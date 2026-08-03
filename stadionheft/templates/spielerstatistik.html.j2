@@ -1,0 +1,13 @@
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  <p class="unterzeile">{{ daten.anzeigename }}{% if daten.liga %} &middot; {{ daten.liga }}{% endif %}</p>
+
+  {% if daten.spieler %}
+    {{ m.spielertabelle(daten.spieler) }}
+    {{ m.stand(daten, ausgabe) }}
+  {% else %}
+    {{ m.leer("Für " ~ daten.anzeigename ~ " liegt derzeit keine Spielerstatistik vor.") }}
+  {% endif %}
+{% endblock %}

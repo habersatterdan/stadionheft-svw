@@ -1,0 +1,51 @@
+{# Wiederverwendbare Bausteine. #}
+
+{% macro leer(text) %}
+  <p class="leer-hinweis">{{ text }}</p>
+{% endmacro %}
+
+
+{% macro stand(daten, ausgabe) %}
+  <p class="stand">
+    Stand: {{ ausgabe.erstellt_am_lesbar }}
+    {%- if daten.quelle == 'demo' %} &middot; <strong>Beispieldaten</strong>
+    {%- elif daten.quelle == 'manuell' %} &middot; manuelle Eingabe
+    {%- elif daten.quelle == 'api' %} &middot; Quelle: fupa.net
+    {%- endif %}
+  </p>
+{% endmacro %}
+
+
+{# Tabelle der Spielerstatistik - wird fuer die eigene Mannschaft und
+   fuer den Gegner identisch verwendet. #}
+{% macro spielertabelle(zeilen) %}
+  <table class="daten">
+    <thead>
+      <tr>
+        <th class="links">Pl.</th>
+        <th class="links">Spieler</th>
+        <th>Spiele</th><th>Tore</th><th>Assists</th><th>11m</th>
+        <th>Gelb</th><th>G/R</th><th>Rot</th>
+        <th>Ein.</th><th>Aus.</th><th>Min.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for z in zeilen %}
+      <tr>
+        <td class="platz">{{ z.platz }}.</td>
+        <td class="links name">{{ z.spieler }}</td>
+        <td>{{ z.spiele }}</td>
+        <td>{{ z.tore }}</td>
+        <td>{{ z.vorlagen }}</td>
+        <td>{{ z.elfmeter }}</td>
+        <td>{{ z.gelb }}</td>
+        <td>{{ z.gelb_rot }}</td>
+        <td>{{ z.rot }}</td>
+        <td>{{ z.eingewechselt }}</td>
+        <td>{{ z.ausgewechselt }}</td>
+        <td>{{ z.minuten }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}

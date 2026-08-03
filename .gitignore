@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Lokale Konfiguration (enthaelt ggf. Zugangsdaten -> niemals committen!)
+config/config.yaml
+config/heftplan.yaml
+.env
+
+# Arbeitsdaten / Ausgaben
+daten/02_werbung/*
+!daten/02_werbung/.gitkeep
+daten/03_eingaben/*
+!daten/03_eingaben/.gitkeep
+daten/04_zwischenergebnisse/*
+!daten/04_zwischenergebnisse/.gitkeep
+daten/05_ausgaben/*
+!daten/05_ausgaben/.gitkeep
+daten/01_vorlagen/*.pdf
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+@eaDir/

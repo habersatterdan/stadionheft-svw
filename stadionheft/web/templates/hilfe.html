@@ -1,0 +1,69 @@
+{% extends "_layout.html" %}
+{% block titel %}Hilfe{% endblock %}
+
+{% block inhalt %}
+<h1>Hilfe</h1>
+
+<div class="karte">
+  <h2 style="margin-top:0">So erstellst du ein Stadionheft</h2>
+  <ol>
+    <li>Mannschaften anhaken, die im Heft vorkommen sollen.</li>
+    <li>Optional Spieltag und deinen Namen eintragen.</li>
+    <li>Auf <strong>Stadionheft erstellen</strong> klicken.</li>
+    <li>Warten, bis „Stadionheft ist fertig“ erscheint.</li>
+    <li>PDF herunterladen oder direkt von der NAS holen.</li>
+  </ol>
+</div>
+
+<div class="karte">
+  <h2 style="margin-top:0">Was tun, wenn eine Fehlermeldung kommt?</h2>
+  <table class="info">
+    <tr>
+      <td>„FuPa ist nicht erreichbar“</td>
+      <td>Kurz warten und noch einmal versuchen. Wenn es nicht besser wird:
+          bei „Woher kommen die Daten?“ auf <em>Aus den CSV-Dateien</em>
+          umstellen.</td>
+    </tr>
+    <tr>
+      <td>„Die Daten konnten nicht gelesen werden“</td>
+      <td>FuPa hat vermutlich etwas an der Seite geändert. Bitte einen
+          Administrator informieren – das Heft lässt sich in der Zwischenzeit
+          mit den CSV-Dateien erstellen.</td>
+    </tr>
+    <tr>
+      <td>„Datei wurde nicht gefunden“</td>
+      <td>Eine Werbeanzeige oder die Vorlage fehlt im Ordner auf der NAS.
+          Die Meldung nennt den genauen Pfad.</td>
+    </tr>
+    <tr>
+      <td>„Die NAS ist nicht erreichbar“</td>
+      <td>Das Heft ist trotzdem fertig und kann hier heruntergeladen werden.
+          Der Upload lässt sich später von Hand nachholen.</td>
+    </tr>
+    <tr>
+      <td>Eine Seite ist leer</td>
+      <td>Für diese Mannschaft fehlen die Daten. Die Hinweise unter dem
+          Ergebnis nennen die genaue Datei.</td>
+    </tr>
+  </table>
+</div>
+
+<div class="karte">
+  <h2 style="margin-top:0">Aktuelle Einstellungen</h2>
+  <table class="info">
+    <tr><td>Verein</td><td>{{ konfiguration.vereinsname }}</td></tr>
+    <tr><td>Saison</td><td>{{ konfiguration.saison }}</td></tr>
+    <tr><td>Datenquelle</td><td>{{ konfiguration.get('datenquelle.modus') }}</td></tr>
+    <tr><td>Eingabeordner</td><td>{{ konfiguration.eingabe_ordner }}</td></tr>
+    <tr><td>Ausgabeordner</td><td>{{ konfiguration.ausgabe_ordner }}</td></tr>
+    <tr><td>NAS-Upload</td>
+        <td>{{ 'aktiv' if konfiguration.get('nas.aktiv') else 'ausgeschaltet' }}</td></tr>
+  </table>
+  <p style="color:#666; font-size:.9rem">
+    Diese Werte stehen in <code>config/config.yaml</code> und können nur von
+    einem Administrator geändert werden.
+  </p>
+</div>
+
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Zurück zum Start</a></p>
+{% endblock %}

@@ -1,0 +1,39 @@
+{# Inhaltsseite mit rotem Kopfbalken, Wappen und Fusszeile.
+
+   Zwei Betriebsarten (siehe _basis.html.j2):
+
+   * fliessend = false -- genau eine Seite. Kopf, Wappen und Fuss liegen
+     absolut positioniert in .seite.
+   * fliessend = true  -- der Inhalt darf weiterlaufen. Dieselben Elemente
+     werden per position:fixed auf jeder Seite wiederholt.
+
+   Wichtig: In WeasyPrint ist der Bezugsrahmen fuer position:fixed die
+   Seitenflaeche (das Endformat), nicht der Satzspiegel. Die Masse sind
+   deshalb in beiden Betriebsarten identisch -- nur die Positionierungsart
+   unterscheidet sich.
+#}
+{% extends "_basis.html.j2" %}
+
+{% macro kopfbereich(fest) %}
+  <div class="kopf {{ 'kopf-fix' if fest }}">
+    <h1>{{ seitentitel }}</h1>
+  </div>
+  {% if heft.logo_url %}
+    <img class="wappen {{ 'wappen-fix' if fest }}" src="{{ heft.logo_url }}" alt="">
+  {% endif %}
+  <div class="fuss {{ 'fuss-fix' if fest }}">{{ heft.hefttitel }}</div>
+{% endmacro %}
+
+{% block koerper %}
+{% if fliessend %}
+  {{ kopfbereich(true) }}
+  <div class="inhalt-fliessend">{{ self.inhalt() }}</div>
+{% else %}
+  <div class="seite">
+    {{ kopfbereich(false) }}
+    <div class="inhalt">{{ self.inhalt() }}</div>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block inhalt %}{% endblock %}

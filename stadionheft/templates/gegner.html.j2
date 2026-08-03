@@ -1,0 +1,20 @@
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  {% set spiel = daten.naechstes_spiel %}
+
+  {% if spiel and spiel.gegner %}
+    <p class="unterzeile">{{ spiel.gegner }}</p>
+  {% endif %}
+
+  {% if daten.gegner_spieler %}
+    {{ m.spielertabelle(daten.gegner_spieler) }}
+    {{ m.stand(daten, ausgabe) }}
+  {% elif spiel and spiel.gegner %}
+    {{ m.leer("Für " ~ spiel.gegner ~ " liegen keine Spielerdaten vor. "
+              ~ "Datei " ~ daten.schluessel ~ "_gegner_spieler.csv im Eingabeordner ergänzen.") }}
+  {% else %}
+    {{ m.leer("Der nächste Gegner steht noch nicht fest.") }}
+  {% endif %}
+{% endblock %}

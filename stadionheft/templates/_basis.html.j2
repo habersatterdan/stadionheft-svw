@@ -1,0 +1,33 @@
+{#
+  Grundgeruest jeder erzeugten Seite.
+
+  Zwei Betriebsarten:
+
+  * fliessend = false (Standard) -- eine Seite fester Groesse. Kopf, Fuss und
+    Inhalt sind absolut positioniert, genau wie in der InDesign-Vorlage.
+  * fliessend = true -- der Inhalt darf auf Folgeseiten weiterlaufen
+    (z. B. Vorwort, Spielbericht). Kopf und Fuss werden dann per
+    position:fixed auf jeder Seite wiederholt.
+#}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>{{ seitentitel|default(heft.hefttitel) }}</title>
+  <link rel="stylesheet" href="{{ css_pfad }}">
+  <style>
+    :root {
+      --seitenbreite: {{ layout.breite_mm }}mm;
+      --seitenhoehe: {{ layout.hoehe_mm }}mm;
+      --anschnitt: {{ layout.anschnitt_mm }}mm;
+      --druckmarken: {{ 'crop cross' if layout.druckmarken else 'none' }};
+      --rot: {{ layout.primaerfarbe_css }};
+      --text: {{ layout.textfarbe_css }};
+      --schrift: {{ layout.schrift_css }};
+    }
+  </style>
+</head>
+<body class="{{ 'fliessend' if fliessend else '' }}">
+{% block koerper %}{% endblock %}
+</body>
+</html>

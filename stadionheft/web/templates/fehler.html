@@ -1,0 +1,24 @@
+{% extends "_layout.html" %}
+{% block titel %}{{ titel }}{% endblock %}
+
+{% block inhalt %}
+<h1>{{ titel }}</h1>
+
+<div class="karte">
+  <div class="fehlerkasten">
+    <strong>{{ meldung }}</strong>
+    {% if hinweis %}
+      <p style="margin:.6rem 0 0; white-space:pre-line">{{ hinweis }}</p>
+    {% endif %}
+  </div>
+
+  {% if technisch %}
+    <details style="margin-top:1rem">
+      <summary>Technische Details (für Administratoren)</summary>
+      <pre class="protokoll">{{ technisch }}</pre>
+    </details>
+  {% endif %}
+</div>
+
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Zurück zum Start</a></p>
+{% endblock %}

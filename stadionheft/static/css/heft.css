@@ -1,0 +1,411 @@
+/* ==========================================================================
+   Stadionheft "Wörnitzstein am Ball" - Seitenlayout
+   --------------------------------------------------------------------------
+   Alle Masse stammen aus der Analyse der bestehenden InDesign-Vorlage
+   (docs/ANALYSE_VORLAGE.md):
+
+     Endformat (TrimBox) : 148 x 210 mm  (A5 hoch)
+     Anschnitt (Bleed)   : 3 mm
+     Hausfarbe           : #E52421
+
+   Die Variablen --* werden vom Programm aus config.yaml gesetzt, damit
+   Farbe, Schrift und Format ohne CSS-Aenderung anpassbar bleiben.
+   ========================================================================== */
+
+@page {
+    size: var(--seitenbreite) var(--seitenhoehe);
+    bleed: var(--anschnitt);
+    marks: var(--druckmarken);
+    margin: 0;
+}
+
+:root {
+    --rot: #E52421;
+    --text: #1A1A1A;
+    --grau: #6B6B6B;
+    --linie: #DDDDDD;
+    --zebra: #F6F6F6;
+
+    /* Alle folgenden Masse sind aus der bestehenden Vorlage gemessen
+       (Seite 16-18, jeweils bezogen auf die obere Kante des Endformats). */
+    --rand: 12mm;              /* seitlicher Satzspiegel */
+    --kopf-oben: 12mm;         /* Oberkante roter Kopfbalken */
+    --kopf-hoehe: 15.5mm;
+    --fuss-unten: 1.5mm;       /* Abstand Fussbalken zur Unterkante */
+    --fuss-hoehe: 13mm;
+    --inhalt-oben: 44mm;       /* Beginn des Inhalts (unterhalb des Wappens) */
+    --inhalt-unten: 20mm;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--schrift);
+    color: var(--text);
+    font-size: 8.5pt;
+    line-height: 1.35;
+    hyphens: auto;
+}
+
+.seite {
+    position: relative;
+    width: var(--seitenbreite);
+    height: var(--seitenhoehe);
+    page-break-after: always;
+    overflow: hidden;
+}
+.seite:last-child { page-break-after: auto; }
+
+/* --------------------------------------------------------------------------
+   Kopfbereich: roter Balken mit Wappen (wie Seiten 15-18 der Vorlage)
+   -------------------------------------------------------------------------- */
+
+.kopf {
+    position: absolute;
+    top: var(--kopf-oben);
+    left: 0;
+    width: 100%;
+    height: var(--kopf-hoehe);
+    background: var(--rot);
+}
+
+.kopf h1 {
+    margin: 0;
+    padding-left: 34mm;
+    font-size: 22pt;
+    font-weight: 300;
+    color: #FFFFFF;
+    line-height: var(--kopf-hoehe);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.wappen {
+    position: absolute;
+    top: 5.5mm;
+    left: 9mm;
+    width: 19mm;
+    z-index: 2;
+}
+
+/* --------------------------------------------------------------------------
+   Fussbereich: roter Balken mit Hefttitel
+   -------------------------------------------------------------------------- */
+
+.fuss {
+    position: absolute;
+    bottom: var(--fuss-unten);
+    left: 0;
+    width: 100%;
+    height: var(--fuss-hoehe);
+    background: var(--rot);
+    color: #FFFFFF;
+    font-size: 13pt;
+    font-weight: 600;
+    text-align: center;
+    line-height: var(--fuss-hoehe);
+}
+
+/* --------------------------------------------------------------------------
+   Inhaltsbereich
+   -------------------------------------------------------------------------- */
+
+.inhalt {
+    position: absolute;
+    top: var(--inhalt-oben);
+    left: var(--rand);
+    right: var(--rand);
+    bottom: var(--inhalt-unten);
+    width: calc(100% - 2 * var(--rand));
+    overflow: hidden;
+}
+
+/* Fliessender Modus: Inhalt darf auf Folgeseiten weiterlaufen.
+   position:fixed wiederholt Kopf und Fuss auf jeder Seite. */
+
+/* Fliessender Modus: der Inhalt darf auf Folgeseiten weiterlaufen.
+   Der Satzspiegel wird ueber die Seitenraender des <body> hergestellt.
+
+   Bezugsrahmen fuer position:fixed ist in WeasyPrint die Seitenflaeche
+   (das Endformat) -- nicht der Satzspiegel. Kopf, Wappen und Fuss behalten
+   deshalb exakt dieselben Werte wie im festen Modus und werden auf jeder
+   Folgeseite automatisch wiederholt. */
+
+body.fliessend {
+    margin: var(--inhalt-oben) var(--rand) var(--inhalt-unten) var(--rand);
+}
+
+.kopf-fix, .fuss-fix, .wappen-fix { position: fixed; }
+.kopf-fix { top: var(--kopf-oben); left: 0; width: var(--seitenbreite); }
+.fuss-fix { bottom: var(--fuss-unten); left: 0; width: var(--seitenbreite); }
+
+.inhalt-fliessend { width: 100%; }
+
+.unterzeile {
+    font-size: 9pt;
+    font-weight: 700;
+    margin: 0 0 2mm 0;
+}
+
+.stand {
+    font-size: 6.5pt;
+    color: var(--grau);
+    margin-top: 2mm;
+}
+
+.leer-hinweis {
+    margin-top: 15mm;
+    padding: 6mm;
+    border: 0.4mm dashed var(--linie);
+    color: var(--grau);
+    font-size: 8pt;
+    text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Tabellen (Tabelle / Torschuetzen / Spielerstatistik)
+   -------------------------------------------------------------------------- */
+
+table.daten {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 7pt;
+}
+
+table.daten thead th {
+    font-size: 6pt;
+    font-weight: 600;
+    color: var(--grau);
+    text-align: right;
+    padding: 0 0.8mm 1.2mm 0.8mm;
+    border-bottom: 0.3mm solid var(--linie);
+    white-space: nowrap;
+}
+
+table.daten thead th.links,
+table.daten tbody td.links { text-align: left; }
+
+table.daten tbody td {
+    padding: 1.1mm 0.8mm;
+    text-align: right;
+    border-bottom: 0.2mm solid var(--linie);
+    white-space: nowrap;
+}
+
+table.daten tbody tr:nth-child(even) { background: var(--zebra); }
+
+table.daten tbody tr.eigene {
+    background: rgba(229, 36, 33, 0.10);
+    font-weight: 700;
+}
+
+td.platz { width: 7mm; color: var(--grau); text-align: left; }
+td.name  { max-width: 45mm; overflow: hidden; text-overflow: ellipsis; }
+td.verein {
+    font-size: 5.6pt;
+    color: var(--grau);
+    display: block;
+    line-height: 1.1;
+}
+
+/* --------------------------------------------------------------------------
+   Titelseite
+   -------------------------------------------------------------------------- */
+
+.titel {
+    background: var(--rot);
+    color: #FFFFFF;
+}
+
+.titel .kopfzeile {
+    position: absolute;
+    top: 6.5mm;
+    left: 10mm;
+    right: 10mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8pt;
+    font-weight: 700;
+    z-index: 3;
+}
+
+.titel .wappen-gross {
+    position: absolute;
+    top: 13mm;
+    left: 7.5mm;
+    width: 30mm;
+    z-index: 3;
+}
+
+.titel .hefttitel {
+    position: absolute;
+    top: 16mm;
+    left: 42mm;
+    right: 10mm;
+    text-align: right;
+    z-index: 3;
+}
+.titel .hefttitel .zeile1 {
+    font-size: 31pt;
+    font-weight: 700;
+    line-height: 1.08;
+}
+.titel .hefttitel .zeile2 {
+    font-size: 30pt;
+    font-weight: 600;
+    font-style: italic;
+    line-height: 1.08;
+}
+
+.titel .bild,
+.titel .bild-platzhalter {
+    position: absolute;
+    top: 60mm;
+    left: 0;
+    width: 100%;
+    height: 96mm;
+    z-index: 0;
+}
+.titel .bild { object-fit: cover; }
+.titel .bild-platzhalter {
+    background: #C81E1B;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 8pt;
+    text-align: center;
+    line-height: 96mm;
+}
+
+/* Die beiden weissen Schraegen sind das Erkennungsmerkmal der Titelseite.
+   Sie liegen ueber dem Foto und unter dem Textkasten. */
+.titel .schraege {
+    position: absolute;
+    left: -12mm;
+    width: 175mm;
+    height: 9mm;
+    background: #FFFFFF;
+    transform: rotate(-4.5deg);
+    z-index: 1;
+}
+.titel .schraege-oben  { top: 55mm; }
+.titel .schraege-unten { top: 150mm; }
+
+.titel .kasten {
+    position: absolute;
+    left: 30mm;
+    right: 10mm;
+    bottom: 20mm;
+    background: #FFFFFF;
+    color: var(--text);
+    padding: 4mm 5mm;
+    z-index: 2;
+}
+.titel .kasten .gaeste {
+    font-size: 9.5pt;
+    font-weight: 700;
+    font-style: italic;
+    text-align: center;
+    margin-bottom: 2.5mm;
+}
+.titel .kasten .tag     { font-size: 8.5pt; font-weight: 700; }
+.titel .kasten .paarung { font-size: 9.5pt; font-weight: 700; }
+.titel .kasten .details { font-size: 8pt; color: #333333; }
+
+/* --------------------------------------------------------------------------
+   Trennseite (voll rot, wie Seite 12 der Vorlage)
+   -------------------------------------------------------------------------- */
+
+.trenner {
+    background: var(--rot);
+    color: #FFFFFF;
+    text-align: center;
+}
+.trenner .gruppe {
+    position: absolute;
+    top: 62mm;
+    left: 0;
+    width: 100%;
+    font-size: 36pt;
+    font-weight: 700;
+}
+.trenner .untertitel {
+    position: absolute;
+    top: 92mm;
+    left: 0;
+    width: 100%;
+    font-size: 25pt;
+    font-weight: 600;
+    font-style: italic;
+}
+.trenner .liga {
+    position: absolute;
+    bottom: 22mm;
+    left: 0;
+    width: 100%;
+    font-size: 13pt;
+    font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   Freitext (Vorwort, Spielbericht) - zweispaltig wie in der Vorlage
+   -------------------------------------------------------------------------- */
+
+.fliesstext {
+    column-count: 2;
+    column-gap: 5mm;
+    font-size: 8pt;
+    text-align: justify;
+}
+.fliesstext p { margin: 0 0 2mm 0; }
+.fliesstext h2 {
+    column-span: all;
+    font-size: 11pt;
+    margin: 0 0 3mm 0;
+    color: var(--rot);
+}
+
+/* --------------------------------------------------------------------------
+   Naechstes Spiel
+   -------------------------------------------------------------------------- */
+
+.spielkarte {
+    border: 0.4mm solid var(--linie);
+    border-top: 2mm solid var(--rot);
+    padding: 5mm;
+    margin-bottom: 4mm;
+}
+.spielkarte .paarung { font-size: 13pt; font-weight: 700; margin-bottom: 3mm; }
+.spielkarte dl { margin: 0; display: block; }
+.spielkarte dt {
+    float: left;
+    width: 28mm;
+    color: var(--grau);
+    font-size: 7.5pt;
+    clear: left;
+}
+.spielkarte dd { margin: 0 0 1.5mm 28mm; font-size: 8.5pt; font-weight: 600; }
+
+/* --------------------------------------------------------------------------
+   Kontaktlisten
+   -------------------------------------------------------------------------- */
+
+.kontakte h2 {
+    font-size: 9pt;
+    color: var(--rot);
+    margin: 3mm 0 1.5mm 0;
+}
+.kontakte .eintrag { margin-bottom: 1.6mm; font-size: 7pt; }
+.kontakte .rolle { font-weight: 700; }
+.kontakte .kontaktdaten { color: #444444; }
+
+/* --------------------------------------------------------------------------
+   Impressum
+   -------------------------------------------------------------------------- */
+
+.impressum dt {
+    font-weight: 700;
+    font-size: 8pt;
+    margin-top: 3mm;
+}
+.impressum dd { margin: 0; font-size: 8pt; }

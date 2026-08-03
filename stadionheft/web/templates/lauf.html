@@ -1,0 +1,101 @@
+{% extends "_layout.html" %}
+{% block titel %}Stadionheft wird erstellt{% endblock %}
+
+{% block inhalt %}
+<h1 id="ueberschrift"><span class="spinner"></span> Stadionheft wird erstellt …</h1>
+<p style="color:#666" id="untertitel">
+  Das dauert normalerweise wenige Sekunden. Diese Seite aktualisiert sich von selbst.
+</p>
+
+<div class="karte" id="ergebnis" style="display:none"></div>
+
+<div class="karte">
+  <h2 style="margin-top:0">Was gerade passiert</h2>
+  <pre class="protokoll" id="protokoll">wird geladen …</pre>
+</div>
+
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Neues Heft erstellen</a></p>
+
+<script>
+const laufId = {{ lauf.id|tojson }};
+const statusUrl = {{ url_for('status', lauf_id=lauf.id)|tojson }};
+const downloadUrl = {{ url_for('download', lauf_id=lauf.id)|tojson }};
+
+function escape(text) {
+  const d = document.createElement('div');
+  d.textContent = text == null ? '' : String(text);
+  return d.innerHTML;
+}
+
+function zeigeErgebnis(daten) {
+  const kasten = document.getElementById('ergebnis');
+  const ueberschrift = document.getElementById('ueberschrift');
+  const untertitel = document.getElementById('untertitel');
+  kasten.style.display = 'block';
+
+  if (daten.erfolgreich && daten.ergebnis) {
+    const e = daten.ergebnis;
+    ueberschrift.innerHTML = '&#10003; Stadionheft ist fertig';
+    untertitel.textContent = '';
+    let html = '<div class="erfolg"><strong>' + escape(e.dateiname) + '</strong><br>'
+             + escape(e.seitenzahl) + ' Seiten &middot; ' + escape(e.dauer_sekunden)
+             + ' Sekunden &middot; Datenquelle: ' + escape(e.quelle) + '</div>'
+             + '<p><a class="knopf-zweit" href="' + downloadUrl
+             + '" style="background:#E52421;color:#fff;border-color:#E52421">'
+             + 'PDF herunterladen</a></p>'
+             + '<table class="info">'
+             + '<tr><td>Gespeichert unter</td><td>' + escape(e.pdf) + '</td></tr>';
+    if (e.nas_ziel) {
+      html += '<tr><td>Auf der NAS</td><td>' + escape(e.nas_ziel) + '</td></tr>';
+    }
+    if (e.snapshot) {
+      html += '<tr><td>Snapshot (für exakte Wiederholung)</td><td>'
+            + escape(e.snapshot) + '</td></tr>';
+    }
+    html += '</table>';
+
+    if (e.warnungen && e.warnungen.length) {
+      html += '<h2>Bitte noch prüfen</h2>';
+      e.warnungen.forEach(function (w) {
+        html += '<div class="hinweis">' + escape(w) + '</div>';
+      });
+    }
+    kasten.innerHTML = html;
+  } else {
+    const f = daten.fehler || {};
+    ueberschrift.innerHTML = '&#10007; Das Heft konnte nicht erstellt werden';
+    untertitel.textContent = '';
+    let html = '<div class="fehlerkasten"><strong>' + escape(f.meldung) + '</strong>';
+    if (f.hinweis) {
+      html += '<p style="margin:.6rem 0 0; white-space:pre-line">'
+            + escape(f.hinweis) + '</p>';
+    }
+    html += '</div>';
+    if (f.technisch) {
+      html += '<details style="margin-top:.8rem"><summary>Technische Details</summary>'
+            + '<pre class="protokoll">' + escape(f.technisch) + '</pre></details>';
+    }
+    kasten.innerHTML = html;
+  }
+}
+
+function abfragen() {
+  fetch(statusUrl).then(function (a) { return a.json(); }).then(function (daten) {
+    if (daten.protokoll) {
+      document.getElementById('protokoll').textContent =
+        daten.protokoll.map(function (z) {
+          return z.zeit + '  ' + z.level.padEnd(7) + ' ' + z.text;
+        }).join('\n') || 'noch keine Meldungen …';
+    }
+    if (daten.fertig) {
+      zeigeErgebnis(daten);
+    } else {
+      setTimeout(abfragen, 1000);
+    }
+  }).catch(function () {
+    setTimeout(abfragen, 3000);
+  });
+}
+abfragen();
+</script>
+{% endblock %}

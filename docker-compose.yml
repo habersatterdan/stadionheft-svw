@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# Betrieb auf der Synology NAS (Container Manager -> Projekt anlegen)
+#
+# Die Ordner unter /volume1/Stadionheft/ muessen vorher in der DSM-Dateistation
+# angelegt sein (siehe docs/NAS_ORDNERSTRUKTUR.md).
+#
+# WICHTIG vor dem ersten Start:
+# Der Ordner 00_Konfiguration wird ueber /app/config gemountet und verdeckt
+# damit die im Image mitgelieferten Beispieldateien. Deshalb einmalig
+#
+#     config/config.example.yaml   ->  00_Konfiguration/config.yaml
+#     config/heftplan.example.yaml ->  00_Konfiguration/heftplan.yaml
+#     config/kontakte.example.yaml ->  00_Konfiguration/kontakte.yaml
+#
+# kopieren und die TODO-Werte ausfuellen. Fehlt die Konfiguration, startet der
+# Container trotzdem und zeigt im Browser eine Anleitung an.
+# ---------------------------------------------------------------------------
+services:
+  stadionheft:
+    build: .
+    image: stadionheft-svw:latest
+    container_name: stadionheft
+    restart: unless-stopped
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      TZ: Europe/Berlin
+      # Nur noetig, wenn nas.modus = "smb" verwendet wird. Besser: Volumes
+      # unten benutzen und nas.modus auf "mount" lassen.
+      # NAS_PASSWORT: "${NAS_PASSWORT}"
+
+    volumes:
+      # Konfiguration -- liegt auf der NAS und ist damit ohne Neubau aenderbar
+      - /volume1/Stadionheft/00_Konfiguration:/app/config
+
+      # Arbeits- und Ablageordner
+      - /volume1/Stadionheft/01_Vorlagen:/app/daten/01_vorlagen:ro
+      - /volume1/Stadionheft/02_Werbung:/app/daten/02_werbung:ro
+      - /volume1/Stadionheft/03_Eingaben:/app/daten/03_eingaben
+      - /volume1/Stadionheft/04_Zwischenergebnisse:/app/daten/04_zwischenergebnisse
+      - /volume1/Stadionheft/05_Ausgaben:/app/daten/05_ausgaben
+      - /volume1/Stadionheft/99_Logs:/app/logs
+
+      # Zielordner fuer den "NAS-Upload" bei nas.modus = "mount".
+      # Zeigt bewusst auf denselben Ordner wie 05_Ausgaben -- so ist das Heft
+      # sofort in der Dateistation sichtbar.
+      - /volume1/Stadionheft/05_Ausgaben:/nas/Stadionheft/05_Ausgaben

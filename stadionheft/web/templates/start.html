@@ -1,0 +1,109 @@
+{% extends "_layout.html" %}
+{% block titel %}Stadionheft erstellen{% endblock %}
+
+{% block inhalt %}
+<h1>Stadionheft erstellen</h1>
+<p style="color:#666; margin-top:0">
+  Mannschaften auswählen, auf „Stadionheft erstellen“ klicken – fertig.
+</p>
+
+{% for warnung in warnungen %}
+  <div class="hinweis">{{ warnung }}</div>
+{% endfor %}
+
+{% if modus == 'demo' %}
+  <div class="hinweis">
+    <strong>Demo-Modus.</strong> Das Programm arbeitet gerade mit Beispieldaten,
+    nicht mit echten Zahlen. Umstellen in <code>config/config.yaml</code> unter
+    <code>datenquelle.modus</code>.
+  </div>
+{% endif %}
+
+<form method="post" action="{{ url_for('erstellen') }}">
+  <div class="karte">
+    <fieldset>
+      <legend>1. Welche Mannschaften sollen ins Heft?</legend>
+      {% for m in mannschaften %}
+        <label class="zeile">
+          <input type="checkbox" name="mannschaften" value="{{ m.schluessel }}"
+                 {% if loop.first %}checked{% endif %}>
+          <span>
+            <span class="name">{{ m.anzeigename }}</span><br>
+            <span class="liga">
+              {%- if m.liga_fehlt %}Liga noch nicht eingetragen
+              {%- else %}{{ m.liga }}{% endif -%}
+              &nbsp;&middot;&nbsp; Seiten: {{ m.seiten|join(', ') }}
+            </span>
+          </span>
+        </label>
+      {% else %}
+        <p class="hinweis">Es ist keine Mannschaft konfiguriert.</p>
+      {% endfor %}
+    </fieldset>
+  </div>
+
+  <div class="karte">
+    <fieldset>
+      <legend>2. Angaben zur Ausgabe <span style="font-weight:400;color:#666">(optional)</span></legend>
+
+      <div class="feld">
+        <label for="spieltag">Spieltag</label>
+        <input type="text" id="spieltag" name="spieltag" placeholder="z. B. 3. Spieltag">
+      </div>
+
+      <div class="feld">
+        <label for="titelspiel">Welches Spiel kommt auf die Titelseite?</label>
+        <select id="titelspiel" name="titelspiel">
+          <option value="">Automatisch (nächstes Heimspiel)</option>
+          {% for m in mannschaften %}
+            <option value="{{ m.schluessel }}">{{ m.anzeigename }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="feld">
+        <label for="benutzer">Dein Name</label>
+        <input type="text" id="benutzer" name="benutzer"
+               placeholder="wird nur im Protokoll vermerkt">
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="karte">
+    <fieldset>
+      <legend>3. Woher kommen die Daten?</legend>
+      <div class="feld">
+        <select name="quelle">
+          <option value="">Wie eingestellt: {{ modus }}</option>
+          <option value="api">Automatisch von FuPa abrufen</option>
+          <option value="manuell">Aus den CSV-Dateien im Eingabeordner</option>
+          <option value="demo">Beispieldaten (nur zum Ausprobieren)</option>
+        </select>
+        <p class="hilfe">
+          Im Normalfall hier nichts ändern.
+        </p>
+      </div>
+
+      <label class="zeile">
+        <input type="checkbox" name="nas" value="ja"
+               {% if nas_aktiv and nas_ok %}checked{% endif %}
+               {% if not nas_aktiv %}disabled{% endif %}>
+        <span>
+          <span class="name">Fertiges Heft auf der Synology NAS ablegen</span><br>
+          <span class="liga">
+            {% if not nas_aktiv %}
+              <span class="status aus">ausgeschaltet</span> – in der Konfiguration aktivierbar
+            {% elif nas_ok %}
+              <span class="status ok">erreichbar</span> {{ nas_meldung }}
+            {% else %}
+              <span class="status warn">Problem</span> {{ nas_meldung }}
+            {% endif %}
+          </span>
+        </span>
+      </label>
+    </fieldset>
+  </div>
+
+  <p><button type="submit">Stadionheft erstellen</button></p>
+</form>
+{% endblock %}

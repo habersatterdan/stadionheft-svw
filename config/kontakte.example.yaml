@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Kontaktlisten fuer die Seiten "Kontaktlisten" des Stadionhefts.
+# Kopieren nach: config/kontakte.yaml
+#
+# Diese Daten aendern sich selten - sie werden bewusst NICHT von FuPa geholt.
+#
+# Hinweis Datenschutz: Es handelt sich um personenbezogene Daten. Bitte nur
+# Angaben aufnehmen, deren Veroeffentlichung die betroffene Person kennt und
+# mittraegt (Art. 6 DSGVO). Die Datei gehoert nicht in ein oeffentliches Repo.
+# ---------------------------------------------------------------------------
+
+abschnitte:
+
+  - titel: "Vorstandschaft"
+    eintraege:
+      - rolle: "Vorstand Finanzen"
+        name: "TODO Name"
+        telefon: "TODO"
+        email: "1.vorstand@sv-woernitzstein-berg.de"
+      - rolle: "Vorstand Fußball"
+        name: "TODO Name"
+        telefon: "TODO"
+        email: "2.vorstand@sv-woernitzstein-berg.de"
+
+  - titel: "Jugend"
+    eintraege:
+      - rolle: "A-Jugend"
+        name: "TODO Name"
+        telefon: "TODO"
+        email: "a-jgd@sv-woernitzstein-berg.de"

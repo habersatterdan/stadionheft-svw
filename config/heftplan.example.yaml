@@ -1,0 +1,67 @@
+# ---------------------------------------------------------------------------
+# Heftplan - die Seitenreihenfolge des Stadionhefts
+#
+# Kopieren nach: config/heftplan.yaml
+#
+# Der Heftplan bildet die Struktur der bestehenden InDesign-Vorlage nach
+# (siehe docs/ANALYSE_VORLAGE.md, 28 Seiten).
+#
+# Seitentypen:
+#   titelseite       -> erzeugt: Cover mit Spielpaarung, Liga, Datum, Anstoss
+#   trennseite       -> erzeugt: rote Trennseite (nur ausserhalb Mannschaftsblock)
+#   freitext         -> erzeugt: Textseite aus einer Markdown-/Textdatei
+#   kontakte         -> erzeugt: Kontaktlisten aus config/kontakte.yaml
+#   impressum        -> erzeugt: Impressumsseite
+#   mannschaftsbloecke -> Platzhalter: wird durch die je Mannschaft
+#                         konfigurierten Seiten ersetzt (siehe config.yaml)
+#   pdf              -> bindet eine fertige PDF-Datei ein (Werbung, Grafikseiten)
+#
+# Bei "pdf":
+#   quelle   : Pfad relativ zu daten/ oder absolut
+#   optional : true  -> fehlt die Datei, gibt es nur eine Warnung
+#              false -> fehlt die Datei, bricht der Lauf mit klarer Meldung ab
+#   seiten   : optional, z. B. "1" oder "1-2" (Standard: alle Seiten)
+# ---------------------------------------------------------------------------
+
+seiten:
+
+  # --- Seite 1: Titel ------------------------------------------------------
+  - typ: titelseite
+
+  # --- Seite 2-3: Vorwort --------------------------------------------------
+  - typ: freitext
+    titel: "Vorwort"
+    quelle: "03_eingaben/vorwort.md"
+    optional: true
+    # Bei zu langem Text laeuft der Inhalt automatisch auf Folgeseiten weiter.
+
+  # --- Seite 4-11: Werbeblock vorne ---------------------------------------
+  - typ: pdf
+    quelle: "02_werbung/werbung_vorne.pdf"
+    optional: true
+    bemerkung: "Werbeseiten 4-11 der Vorlage. Eine PDF mit mehreren Seiten oder mehrere Eintraege."
+
+  # --- Seiten 12-18 (je Mannschaft): Trenner, Gegner, Tabelle, ... ---------
+  - typ: mannschaftsbloecke
+    # Zwischen zwei Mannschaftsbloecken zusaetzlich einbinden (optional):
+    trenner_zwischen:
+      - typ: pdf
+        quelle: "02_werbung/werbung_zwischen.pdf"
+        optional: true
+
+  # --- Werbeblock hinten ---------------------------------------------------
+  - typ: pdf
+    quelle: "02_werbung/werbung_hinten.pdf"
+    optional: true
+
+  # --- Kontaktlisten -------------------------------------------------------
+  - typ: kontakte
+    optional: true
+
+  # --- Impressum -----------------------------------------------------------
+  - typ: impressum
+
+  # --- Ruecktitel ----------------------------------------------------------
+  - typ: pdf
+    quelle: "02_werbung/ruecktitel.pdf"
+    optional: true

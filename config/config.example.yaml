@@ -1,0 +1,197 @@
+# ---------------------------------------------------------------------------
+# Stadionheft-Generator - Beispielkonfiguration
+#
+# Kopieren nach:  config/config.yaml
+# Danach die mit "TODO" markierten Werte anpassen.
+#
+# Diese Datei ist die EINZIGE Stelle, an der Mannschaften, FuPa-Links und
+# Ablagepfade gepflegt werden. Kein Programmcode muss dafuer geaendert werden.
+# ---------------------------------------------------------------------------
+
+verein:
+  name: "SV Wörnitzstein-Berg"
+  kurzname: "SVW"
+  # Wird im Titel jeder Inhaltsseite und in der Fusszeile verwendet:
+  hefttitel: "Wörnitzstein am Ball"
+  website: "https://www.sv-woernitzstein-berg.de/"
+  fupa_verein_url: "https://www.fupa.net/club/sv-woernitzstein-berg"
+  # Pfad relativ zum Projektordner oder absolut:
+  logo: "stadionheft/static/img/svw_logo.png"
+
+saison: "2026/2027"
+
+
+# ---------------------------------------------------------------------------
+# Woher kommen die Daten?
+# ---------------------------------------------------------------------------
+datenquelle:
+  # demo     = eingebaute Beispieldaten (funktioniert sofort, ohne Internet)
+  # manuell  = CSV-Dateien aus datenquelle.manuell.ordner (empfohlener Start)
+  # api      = automatischer Abruf von FuPa (Endpunkte muessen erst verifiziert
+  #            werden, siehe README Abschnitt "FuPa-Abruf einrichten")
+  modus: "demo"
+
+  # Wenn der gewaehlte Modus fehlschlaegt: auf diesen Modus zurueckfallen,
+  # statt den ganzen Lauf abzubrechen. "" = kein Fallback.
+  fallback_modus: "manuell"
+
+  fupa:
+    # TODO PRUEFEN: Diese Basis-URL und die Endpunkte sind PLATZHALTER.
+    # FuPa veroeffentlicht keine offizielle, dokumentierte API. Bitte einmalig
+    # mit `python -m stadionheft.cli probe-fupa` pruefen und hier eintragen.
+    basis_url: "https://api.fupa.net"
+    endpunkte:
+      team: "/v1/teams/{team_slug}"
+      tabelle: "/v1/teams/{team_slug}/standing"
+      spielplan: "/v1/teams/{team_slug}/matches"
+      spieler: "/v1/teams/{team_slug}/players"
+      torjaeger: "/v1/teams/{team_slug}/topscorers"
+    timeout_sekunden: 20
+    wiederholungen: 2
+    pause_zwischen_anfragen_sekunden: 1.5
+    # Bitte eine erreichbare Kontaktadresse eintragen - faires Verhalten
+    # gegenueber dem Betreiber und im Zweifel der Unterschied zwischen
+    # "geduldet" und "gesperrt".
+    user_agent: "SVW-Stadionheft/0.1 (+https://www.sv-woernitzstein-berg.de; kontakt@sv-woernitzstein-berg.de)"
+    robots_txt_beachten: true
+
+  manuell:
+    # Hier liegen die CSV-Dateien je Mannschaft, z. B.
+    #   herren1_tabelle.csv, herren1_torjaeger.csv, herren1_spieler.csv,
+    #   herren1_naechstes_spiel.csv
+    ordner: "daten/03_eingaben"
+
+  cache:
+    aktiv: true
+    ordner: "daten/04_zwischenergebnisse/cache"
+    gueltigkeit_minuten: 120
+
+
+# ---------------------------------------------------------------------------
+# Mannschaften
+#
+# Der Schluessel (herren1, herren2, ...) ist der interne Name und taucht in
+# Dateinamen auf. Er sollte NICHT mehr geaendert werden, sobald er benutzt wird.
+# Fuer eine neue Mannschaft einfach einen weiteren Block anlegen - die
+# Oberflaeche zeigt sie danach automatisch an.
+# ---------------------------------------------------------------------------
+mannschaften:
+
+  herren1:
+    anzeigename: "Herren 1"
+    gruppe: "Herren"            # grosse Zeile auf der Trennseite
+    untertitel: "1. Mannschaft" # zweite Zeile auf der Trennseite
+    liga: "Bezirksliga Schwaben Nord"
+    fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
+    aktiv: true
+    # Welche Seiten werden fuer diese Mannschaft erzeugt? Reihenfolge zaehlt.
+    # Moeglich: trenner, spielbericht, gegner, tabelle, torjaeger,
+    #           spielerstatistik, naechstes_spiel
+    seiten: ["trenner", "gegner", "tabelle", "torjaeger", "spielerstatistik"]
+
+  herren2:
+    anzeigename: "Herren 2"
+    gruppe: "Herren"
+    untertitel: "2. Mannschaft"
+    liga: "TODO: Liga eintragen"       # TODO
+    fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m2-2026-27"
+    aktiv: true
+    seiten: ["trenner", "tabelle", "torjaeger", "spielerstatistik"]
+
+  herren3:
+    anzeigename: "Herren 3"
+    gruppe: "Herren"
+    untertitel: "3. Mannschaft"
+    liga: "TODO: Liga eintragen"       # TODO
+    fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m3-2026-27"
+    aktiv: true
+    seiten: ["trenner", "tabelle", "torjaeger"]
+
+  damen1:
+    anzeigename: "Damen 1"
+    gruppe: "Damen"
+    untertitel: "1. Mannschaft"
+    liga: "TODO: Liga eintragen"       # TODO
+    fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w1-2026-27"
+    aktiv: true
+    seiten: ["trenner", "tabelle", "torjaeger", "spielerstatistik"]
+
+  damen2:
+    anzeigename: "Damen 2"
+    gruppe: "Damen"
+    untertitel: "2. Mannschaft"
+    liga: "TODO: Liga eintragen"       # TODO
+    fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w2-2026-27"
+    aktiv: true
+    seiten: ["trenner", "tabelle", "torjaeger"]
+
+
+# ---------------------------------------------------------------------------
+# Layout / Erscheinungsbild
+# Werte stammen aus der Analyse der bestehenden Vorlage (siehe
+# docs/ANALYSE_VORLAGE.md) und muessen normalerweise nicht geaendert werden.
+# ---------------------------------------------------------------------------
+layout:
+  seitenbreite_mm: 148        # A5 hoch
+  seitenhoehe_mm: 210
+  anschnitt_mm: 3             # Beschnittzugabe
+  druckmarken: true           # Schnittmarken fuer die Druckerei
+  primaerfarbe: "#E52421"     # SVW-Rot, aus der Vorlage gemessen
+  textfarbe: "#1A1A1A"
+  # Segoe UI ist eine Windows-Schrift und darf nicht frei weitergegeben
+  # werden. Auf dem Server wird die erste verfuegbare Schrift verwendet.
+  schriftfamilie: "Segoe UI, Open Sans, Source Sans 3, DejaVu Sans, sans-serif"
+
+
+# ---------------------------------------------------------------------------
+# Ausgabe
+# ---------------------------------------------------------------------------
+ausgabe:
+  # Platzhalter: {datum} {datum_kompakt} {saison} {spieltag} {mannschaften}
+  dateiname: "{datum_kompakt}_WaB_Druck.pdf"
+  ordner: "daten/05_ausgaben"
+  arbeitsordner: "daten/04_zwischenergebnisse"
+  # Zusaetzlich zum PDF eine Snapshot-Datei mit allen verwendeten Daten
+  # ablegen. Damit ist jeder Lauf spaeter exakt reproduzierbar.
+  snapshot_speichern: true
+
+
+# ---------------------------------------------------------------------------
+# Synology NAS
+# ---------------------------------------------------------------------------
+nas:
+  aktiv: false
+
+  # mount = Der NAS-Ordner ist im Dateisystem eingebunden (Netzlaufwerk unter
+  #         Windows, Docker-Volume auf der NAS selbst). Das ist der einfachste
+  #         und stabilste Weg - Empfehlung.
+  # smb   = Direkter SMB-Upload ueber das Netzwerk (benoetigt zusaetzlich
+  #         das Paket "smbprotocol", siehe README).
+  modus: "mount"
+
+  mount:
+    # TODO: Pfad eintragen.
+    # Beispiel Windows:  "Z:/Stadionheft/05_Ausgaben"
+    # Beispiel Docker auf der NAS: "/nas/05_Ausgaben"
+    zielordner: "/nas/Stadionheft/05_Ausgaben"
+
+  smb:
+    host: "diskstation.local"        # TODO
+    freigabe: "Stadionheft"          # TODO
+    zielordner: "05_Ausgaben"
+    benutzer: "stadionheft"          # TODO
+    # Das Passwort wird NIE in dieser Datei gespeichert, sondern aus einer
+    # Umgebungsvariablen gelesen:
+    passwort_umgebungsvariable: "NAS_PASSWORT"
+    domaene: "WORKGROUP"
+
+  # Vorhandene Datei mit gleichem Namen ueberschreiben?
+  ueberschreiben: false
+
+
+# ---------------------------------------------------------------------------
+# Protokollierung
+# ---------------------------------------------------------------------------
+protokoll:
+  ordner: "logs"
+  level: "INFO"        # DEBUG | INFO | WARNING | ERROR

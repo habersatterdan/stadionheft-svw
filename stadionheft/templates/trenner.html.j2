@@ -1,0 +1,13 @@
+{% extends "_basis.html.j2" %}
+
+{% block koerper %}
+<div class="seite trenner">
+  <div class="gruppe">{{ daten.gruppe or daten.anzeigename }}</div>
+  {% if daten.untertitel %}
+    <div class="untertitel">{{ daten.untertitel }}</div>
+  {% endif %}
+  {% if daten.liga %}
+    <div class="liga">{{ daten.liga }}</div>
+  {% endif %}
+</div>
+{% endblock %}

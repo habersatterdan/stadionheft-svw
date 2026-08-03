@@ -1,0 +1,18 @@
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  {% if absaetze %}
+    <div class="fliesstext">
+      {% for absatz in absaetze %}
+        {% if absatz.ueberschrift %}
+          <h2>{{ absatz.text }}</h2>
+        {% else %}
+          <p>{{ absatz.text }}</p>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    {{ m.leer("Kein Text hinterlegt. Datei " ~ (quelle or '—') ~ " im Eingabeordner ablegen.") }}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  {% if daten.liga %}<p class="unterzeile">{{ daten.liga }}</p>{% endif %}
+
+  {% if daten.tabelle %}
+    <table class="daten">
+      <thead>
+        <tr>
+          <th class="links">Pl.</th>
+          <th class="links">Team</th>
+          <th>Sp.</th><th>S-U-N</th><th>Tore</th><th>Diff.</th><th>Pkt.</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for z in daten.tabelle %}
+        <tr class="{{ 'eigene' if z.eigene }}">
+          <td class="platz">{{ z.platz }}.</td>
+          <td class="links name">
+            {{ z.mannschaft }}{% if z.zusatz %} <span class="verein">{{ z.zusatz }}</span>{% endif %}
+          </td>
+          <td>{{ z.spiele }}</td>
+          <td>{{ z.bilanz }}</td>
+          <td>{{ z.torverhaeltnis }}</td>
+          <td>{{ '%+d'|format(z.differenz) if z.differenz else 0 }}</td>
+          <td>{{ z.punkte }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {{ m.stand(daten, ausgabe) }}
+  {% else %}
+    {{ m.leer("Für " ~ daten.anzeigename ~ " liegt derzeit keine Tabelle vor.") }}
+  {% endif %}
+{% endblock %}
