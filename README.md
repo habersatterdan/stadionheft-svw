@@ -38,7 +38,20 @@ entsprechen exakt der bisherigen InDesign-Vorlage.
   Unter Windows und macOS bringt WeasyPrint alles Nötige mit
   (siehe [WeasyPrint-Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html)).
 
-### Installation
+### Der einfache Weg: Startskript
+
+Nach dem Herunterladen des Projekts genügt ein Doppelklick:
+
+| System | Datei |
+|---|---|
+| Windows | `start.bat` |
+| macOS / Linux | `start.sh` |
+
+Das Skript richtet beim ersten Start alles selbst ein (Arbeitsumgebung,
+Pakete, Konfiguration), startet die Weboberfläche und öffnet den Browser.
+Der erste Start dauert ein paar Minuten, jeder weitere wenige Sekunden.
+
+### Der manuelle Weg
 
 ```bash
 git clone <repository-url>
