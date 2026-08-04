@@ -287,8 +287,13 @@ stadionheft erstellen --snapshot daten/05_ausgaben/20260729_WaB_Druck_snapshot.j
 
 ## Betrieb auf der Synology NAS
 
-Empfohlen: Container Manager (Docker). Vollständige Anleitung in
-[docs/NAS_ORDNERSTRUKTUR.md](docs/NAS_ORDNERSTRUKTUR.md).
+Das ist der eigentliche Zielzustand: **einmal einrichten, danach öffnet jeder
+im Verein nur noch einen Link – am Rechner oder am Handy.**
+
+Schritt-für-Schritt-Anleitung mit DSM-Klickwegen, Handy-Zugriff und
+Fehlerbehebung: **[docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md)**
+
+Kurzfassung:
 
 1. Ordner `/volume1/Stadionheft/…` anlegen:
    ```bash
@@ -299,6 +304,17 @@ Empfohlen: Container Manager (Docker). Vollständige Anleitung in
 2. `config.yaml`, `heftplan.yaml`, `kontakte.yaml` nach `00_Konfiguration`.
 3. Container Manager → **Projekt** → `docker-compose.yml` aus diesem Repository.
 4. Aufrufen unter `http://<nas-name>:8080`.
+
+### Vom Handy
+
+Die Oberfläche ist für kleine Bildschirme ausgelegt – getestet bei 320, 360
+und 390 px Breite. Im heimischen WLAN genügt dieselbe Adresse im
+Handy-Browser; über „Zum Home-Bildschirm hinzufügen" verhält sie sich wie
+eine App.
+
+> Von unterwegs bitte **nicht** einfach den Port ins Internet öffnen – die
+> App hat keine Benutzeranmeldung. Empfohlen ist der VPN-Server von DSM.
+> Details in [docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md).
 
 ### NAS-Ablage konfigurieren
 
@@ -406,6 +422,8 @@ vereinheitlicht werden.
 
 ## Weiterführende Dokumente
 
+* **[docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md)** – Schritt für
+  Schritt auf der Synology NAS, inklusive Zugriff vom Handy
 * **[docs/KONZEPT.md](docs/KONZEPT.md)** – Architektur, Bewertung der
   Technologie-Optionen, rechtliche Einordnung des FuPa-Abrufs, Projektplan,
   **offene Punkte und was noch gebraucht wird**

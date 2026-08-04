@@ -1,0 +1,215 @@
+# Installation auf der Synology NAS
+
+Ziel: Jede Person im Verein öffnet einen Link im Browser – am Rechner **oder
+am Handy** – und kann ein Stadionheft erstellen. Niemand installiert etwas.
+
+Zeitaufwand: etwa eine halbe Stunde beim ersten Mal.
+
+---
+
+## Voraussetzungen
+
+| | |
+|---|---|
+| DSM-Version | 7.0 oder neuer |
+| Paket | **Container Manager** (heißt in DSM 6 „Docker") |
+| NAS-Modell | Muss Docker unterstützen – Modelle mit Intel/AMD-CPU (z. B. DS220+, DS920+, DS923+). Reine ARM-Einsteigermodelle wie DS120j können es **nicht**. |
+| Arbeitsspeicher | 2 GB reichen aus |
+| Speicherplatz | ca. 700 MB für das Abbild |
+
+**Modell prüfen:** DSM → Systemsteuerung → Info-Center. Steht dort bei
+Modell ein „+" oder „play", passt es meistens. Im Zweifel: Paket-Zentrum
+öffnen und nach „Container Manager" suchen – wird es angeboten, geht es.
+
+---
+
+## Schritt 1: Container Manager installieren
+
+DSM öffnen → **Paket-Zentrum** → nach `Container Manager` suchen →
+**Installieren**.
+
+---
+
+## Schritt 2: Ordner anlegen
+
+**Systemsteuerung → Gemeinsamer Ordner → Erstellen**
+
+* Name: `Stadionheft`
+* Papierkorb aktivieren (rettet versehentlich gelöschte Werbedateien)
+
+Dann in der **Dateistation** innerhalb von `Stadionheft` diese Unterordner
+anlegen:
+
+```
+00_Konfiguration
+01_Vorlagen
+02_Werbung
+03_Eingaben
+04_Zwischenergebnisse
+05_Ausgaben
+99_Logs
+```
+
+Wer SSH mag, geht schneller:
+
+```bash
+cd /volume1/Stadionheft
+mkdir -p 00_Konfiguration 01_Vorlagen 02_Werbung 03_Eingaben \
+         04_Zwischenergebnisse 05_Ausgaben/Archiv 99_Logs
+```
+
+Hintergrund zu den Ordnern: [NAS_ORDNERSTRUKTUR.md](NAS_ORDNERSTRUKTUR.md)
+
+---
+
+## Schritt 3: Konfiguration hinterlegen
+
+**Wichtig – sonst startet die App im Einrichtungsmodus.**
+
+Aus diesem Projekt die drei Beispieldateien nehmen, umbenennen und per
+Dateistation nach `Stadionheft/00_Konfiguration/` hochladen:
+
+| aus dem Projekt | auf der NAS |
+|---|---|
+| `config/config.example.yaml` | `00_Konfiguration/config.yaml` |
+| `config/heftplan.example.yaml` | `00_Konfiguration/heftplan.yaml` |
+| `config/kontakte.example.yaml` | `00_Konfiguration/kontakte.yaml` |
+
+Danach `config.yaml` bearbeiten (Text-Editor in der Dateistation genügt) und
+mindestens diese Werte setzen:
+
+```yaml
+nas:
+  aktiv: true
+  modus: "mount"
+  mount:
+    zielordner: "/nas/Stadionheft/05_Ausgaben"
+```
+
+Die mit `TODO` markierten Ligen kannst du später ergänzen – die App läuft
+auch so.
+
+---
+
+## Schritt 4: Projekt anlegen
+
+**Container Manager → Projekt → Erstellen**
+
+* Projektname: `stadionheft`
+* Pfad: `/volume1/Stadionheft` (oder ein eigener Ordner `/volume1/docker/stadionheft`)
+* Quelle: **Docker-compose.yml erstellen** und den Inhalt der Datei
+  `docker-compose.yml` aus diesem Projekt einfügen
+
+Alternativ – sauberer, weil das Abbild direkt aus dem Quellcode gebaut wird:
+per SSH auf die NAS und
+
+```bash
+cd /volume1/docker
+git clone -b main https://github.com/habersatterdan/stadionheft-svw.git stadionheft
+cd stadionheft
+docker compose up -d --build
+```
+
+Der erste Build dauert 5–15 Minuten (es werden Pango, Cairo und die
+Schriften installiert). Danach startet der Container in Sekunden.
+
+---
+
+## Schritt 5: Aufrufen
+
+Im Browser:
+
+```
+http://<name-oder-ip-der-nas>:8080
+```
+
+Also z. B. `http://diskstation:8080` oder `http://192.168.178.42:8080`.
+
+Die IP findest du in DSM unter Systemsteuerung → Netzwerk → Netzwerkschnittstelle.
+
+**Tipp:** Der NAS eine feste IP geben (im Router als DHCP-Reservierung),
+damit sich die Adresse nie ändert.
+
+---
+
+## Vom Handy aus benutzen
+
+Die Oberfläche ist für kleine Bildschirme ausgelegt – getestet bei 320, 360
+und 390 Pixel Breite, kein seitliches Scrollen, Knöpfe in Daumengröße.
+
+### Im WLAN zu Hause / im Vereinsheim
+
+Nichts weiter nötig. Im Handy-Browser dieselbe Adresse öffnen:
+`http://192.168.178.42:8080`
+
+**Als App auf den Startbildschirm legen:**
+
+* *iPhone (Safari)*: Teilen-Symbol → „Zum Home-Bildschirm"
+* *Android (Chrome)*: Drei-Punkte-Menü → „Zum Startbildschirm hinzufügen"
+
+Danach sieht es aus wie eine echte App – ein Symbol antippen, fertig.
+
+### Von unterwegs
+
+Hier ist Vorsicht angebracht: Die App hat **keine Benutzeranmeldung**. Wer
+die Adresse kennt, kann Hefte erzeugen. Im Vereinsnetz ist das in Ordnung –
+offen ins Internet gehört sie nicht.
+
+Drei Wege, vom sichersten zum bequemsten:
+
+| Weg | Sicherheit | Aufwand | Wie |
+|---|---|---|---|
+| **VPN** | am besten | mittel | DSM → Systemsteuerung → **VPN Server** (WireGuard/OpenVPN). Handy verbindet sich ins Heimnetz, dann funktioniert die lokale Adresse wie zu Hause. |
+| **Reverse Proxy + Passwort** | gut | mittel | DSM → Anmeldeportal → **Reverse Proxy**: Regel von `stadionheft.deine-domain.de` (443) auf `localhost:8080`. Zusätzlich **unbedingt** einen Passwortschutz davorsetzen und ein Zertifikat (Let's Encrypt) aktivieren. |
+| **QuickConnect** | eingeschränkt | gering | Funktioniert nur für DSM-eigene Dienste, **nicht** ohne Weiteres für eigene Container-Ports. In der Praxis meist kein gangbarer Weg. |
+
+**Empfehlung: VPN.** Es ist der einzige Weg, bei dem eine App ohne
+Anmeldung nicht im offenen Internet steht. Für einen Verein reicht das
+völlig – man verbindet einmal das Handy und hat dann Zugriff auf alles im
+Heimnetz.
+
+---
+
+## Wenn etwas nicht klappt
+
+| Symptom | Ursache / Lösung |
+|---|---|
+| Seite lädt nicht | Container Manager → Container → läuft `stadionheft`? Sonst starten und ins Protokoll sehen. |
+| „Einrichtung nicht abgeschlossen" im Browser | `config.yaml` fehlt in `00_Konfiguration`. Schritt 3 nachholen, dann Container neu starten. |
+| Container startet und stoppt sofort | Protokoll im Container Manager ansehen. Meist ein YAML-Fehler in `config.yaml` (Einrückung!). |
+| Build schlägt fehl | Kein Internet auf der NAS oder zu wenig Speicherplatz. |
+| Heft wird erzeugt, liegt aber nicht in `05_Ausgaben` | In `config.yaml` prüfen: `nas.aktiv: true` und `zielordner: "/nas/Stadionheft/05_Ausgaben"`. Der Pfad ist der **Pfad im Container**, nicht der DSM-Pfad. |
+| „NAS nicht erreichbar" | Volume-Zuordnung in `docker-compose.yml` prüfen. |
+
+Protokolle liegen auf der NAS unter `Stadionheft/99_Logs/`.
+
+---
+
+## Aktualisieren
+
+Bei einer neuen Version:
+
+```bash
+cd /volume1/docker/stadionheft
+git pull
+docker compose up -d --build
+```
+
+Konfiguration und Daten bleiben erhalten – sie liegen außerhalb des
+Containers in den gemounteten Ordnern.
+
+---
+
+## Sicherung
+
+Hyper Backup einrichten für:
+
+* `Stadionheft/00_Konfiguration` – **wichtig**, enthält eure ganze Einrichtung
+* `Stadionheft/01_Vorlagen` und `02_Werbung` – schwer wiederzubeschaffen
+* `Stadionheft/05_Ausgaben` – die fertigen Hefte
+
+`04_Zwischenergebnisse` braucht keine Sicherung.
+
+> `00_Konfiguration/kontakte.yaml` enthält personenbezogene Daten
+> (Telefonnummern, private E-Mail-Adressen). Das Backup-Ziel sollte
+> verschlüsselt sein.

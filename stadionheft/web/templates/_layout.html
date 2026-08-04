@@ -42,6 +42,11 @@
     .knopf-zweit { display: inline-block; background: #FFF; color: var(--dunkel);
                    border: 1px solid var(--rahmen); border-radius: 6px;
                    padding: .8rem 1.4rem; text-decoration: none; font-weight: 600; }
+    /* Diese Kaesten enthalten oft lange Dateipfade. Ohne overflow-wrap
+       ziehen sie die Seite auf dem Handy in die Breite. */
+    .hinweis, .fehlerkasten, .erfolg {
+        overflow-wrap: anywhere; word-break: break-word;
+    }
     .hinweis { border-left: 4px solid var(--gelb); background: #FFFBEB;
                padding: .7rem 1rem; margin: .6rem 0; border-radius: 0 6px 6px 0;
                font-size: .92rem; }
@@ -60,9 +65,33 @@
     details summary { cursor: pointer; color: var(--grau); font-size: .9rem; }
     footer { text-align: center; color: var(--grau); font-size: .82rem;
              padding: 2rem 1rem 3rem; }
-    table.info { width: 100%; border-collapse: collapse; font-size: .9rem; }
-    table.info td { padding: .35rem .5rem; border-bottom: 1px solid var(--rahmen); }
-    table.info td:first-child { color: var(--grau); width: 40%; }
+    /* table-layout:fixed + overflow-wrap sind noetig, damit lange Dateipfade
+       die Seite auf dem Handy nicht in die Breite ziehen. */
+    table.info { width: 100%; border-collapse: collapse; font-size: .9rem;
+                 table-layout: fixed; }
+    table.info td { padding: .35rem .5rem; border-bottom: 1px solid var(--rahmen);
+                    overflow-wrap: anywhere; word-break: break-word; }
+    table.info td:first-child { color: var(--grau); width: 38%; }
+
+    /* --- Handy ---------------------------------------------------------- */
+    @media (max-width: 560px) {
+        main { padding: 1rem .8rem; }
+        .karte { padding: 1rem; }
+        h1 { font-size: 1.3rem; }
+
+        /* Zweispaltige Infotabellen untereinander statt nebeneinander */
+        table.info, table.info tbody, table.info tr, table.info td {
+            display: block; width: 100%;
+        }
+        table.info td:first-child {
+            padding-bottom: 0; border-bottom: none; font-size: .8rem;
+        }
+        table.info td:last-child { padding-top: .1rem; }
+
+        /* Knoepfe auf volle Breite - besser mit dem Daumen zu treffen */
+        button, .knopf-zweit { width: 100%; text-align: center; }
+        .knopf-zweit { box-sizing: border-box; }
+    }
     .spinner { display: inline-block; width: 1.1rem; height: 1.1rem;
                border: 3px solid #DDD; border-top-color: var(--rot);
                border-radius: 50%; animation: dreh .8s linear infinite;
