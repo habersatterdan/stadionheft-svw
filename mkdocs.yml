@@ -51,6 +51,7 @@ nav:
       - Inhalte pflegen: inhalte-pflegen.md
       - Werbung verwalten: werbung.md
   - Für Administratoren:
+      - Erste Einrichtung (Schritt für Schritt): ERSTE_EINRICHTUNG.md
       - Installation auf der NAS: INSTALLATION_NAS.md
       - Ordner auf der NAS: NAS_ORDNERSTRUKTUR.md
       - FuPa-Anbindung: fupa.md
