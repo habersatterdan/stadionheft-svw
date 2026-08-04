@@ -223,22 +223,61 @@ Danach sieht es aus wie eine echte App – ein Symbol antippen, fertig.
 
 ### Von unterwegs
 
-Hier ist Vorsicht angebracht: Die App hat **keine Benutzeranmeldung**. Wer
-die Adresse kennt, kann Hefte erzeugen. Im Vereinsnetz ist das in Ordnung –
-offen ins Internet gehört sie nicht.
-
 Drei Wege, vom sichersten zum bequemsten:
 
-| Weg | Sicherheit | Aufwand | Wie |
-|---|---|---|---|
-| **VPN** | am besten | mittel | DSM → Systemsteuerung → **VPN Server** (WireGuard/OpenVPN). Handy verbindet sich ins Heimnetz, dann funktioniert die lokale Adresse wie zu Hause. |
-| **Reverse Proxy + Passwort** | gut | mittel | DSM → Anmeldeportal → **Reverse Proxy**: Regel von `stadionheft.deine-domain.de` (443) auf `localhost:8080`. Zusätzlich **unbedingt** einen Passwortschutz davorsetzen und ein Zertifikat (Let's Encrypt) aktivieren. |
-| **QuickConnect** | eingeschränkt | gering | Funktioniert nur für DSM-eigene Dienste, **nicht** ohne Weiteres für eigene Container-Ports. In der Praxis meist kein gangbarer Weg. |
+| Weg | Sicherheit | Aufwand |
+|---|---|---|
+| **VPN** | am besten | mittel |
+| **Reverse Proxy + Passwortschutz** | gut | mittel |
+| **QuickConnect** | funktioniert hier nicht | – |
 
-**Empfehlung: VPN.** Es ist der einzige Weg, bei dem eine App ohne
-Anmeldung nicht im offenen Internet steht. Für einen Verein reicht das
-völlig – man verbindet einmal das Handy und hat dann Zugriff auf alles im
-Heimnetz.
+#### VPN – die Empfehlung
+
+DSM → Systemsteuerung → **VPN Server** (WireGuard). Das Handy verbindet sich
+ins Vereinsnetz, danach funktioniert die lokale Adresse wie zu Hause – und
+zwar für alles auf der NAS, nicht nur für das Stadionheft.
+
+Die Anwendung steht dabei zu keinem Zeitpunkt offen im Internet.
+
+#### Reverse Proxy – wenn es ohne VPN gehen soll
+
+DSM → Anmeldeportal → **Reverse Proxy**: Regel von
+`stadionheft.eure-domain.de` (HTTPS, 443) auf `localhost:8080`. Dazu ein
+Zertifikat über Let's Encrypt.
+
+!!! danger "Dann unbedingt den Passwortschutz einschalten"
+    Sonst kann jeder, der die Adresse kennt, Hefte erzeugen und eure Daten
+    einsehen. In `config.yaml`:
+
+    ```yaml
+    zugang:
+      passwortschutz: true
+      benutzername: "svw"
+      passwort_umgebungsvariable: "STADIONHEFT_PASSWORT"
+    ```
+
+    Das Passwort selbst wird im Container Manager unter **Umgebung** gesetzt –
+    nicht in die Konfigurationsdatei schreiben.
+
+    Der Schutz wirkt nur zusammen mit HTTPS. Über eine unverschlüsselte
+    Verbindung wären die Zugangsdaten mitlesbar.
+
+#### QuickConnect
+
+Leitet nur DSM-eigene Dienste weiter, **nicht** die Ports eigener Container.
+Für das Stadionheft also kein gangbarer Weg – auch wenn die QuickConnect-ID
+eingerichtet ist.
+
+---
+
+## Web Station? Nein.
+
+Naheliegende Frage, aber **Web Station kann das nicht**. Sie liefert statische
+Seiten und PHP aus. Das Stadionheft braucht Python mit WeasyPrint für den
+PDF-Satz – das läuft nur im Container.
+
+Web Station und Container Manager schließen sich nicht aus; sie sind für
+verschiedene Dinge da.
 
 ---
 

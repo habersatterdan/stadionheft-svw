@@ -45,7 +45,7 @@ RUN mkdir -p /app/daten/01_vorlagen /app/daten/02_werbung /app/daten/03_eingaben
 EXPOSE 8080
 
 HEALTHCHECK --interval=60s --timeout=5s --start-period=15s \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/gesundheit').read()" || exit 1
 
 # Ein Arbeitsprozess mit mehreren Threads reicht voellig -- im Verein
 # erstellt praktisch nie mehr als eine Person gleichzeitig ein Heft.

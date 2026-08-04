@@ -190,6 +190,22 @@ nas:
 
 
 # ---------------------------------------------------------------------------
+# Zugangsschutz
+#
+# Im Vereins-WLAN nicht noetig. Einschalten, sobald die Anwendung von
+# ausserhalb erreichbar sein soll.
+#
+# WICHTIG: Das schuetzt nur zusammen mit HTTPS (DSM-Reverse-Proxy mit
+# Zertifikat). Der sicherste Weg von unterwegs bleibt ein VPN.
+# ---------------------------------------------------------------------------
+zugang:
+  passwortschutz: false
+  benutzername: "svw"
+  # Das Passwort steht NIE hier, sondern in dieser Umgebungsvariablen:
+  passwort_umgebungsvariable: "STADIONHEFT_PASSWORT"
+
+
+# ---------------------------------------------------------------------------
 # Protokollierung
 # ---------------------------------------------------------------------------
 protokoll:

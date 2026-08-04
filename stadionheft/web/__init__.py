@@ -58,6 +58,14 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
     app = Flask(__name__)
     app.config["KONFIGURATION"] = k
 
+    from .zugang import einrichten as zugang_einrichten
+    zugang_einrichten(app, k)
+
+    @app.get("/gesundheit")
+    def gesundheit():
+        """Fuer den Healthcheck des Containers -- bewusst ohne Anmeldung."""
+        return {"status": "ok"}
+
     # Jede Vorlage -- auch die Fehlerseiten -- braucht die Konfiguration
     # fuer Kopf- und Fusszeile.
     @app.context_processor
