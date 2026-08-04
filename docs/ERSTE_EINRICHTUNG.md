@@ -73,6 +73,13 @@ So kommt es auf die NAS:
 
 Danach liegt in `SVW/Stadionheft` ein neuer Ordner **`_Programm`**.
 
+!!! warning "Wo genau landet `_Programm`?"
+    Es muss direkt in `SVW/Stadionheft` liegen, also
+    `SVW/Stadionheft/_Programm`. Landet es versehentlich eine Ebene tiefer
+    (z. B. `SVW/Stadionheft/app/_Programm`), dann entweder den Ordner
+    `_Programm` eine Ebene nach oben ziehen – oder in `docker-compose.yml`
+    alle Pfade entsprechend anpassen.
+
 !!! success "Was dabei nicht passiert"
     Deine bestehenden Ordner – `Saison 22 23` bis `Saison 26-27`,
     `Fupa-Export`, `Beregnungseinbau` – werden **nicht angefasst**. Es kommt
@@ -103,17 +110,15 @@ und dauert zwei Minuten.
 5. In diesen Ordner wechseln und die heruntergeladene ZIP hochladen
 6. **Rechtsklick → Extrahieren → Hierher extrahieren**
 
-Nach dem Entpacken liegt dort ein Unterordner
-`stadionheft-svw-main`. **Wichtig:** Der Inhalt muss eine Ebene höher.
-Also: in den Unterordner gehen, alles markieren (Strg+A), ausschneiden,
-eine Ebene zurück, einfügen. Danach den leeren Unterordner und die ZIP
-löschen.
+Nach dem Entpacken liegt dort ein Unterordner mit einem langen Namen wie
+`stadionheft-svw-main` oder `stadionheft-svw-claude-...`. **Das ist in
+Ordnung** – du musst nichts verschieben. Merk dir nur den Namen; im
+nächsten Schritt wählst du genau diesen Ordner aus.
 
-In `docker/stadionheft` müssen jetzt direkt `Dockerfile`,
-`docker-compose.svwnas.yml` und der Ordner `stadionheft` liegen.
+Darin müssen `Dockerfile`, `docker-compose.yml` und der Ordner
+`stadionheft` liegen.
 
-7. Die Datei **`docker-compose.svwnas.yml`** umbenennen in
-   **`docker-compose.yml`** (Rechtsklick → Umbenennen)
+7. Die ZIP-Datei löschen (wird nicht mehr gebraucht)
 
 ---
 
@@ -124,7 +129,7 @@ In `docker/stadionheft` müssen jetzt direkt `Dockerfile`,
 | Feld | Eingabe |
 |---|---|
 | Projektname | `stadionheft` |
-| Pfad | **Festlegen** → `docker/stadionheft` auswählen |
+| Pfad | **Festlegen** → den entpackten Ordner auswählen (der mit dem langen Namen) |
 | Quelle | Container Manager erkennt die vorhandene `docker-compose.yml` und schlägt sie vor – bestätigen |
 
 Dann **Weiter → Weiter → Fertig**.
@@ -193,8 +198,11 @@ Nichts weiter nötig. Adresse weitergeben, fertig. Am Handy lohnt sich
 
 ### Von unterwegs – der sichere Weg
 
-**Systemsteuerung → VPN Server** → **WireGuard** installieren und aktivieren
-→ für jede Person ein Profil anlegen.
+Über **VPN**. Eigene Schritt-für-Schritt-Anleitung:
+**[VPN einrichten](VPN_EINRICHTEN.md)**
+
+Kurz: DDNS einrichten, VPN Server installieren, WireGuard aktivieren, einen
+einzigen UDP-Port im Router freigeben, je Gerät ein Profil per QR-Code.
 
 Wer sich per VPN verbindet, erreicht die App wie zu Hause – und alles andere
 auf der NAS gleich mit.

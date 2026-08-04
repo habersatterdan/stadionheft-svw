@@ -1,19 +1,17 @@
 # ---------------------------------------------------------------------------
-# Betrieb auf der Synology NAS (Container Manager -> Projekt anlegen)
+# Fertige Compose-Datei fuer die SVWNAS (DS720+)
 #
-# Die Ordner unter /volume1/Stadionheft/ muessen vorher in der DSM-Dateistation
-# angelegt sein (siehe docs/NAS_ORDNERSTRUKTUR.md).
+# Zugeschnitten auf die vorhandene Ablage:
+#     /volume1/SVW/Stadionheft/
 #
-# WICHTIG vor dem ersten Start:
-# Der Ordner 00_Konfiguration wird ueber /app/config gemountet und verdeckt
-# damit die im Image mitgelieferten Beispieldateien. Deshalb einmalig
+# Verwendung: Container Manager -> Projekt -> Erstellen -> als Pfad den
+# Ordner waehlen, in dem diese Datei liegt.
 #
-#     config/config.example.yaml   ->  00_Konfiguration/config.yaml
-#     config/heftplan.example.yaml ->  00_Konfiguration/heftplan.yaml
-#     config/kontakte.example.yaml ->  00_Konfiguration/kontakte.yaml
+# Vollstaendige Anleitung: docs/ERSTE_EINRICHTUNG.md
 #
-# kopieren und die TODO-Werte ausfuellen. Fehlt die Konfiguration, startet der
-# Container trotzdem und zeigt im Browser eine Anleitung an.
+# WICHTIG: Die Pfade unten muessen zur tatsaechlichen Ablage passen. Liegt
+# _Programm z. B. unter .../Stadionheft/app/_Programm, dann hier ueberall
+# "/Stadionheft/_Programm" durch "/Stadionheft/app/_Programm" ersetzen.
 # ---------------------------------------------------------------------------
 services:
   stadionheft:
@@ -23,27 +21,37 @@ services:
     restart: unless-stopped
 
     ports:
+      # Falls 8080 auf der NAS schon belegt ist, hier die linke Zahl aendern,
+      # z. B. "8095:8080". Die rechte Zahl bleibt immer 8080.
       - "8080:8080"
 
     environment:
       TZ: Europe/Berlin
-      # Nur noetig, wenn nas.modus = "smb" verwendet wird. Besser: Volumes
-      # unten benutzen und nas.modus auf "mount" lassen.
-      # NAS_PASSWORT: "${NAS_PASSWORT}"
+      # Nur noetig, wenn in config.yaml zugang.passwortschutz auf true steht.
+      # Das Passwort NICHT hier eintragen, sondern im Container Manager unter
+      # "Umgebung" setzen -- sonst steht es im Klartext in dieser Datei.
+      # STADIONHEFT_PASSWORT: ""
 
     volumes:
-      # Konfiguration -- liegt auf der NAS und ist damit ohne Neubau aenderbar
-      - /volume1/Stadionheft/00_Konfiguration:/app/config
+      # --- Konfiguration -------------------------------------------------
+      - /volume1/SVW/Stadionheft/_Programm/00_Konfiguration:/app/config
 
-      # Arbeits- und Ablageordner
-      - /volume1/Stadionheft/01_Vorlagen:/app/daten/01_vorlagen:ro
-      - /volume1/Stadionheft/02_Werbung:/app/daten/02_werbung:ro
-      - /volume1/Stadionheft/03_Eingaben:/app/daten/03_eingaben
-      - /volume1/Stadionheft/04_Zwischenergebnisse:/app/daten/04_zwischenergebnisse
-      - /volume1/Stadionheft/05_Ausgaben:/app/daten/05_ausgaben
-      - /volume1/Stadionheft/99_Logs:/app/logs
+      # --- Vorlagen und Werbung (nur lesen) ------------------------------
+      - /volume1/SVW/Stadionheft/_Programm/01_Vorlagen:/app/daten/01_vorlagen:ro
+      - /volume1/SVW/Stadionheft/_Programm/02_Werbung:/app/daten/02_werbung:ro
 
-      # Zielordner fuer den "NAS-Upload" bei nas.modus = "mount".
-      # Zeigt bewusst auf denselben Ordner wie 05_Ausgaben -- so ist das Heft
-      # sofort in der Dateistation sichtbar.
-      - /volume1/Stadionheft/05_Ausgaben:/nas/Stadionheft/05_Ausgaben
+      # --- Eingaben der Redaktion ----------------------------------------
+      - /volume1/SVW/Stadionheft/_Programm/03_Eingaben:/app/daten/03_eingaben
+
+      # --- Arbeitsordner und Protokolle ----------------------------------
+      - /volume1/SVW/Stadionheft/_Programm/04_Zwischenergebnisse:/app/daten/04_zwischenergebnisse
+      - /volume1/SVW/Stadionheft/_Programm/99_Logs:/app/logs
+
+      # --- Fertige Hefte: in den Saisonordner, wie bisher -----------------
+      # Beim Saisonwechsel diese Zeile auf den neuen Ordner umstellen.
+      - /volume1/SVW/Stadionheft/Saison 26-27/05_Ausgaben:/app/daten/05_ausgaben
+
+      # --- Vorhandener FuPa-Export ---------------------------------------
+      # Falls dort bereits Exportdateien liegen, sind sie im Container unter
+      # /app/daten/fupa_export erreichbar.
+      - /volume1/SVW/Stadionheft/Fupa-Export:/app/daten/fupa_export:ro
