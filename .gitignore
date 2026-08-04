@@ -28,3 +28,6 @@ logs/
 .DS_Store
 Thumbs.db
 @eaDir/
+
+# MkDocs-Ausgabe
+site/

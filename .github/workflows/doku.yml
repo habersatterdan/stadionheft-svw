@@ -1,0 +1,70 @@
+# ---------------------------------------------------------------------------
+# Baut die Anleitung als Website und veroeffentlicht sie auf GitHub Pages.
+#
+# Einmalige Einrichtung im Repository:
+#   Settings -> Pages -> Source: "GitHub Actions"
+#
+# Hinweis bei privaten Repositories: GitHub Pages ist dort nur mit einem
+# kostenpflichtigen Tarif verfuegbar. Bei einem oeffentlichen Repository ist
+# es kostenlos.
+# ---------------------------------------------------------------------------
+name: Anleitung veröffentlichen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/doku.yml"
+  # Erlaubt das Ausloesen von Hand unter "Actions"
+  workflow_dispatch:
+
+# Nur Leserechte auf den Code, Schreibrechte ausschliesslich fuer Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Laeuft ein Deploy bereits, wird er nicht abgebrochen, sondern zu Ende
+# gefuehrt -- sonst kann eine halb veroeffentlichte Seite entstehen.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  bauen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: MkDocs installieren
+        run: pip install mkdocs-material==9.*
+
+      - name: Website bauen
+        # --strict laesst den Lauf bei kaputten internen Links fehlschlagen,
+        # damit keine toten Verweise veroeffentlicht werden.
+        run: mkdocs build --strict
+
+      - name: Ergebnis hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  veroeffentlichen:
+    needs: bauen
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Auf GitHub Pages veröffentlichen
+        id: deploy
+        uses: actions/deploy-pages@v4

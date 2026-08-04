@@ -1,0 +1,27 @@
+/* Vereinsfarbe des SV Wörnitzstein-Berg.
+
+   Die Standardpalette von Material trifft das Rot nicht genau; #E52421 ist
+   aus dem bestehenden Stadionheft gemessen (siehe Analyse der Vorlage). */
+
+/* Material setzt die Palette auf [data-md-color-scheme=...]. Ein blosses
+   :root waere weniger spezifisch und wuerde ueberschrieben -- deshalb hier
+   dieselben Selektoren. */
+:root,
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
+    --md-primary-fg-color:        #E52421;
+    --md-primary-fg-color--light: #EE5350;
+    --md-primary-fg-color--dark:  #B81B19;
+    --md-accent-fg-color:         #B81B19;
+}
+
+/* Dunkle Ansicht: das kräftige Rot als Linkfarbe wäre auf Dunkelgrau zu
+   kontrastarm, deshalb eine aufgehellte Variante. */
+[data-md-color-scheme="slate"] {
+    --md-typeset-a-color: #FF7B78;
+}
+
+/* Etwas Luft zwischen den Kacheln der Startseite */
+.md-typeset .grid.cards > ul > li {
+    padding: 1rem 1.2rem;
+}
