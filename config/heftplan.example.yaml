@@ -55,11 +55,25 @@ seiten:
     optional: true
 
   # --- Kontaktlisten -------------------------------------------------------
-  - typ: kontakte
+  # Bewusst als unveraenderte Seiten aus dem bestehenden Heft uebernommen,
+  # nicht neu gesetzt: So sehen sie exakt aus wie bisher, und die
+  # Telefonnummern muessen nirgends abgetippt werden.
+  #   python -m stadionheft.cli seiten-uebernehmen --aus <altes_heft.pdf> --alles
+  - typ: pdf
+    quelle: "02_werbung/kontaktlisten.pdf"
     optional: true
+    bemerkung: "Kontaktlisten (aus dem bestehenden Heft uebernommen)"
 
   # --- Impressum -----------------------------------------------------------
-  - typ: impressum
+  - typ: pdf
+    quelle: "02_werbung/impressum.pdf"
+    optional: true
+    bemerkung: "Impressum (aus dem bestehenden Heft uebernommen)"
+
+  # Alternative, falls die Seiten doch aus der Konfiguration erzeugt werden
+  # sollen (config/kontakte.yaml bzw. config.yaml -> impressum):
+  #   - typ: kontakte
+  #   - typ: impressum
 
   # --- Ruecktitel ----------------------------------------------------------
   - typ: pdf

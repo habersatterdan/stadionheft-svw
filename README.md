@@ -114,6 +114,7 @@ Für Administratoren und automatische Abläufe.
 | `stadionheft mannschaften` | konfigurierte Mannschaften auflisten |
 | `stadionheft erstellen` | Heft erzeugen |
 | `stadionheft probe-fupa` | FuPa-Endpunkte testen und Rohantworten speichern |
+| `stadionheft seiten-uebernehmen` | feste Seiten (Werbung, Kontakte, Impressum) aus einem bestehenden Heft übernehmen |
 | `stadionheft beispieldaten` | CSV-Vorlagen mit den richtigen Spalten anlegen |
 | `stadionheft web` | Weboberfläche starten |
 
@@ -131,6 +132,31 @@ stadionheft erstellen --mannschaften herren1,damen1 --titelspiel damen1
 
 # Ein früheres Heft exakt neu bauen (kein FuPa-Zugriff nötig)
 stadionheft erstellen --snapshot daten/05_ausgaben/20260729_WaB_Druck_snapshot.json
+```
+
+### Feste Seiten aus dem alten Heft übernehmen
+
+Werbung, Kontaktlisten und Impressum sollen sich nicht ändern – sie werden
+deshalb nicht neu gesetzt, sondern als Seiten aus dem bestehenden Heft
+übernommen:
+
+```bash
+stadionheft seiten-uebernehmen --aus "20260728_WaB_Druck.pdf" --alles
+```
+
+Das legt `werbung_vorne.pdf`, `werbung_hinten.pdf`, `kontaktlisten.pdf`,
+`impressum.pdf` und `ruecktitel.pdf` in `daten/02_werbung/` ab. Der
+mitgelieferte Heftplan bindet sie bereits ein.
+
+So sehen diese Seiten **exakt aus wie bisher**, und die Telefonnummern der
+Kontaktliste müssen nirgends abgetippt werden – ein Vorteil auch beim
+Datenschutz, weil keine personenbezogenen Daten in eine Konfigurationsdatei
+wandern.
+
+Einzelne Seiten gehen genauso:
+
+```bash
+stadionheft seiten-uebernehmen --aus alt.pdf --seiten 24-25 --als kontaktlisten
 ```
 
 ---
@@ -231,14 +257,44 @@ an, dazu eine `LIESMICH.txt`.
 
 | Datei | Spalten |
 |---|---|
+| `<team>_spielplan.csv` | `heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag;ergebnis` |
 | `<team>_tabelle.csv` | `platz;mannschaft;spiele;siege;unentschieden;niederlagen;tore;gegentore;punkte;zusatz` |
 | `<team>_torjaeger.csv` | `platz;spieler;mannschaft;tore;vorlagen;spiele` |
 | `<team>_spieler.csv` | `platz;spieler;spiele;tore;vorlagen;elfmeter;gelb;gelb_rot;rot;ein;aus;minuten` |
-| `<team>_gegner_spieler.csv` | wie `_spieler.csv` (Kader des Gegners) |
-| `<team>_naechstes_spiel.csv` | `heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag` |
+| `<team>_gegner_<gegner>.csv` | wie `_spieler.csv`, je Gegner (z. B. `herren1_gegner_sg-alerheim.csv`) |
 | `<team>_spielbericht.md` | Freitext |
 | `vorwort.md` | Freitext für die Vorwortseite |
 | `titelbild.jpg` | Foto für die Titelseite |
+
+#### Der Spielplan erspart die meiste Arbeit
+
+In `<team>_spielplan.csv` gehören **alle Spiele der Saison** – eine Zeile je
+Partie. Das trägt man einmal im Sommer ein. Danach schaut das Programm bei
+jedem Heft auf das **heutige Datum** und ermittelt selbst:
+
+* gegen wen als nächstes gespielt wird (Titelseite, Gegnerseite)
+* wann und wo, Heim oder Auswärts
+* welches Spiel zuletzt war (für den Spielbericht)
+
+```csv
+heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag;ergebnis
+TG Lauingen;SV Wörnitzstein-Berg;Bezirksliga;26.07.2026;15:00;;nein;1;0:4
+SV Wörnitzstein-Berg;TSV Meitingen;Bezirksliga;29.07.2026;18:30;Wörnitzstein;ja;2;
+SV Wörnitzstein-Berg;SG Alerheim;Bezirksliga;09.08.2026;15:00;Wörnitzstein;ja;3;
+```
+
+Maßgeblich für die Auswahl ist **allein das Datum** – nicht die Reihenfolge in
+der Datei und auch nicht, ob ein Ergebnis eingetragen ist. Ein vergessener
+Ergebniseintrag bringt also keine alte Partie auf die Titelseite.
+
+Für den Gegnerkader empfiehlt sich eine Datei **je Gegner**
+(`herren1_gegner_sg-alerheim.csv`). Das Programm greift automatisch die
+passende. Gibt es nur die allgemeine `herren1_gegner_spieler.csv`, wird das
+Heft trotzdem erzeugt – mit dem Hinweis, dass die Liste zum aktuellen Gegner
+passen muss.
+
+Wer lieber vor jedem Heft eine einzelne Partie einträgt, kann statt des
+Spielplans `<team>_naechstes_spiel.csv` mit genau einer Zeile verwenden.
 
 Die Dateien lassen sich direkt in Excel bearbeiten. Beim Speichern
 **„CSV UTF-8 (durch Trennzeichen getrennt)"** wählen. Semikolon und Komma

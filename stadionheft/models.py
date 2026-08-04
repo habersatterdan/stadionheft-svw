@@ -16,7 +16,7 @@ die verwendeten Rohdaten ab und ist damit spaeter exakt reproduzierbar.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict, fields
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 
@@ -254,6 +254,43 @@ class Spiel(_Basis):
             spieltag=_als_text(zeile.get("spieltag")),
             ergebnis=_als_text(zeile.get("ergebnis")),
         )
+
+
+def spiele_einordnen(spiele: list["Spiel"], stichtag: datetime | None = None,
+                     vorlauf_stunden: float = 3.0
+                     ) -> tuple["Spiel | None", "Spiel | None"]:
+    """Sucht aus einem Spielplan das naechste und das letzte Spiel.
+
+    Massgeblich ist **das Datum**, nicht die Reihenfolge in der Liste und auch
+    nicht, ob schon ein Ergebnis eingetragen ist. Genau so soll sich das Heft
+    verhalten: Es wird am Erstellungstag geschaut, welche Partie als naechste
+    ansteht.
+
+    ``vorlauf_stunden`` sorgt dafuer, dass ein Spiel am selben Tag noch als
+    "naechstes" gilt, waehrend es laeuft. Wer das Heft am Spieltag um 17 Uhr
+    fuer den Anstoss um 15 Uhr nachdruckt, bekommt weiter die richtige Partie
+    aufs Titelblatt.
+
+    Rueckgabe: ``(naechstes, letztes)``. Spiele ohne verwertbares Datum werden
+    uebergangen; gibt es gar kein Datum, faellt die Funktion auf die
+    Listenreihenfolge zurueck (erstes ohne Ergebnis = naechstes).
+    """
+    jetzt = stichtag or datetime.now()
+    grenze = jetzt - timedelta(hours=vorlauf_stunden)
+
+    mit_datum = [s for s in spiele if s.anstoss_dt is not None]
+    if not mit_datum:
+        ohne_ergebnis = [s for s in spiele if not s.ergebnis]
+        mit_ergebnis = [s for s in spiele if s.ergebnis]
+        return (ohne_ergebnis[0] if ohne_ergebnis else None,
+                mit_ergebnis[-1] if mit_ergebnis else None)
+
+    mit_datum.sort(key=lambda s: s.anstoss_dt)  # type: ignore[arg-type,return-value]
+    kuenftig = [s for s in mit_datum if s.anstoss_dt >= grenze]  # type: ignore[operator]
+    vergangen = [s for s in mit_datum if s.anstoss_dt < grenze]  # type: ignore[operator]
+
+    return (kuenftig[0] if kuenftig else None,
+            vergangen[-1] if vergangen else None)
 
 
 # ---------------------------------------------------------------------------

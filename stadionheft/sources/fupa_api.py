@@ -46,7 +46,8 @@ from urllib.parse import urljoin, urlparse
 from ..config import Konfiguration, Mannschaft
 from ..errors import DatenNichtLesbarFehler, DatenquelleNichtErreichbarFehler
 from ..logging_setup import logger
-from ..models import MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile, TorjaegerZeile
+from ..models import (MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile,
+                      TorjaegerZeile, spiele_einordnen)
 from .base import basis_daten
 from .cache import DateiCache
 
@@ -396,27 +397,32 @@ class FupaApiQuelle:
         return zeilen
 
     def _spiele(self, slug: str, daten: MannschaftsDaten) -> None:
+        """Ermittelt die naechste und die letzte Partie -- anhand des Datums.
+
+        Bewusst nicht "erster Eintrag ohne Ergebnis": Spielplaene kommen nicht
+        immer sortiert, und ein noch nicht nachgetragenes Ergebnis wuerde sonst
+        eine laengst gespielte Partie auf die Titelseite bringen.
+        """
         def laden():
             nutzlast = self.client.hole_json(
                 self.client.url_fuer("spielplan", team_slug=slug), pflicht=False)
-            eintraege = _liste_finden(nutzlast, "matches", "fixtures")
-            naechstes: Spiel | None = None
-            letztes: Spiel | None = None
-            for eintrag in eintraege:
-                spiel = self._spiel_aus(eintrag)
-                if spiel.ergebnis:
-                    letztes = spiel                 # letztes gespieltes gewinnt
-                elif naechstes is None:
-                    naechstes = spiel               # erstes ungespieltes gewinnt
-            return naechstes, letztes
+            spiele = [self._spiel_aus(e)
+                      for e in _liste_finden(nutzlast, "matches", "fixtures")]
+            return spiele_einordnen(spiele)
 
         ergebnis = self._sicher("Der Spielplan", daten, laden)
         if ergebnis:
             daten.naechstes_spiel, daten.letztes_spiel = ergebnis
         if daten.naechstes_spiel is None:
             daten.warnungen.append(
-                "Es wurde kein naechstes Spiel gefunden - bitte Gegner, Datum "
-                "und Anstoss von Hand eintragen.")
+                "Es wurde kein kommendes Spiel gefunden - moeglicherweise ist "
+                "die Saison zu Ende oder der Spielplan noch nicht "
+                "veroeffentlicht. Bitte Gegner, Datum und Anstoss von Hand "
+                "eintragen.")
+        else:
+            logger().info("Naechstes Spiel: %s am %s",
+                          daten.naechstes_spiel.paarung or "?",
+                          daten.naechstes_spiel.datum or "ohne Datum")
 
     def _spiel_aus(self, eintrag: dict) -> Spiel:
         heim = _text(eintrag, "homeTeam.name", "home.name", "homeTeamName", "heim")

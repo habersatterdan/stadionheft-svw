@@ -143,3 +143,102 @@ def test_cache_aus_liefert_nichts(tmp_path: Path):
     cache = DateiCache(tmp_path / "c", aktiv=False)
     cache.schreiben("k", {"a": 1})
     assert cache.lesen("k") is None
+
+
+# ---------------------------------------------------------------------------
+# Spielplan und Gegnerkader
+# ---------------------------------------------------------------------------
+
+SPIELPLAN_KOPF = ("heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;"
+                  "spieltag;ergebnis\n")
+
+
+def _spielplan_anlegen(konfiguration: Konfiguration, zeilen: str) -> None:
+    (konfiguration.eingabe_ordner / "herren1_spielplan.csv").write_text(
+        SPIELPLAN_KOPF + zeilen, encoding="utf-8")
+    (konfiguration.eingabe_ordner / "herren1_tabelle.csv").write_text(
+        "platz;mannschaft;punkte\n1;Wörnitzstein;3\n", encoding="utf-8")
+
+
+def test_spielplan_waehlt_partie_nach_datum(konfiguration: Konfiguration,
+                                            monkeypatch):
+    """Der Kern der Anforderung: es zaehlt das heutige Datum."""
+    _spielplan_anlegen(konfiguration,
+        "TG Lauingen;SVW;Bezirksliga;26.07.2026;15:00;;nein;1;0:4\n"
+        "SVW;TSV Meitingen;Bezirksliga;29.07.2026;18:30;;ja;2;\n"
+        "SVW;SG Alerheim;Bezirksliga;09.08.2026;15:00;;ja;3;\n")
+
+    import stadionheft.models as modelle
+    from datetime import datetime as echte_zeit
+
+    class Heute(echte_zeit):
+        @classmethod
+        def now(cls, tz=None):
+            return echte_zeit(2026, 8, 4, 10, 0)
+
+    monkeypatch.setattr(modelle, "datetime", Heute)
+
+    daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
+    assert daten.naechstes_spiel.gegner == "SG Alerheim"
+    assert daten.naechstes_spiel.datum == "09.08.2026"
+    assert daten.letztes_spiel.gegner == "TSV Meitingen"
+
+
+def test_spielplan_ohne_kuenftige_partie_warnt(konfiguration: Konfiguration,
+                                               monkeypatch):
+    _spielplan_anlegen(konfiguration,
+        "SVW;TSV Meitingen;Bezirksliga;29.07.2026;18:30;;ja;2;3:1\n")
+
+    import stadionheft.models as modelle
+    from datetime import datetime as echte_zeit
+
+    class Spaeter(echte_zeit):
+        @classmethod
+        def now(cls, tz=None):
+            return echte_zeit(2027, 1, 1)
+
+    monkeypatch.setattr(modelle, "datetime", Spaeter)
+
+    daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
+    assert daten.naechstes_spiel is None
+    assert any("Vergangenheit" in w for w in daten.warnungen)
+
+
+def test_gegnerkader_je_gegner_wird_bevorzugt(konfiguration: Konfiguration):
+    _spielplan_anlegen(konfiguration,
+        "SVW;SG Alerheim;Bezirksliga;31.12.2099;15:00;;ja;3;\n")
+    ordner = konfiguration.eingabe_ordner
+    (ordner / "herren1_gegner_spieler.csv").write_text(
+        "platz;spieler\n1;Falscher Kader\n", encoding="utf-8")
+    (ordner / "herren1_gegner_sg-alerheim.csv").write_text(
+        "platz;spieler\n1;Richtiger Kader\n", encoding="utf-8")
+
+    daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
+    assert daten.gegner_spieler[0].spieler == "Richtiger Kader"
+    assert not any("allgemeinen Datei" in w for w in daten.warnungen)
+
+
+def test_allgemeiner_gegnerkader_wird_beanstandet(konfiguration: Konfiguration):
+    """Ein statischer Kader kann zum falschen Gegner gehoeren - das muss
+    dem Benutzer auffallen."""
+    _spielplan_anlegen(konfiguration,
+        "SVW;SG Alerheim;Bezirksliga;31.12.2099;15:00;;ja;3;\n")
+    (konfiguration.eingabe_ordner / "herren1_gegner_spieler.csv").write_text(
+        "platz;spieler\n1;Irgendwer\n", encoding="utf-8")
+
+    daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
+    assert daten.gegner_spieler[0].spieler == "Irgendwer"
+    assert any("SG Alerheim" in w and "prüfen" in w for w in daten.warnungen)
+
+
+def test_fehlender_gegnerkader_nennt_den_dateinamen(konfiguration: Konfiguration):
+    _spielplan_anlegen(konfiguration,
+        "SVW;SG Alerheim;Bezirksliga;31.12.2099;15:00;;ja;3;\n")
+    daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
+    assert any("herren1_gegner_sg-alerheim.csv" in w for w in daten.warnungen)
+
+
+def test_umlaute_im_gegnernamen():
+    from stadionheft.sources.manuell import _slug
+    assert _slug("Türk Gücü Lauingen") == "tuerk-guecue-lauingen"
+    assert _slug("TSV Nördlingen II") == "tsv-noerdlingen-ii"

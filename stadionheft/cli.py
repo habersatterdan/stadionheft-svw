@@ -162,6 +162,45 @@ def befehl_beispieldaten(args) -> int:
     return 0
 
 
+def befehl_uebernehmen(args) -> int:
+    """Seiten aus einem bestehenden Heft als feste PDF-Seiten uebernehmen."""
+    from .tools.seiten_uebernehmen import VORSCHLAEGE, uebernehmen
+
+    k = _konfiguration(args)
+
+    if args.alles:
+        auftraege = [(name, seiten, titel) for name, seiten, titel in VORSCHLAEGE]
+        print("Uebernehme die ueblichen Seiten aus dem alten Heft.")
+        print("(Seitenzahlen der Ausgabe vom 29.07.2026 - bei abweichendem")
+        print(" Heftaufbau bitte einzeln mit --seiten arbeiten.)\n")
+    else:
+        if not args.seiten or not args.als:
+            print("Bitte --seiten und --als angeben, oder --alles verwenden.\n")
+            print("Ueblich sind:")
+            for name, seiten, titel in VORSCHLAEGE:
+                print(f"  --seiten {seiten:<6} --als {name:<18} # {titel}")
+            return 1
+        auftraege = [(args.als, args.seiten, "")]
+
+    for name, seiten, titel in auftraege:
+        try:
+            ziel, angaben = uebernehmen(k, args.aus, seiten, name)
+        except StadionheftFehler as fehler:
+            print(f"  UEBERSPRUNGEN {name:<18} {fehler.benutzer_text}")
+            continue
+        breite, hoehe = angaben["endformat_mm"]
+        print(f"  OK {name:<18} Seite(n) {seiten:<6} -> {ziel.name} "
+              f"({angaben['seiten']} S., {breite} x {hoehe} mm)"
+              + (f"  # {titel}" if titel else ""))
+
+    print(f"\nAbgelegt in: {k.werbung_ordner}")
+    print("\nIm Heftplan (config/heftplan.yaml) werden diese Dateien mit")
+    print("  - typ: pdf")
+    print("    quelle: \"02_werbung/<dateiname>.pdf\"")
+    print("eingebunden. Die Beispieldatei heftplan.example.yaml zeigt es.")
+    return 0
+
+
 def befehl_web(args) -> int:
     from .web import app_erzeugen
 
@@ -236,6 +275,18 @@ def parser_bauen() -> argparse.ArgumentParser:
     b.add_argument("--mit-daten", action="store_true",
                    help="mit ausgefuellten Beispielwerten statt nur Kopfzeilen")
     b.set_defaults(funktion=befehl_beispieldaten)
+
+    b = unter.add_parser(
+        "seiten-uebernehmen",
+        help="Seiten aus einem bestehenden Heft als feste PDF-Seiten uebernehmen")
+    b.add_argument("--aus", required=True,
+                   help="Pfad zum bestehenden Stadionheft (PDF)")
+    b.add_argument("--seiten", help="z. B. 24-25 oder 24,27")
+    b.add_argument("--als", help="Dateiname ohne Endung, z. B. kontaktlisten")
+    b.add_argument("--alles", action="store_true",
+                   help="alle ueblichen Seiten auf einmal (Kontakte, Impressum, "
+                        "Werbung, Ruecktitel)")
+    b.set_defaults(funktion=befehl_uebernehmen)
 
     b = unter.add_parser("web", help="Weboberflaeche starten")
     b.add_argument("--host", default="0.0.0.0")

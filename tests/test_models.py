@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from stadionheft.models import (Ausgabe, MannschaftsDaten, Spiel, SpielerZeile,
-                                TabellenZeile, TorjaegerZeile)
+                                TabellenZeile, TorjaegerZeile, spiele_einordnen)
 
 
 def test_tabellenzeile_abgeleitete_werte():
@@ -78,3 +80,77 @@ def test_ausgabe_json_hin_und_zurueck():
     assert kopie.to_dict() == original.to_dict()
     assert kopie.mannschaften[0].tabelle[0].mannschaft == "SVW"
     assert kopie.titelspiel.datum == "29.07.2026"
+
+
+# ---------------------------------------------------------------------------
+# Auswahl des naechsten Spiels -- massgeblich ist das Datum
+# ---------------------------------------------------------------------------
+
+def _spiel(tag: str, gast: str = "Gegner", ergebnis: str = "") -> Spiel:
+    return Spiel(heim="SVW", gast=gast, anstoss=f"2026-08-{tag}T15:00:00",
+                 ergebnis=ergebnis)
+
+
+def test_naechstes_spiel_richtet_sich_nach_dem_datum():
+    plan = [_spiel("02", "Alerheim"), _spiel("09", "Ecknach"),
+            _spiel("26", "Lauingen")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 8, 5, 12, 0))
+    assert naechstes.gast == "Ecknach"
+    assert letztes.gast == "Alerheim"
+
+
+def test_reihenfolge_in_der_datei_ist_egal():
+    plan = [_spiel("26", "Lauingen"), _spiel("02", "Alerheim"),
+            _spiel("09", "Ecknach")]
+    naechstes, _ = spiele_einordnen(plan, stichtag=datetime(2026, 8, 5))
+    assert naechstes.gast == "Ecknach"
+
+
+def test_fehlendes_ergebnis_verschiebt_nichts_nach_vorn():
+    """Ein nicht nachgetragenes Ergebnis darf keine alte Partie
+    auf die Titelseite bringen."""
+    plan = [_spiel("02", "Alerheim", ergebnis=""),      # gespielt, nicht gepflegt
+            _spiel("09", "Ecknach")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 8, 5))
+    assert naechstes.gast == "Ecknach"
+    assert letztes.gast == "Alerheim"
+
+
+def test_spiel_am_selben_tag_bleibt_das_naechste():
+    """Heft am Spieltag nachdrucken: die laufende Partie bleibt vorn."""
+    plan = [_spiel("09", "Ecknach")]
+    naechstes, _ = spiele_einordnen(plan, stichtag=datetime(2026, 8, 9, 16, 30))
+    assert naechstes is not None and naechstes.gast == "Ecknach"
+
+
+def test_spiel_von_gestern_ist_das_letzte():
+    plan = [_spiel("09", "Ecknach")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 8, 10, 9, 0))
+    assert naechstes is None
+    assert letztes.gast == "Ecknach"
+
+
+def test_saisonende_liefert_kein_naechstes_spiel():
+    plan = [_spiel("02"), _spiel("09")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 12, 1))
+    assert naechstes is None
+    assert letztes.anstoss.startswith("2026-08-09")
+
+
+def test_vor_saisonstart_gibt_es_kein_letztes_spiel():
+    plan = [_spiel("02"), _spiel("09")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 7, 1))
+    assert naechstes.anstoss.startswith("2026-08-02")
+    assert letztes is None
+
+
+def test_ohne_datum_faellt_auf_die_reihenfolge_zurueck():
+    plan = [Spiel(heim="A", gast="B", ergebnis="1:0"),
+            Spiel(heim="C", gast="D")]
+    naechstes, letztes = spiele_einordnen(plan, stichtag=datetime(2026, 8, 5))
+    assert naechstes.gast == "D"
+    assert letztes.gast == "B"
+
+
+def test_leerer_spielplan():
+    assert spiele_einordnen([], stichtag=datetime(2026, 8, 5)) == (None, None)

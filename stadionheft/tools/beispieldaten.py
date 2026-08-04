@@ -23,8 +23,8 @@ SPALTEN: dict[str, list[str]] = {
                 "gelb", "gelb_rot", "rot", "ein", "aus", "minuten"],
     "gegner_spieler": ["platz", "spieler", "spiele", "tore", "vorlagen", "elfmeter",
                        "gelb", "gelb_rot", "rot", "ein", "aus", "minuten"],
-    "naechstes_spiel": ["heim", "gast", "wettbewerb", "datum", "uhrzeit",
-                        "spielort", "heimspiel", "spieltag"],
+    "spielplan": ["heim", "gast", "wettbewerb", "datum", "uhrzeit",
+                  "spielort", "heimspiel", "spieltag", "ergebnis"],
 }
 
 
@@ -67,12 +67,13 @@ def vorlagen_schreiben(konfiguration: Konfiguration,
                  z.gelb, z.gelb_rot, z.rot, z.eingewechselt, z.ausgewechselt,
                  z.minuten]
                 for z in daten.gegner_spieler]
-            spiel = daten.naechstes_spiel
-            if spiel:
-                inhalte["naechstes_spiel"] = [[
-                    spiel.heim, spiel.gast, spiel.wettbewerb, spiel.datum,
-                    spiel.uhrzeit.replace(" Uhr", ""), spiel.spielort,
-                    "ja" if spiel.heimspiel else "nein", spiel.spieltag]]
+            for spiel in (daten.letztes_spiel, daten.naechstes_spiel):
+                if spiel:
+                    inhalte["spielplan"].append([
+                        spiel.heim, spiel.gast, spiel.wettbewerb, spiel.datum,
+                        spiel.uhrzeit.replace(" Uhr", ""), spiel.spielort,
+                        "ja" if spiel.heimspiel else "nein", spiel.spieltag,
+                        spiel.ergebnis])
 
         for art, spalten in SPALTEN.items():
             ziel = ordner / f"{mannschaft.schluessel}_{art}.csv"
@@ -127,5 +128,29 @@ def _liesmich(konfiguration: Konfiguration) -> str:
         "",
         "Fehlt eine Datei, bleibt nur die betreffende Seite leer – das Heft",
         "wird trotzdem erzeugt.",
+        "",
+        "",
+        "DER SPIELPLAN ERSPART DIR DIE MEISTE ARBEIT",
+        "-" * 43,
+        "",
+        "In <mannschaft>_spielplan.csv gehören ALLE Spiele der Saison –",
+        "eine Zeile je Partie. Das trägt man einmal im Sommer ein.",
+        "",
+        "Danach schaut das Programm bei jedem Heft auf das heutige Datum und",
+        "sucht sich selbst heraus:",
+        "  - gegen wen als nächstes gespielt wird (Titelseite, Gegnerseite)",
+        "  - wann und wo (Datum, Uhrzeit, Heim oder Auswärts)",
+        "  - welches Spiel zuletzt war (für den Spielbericht)",
+        "",
+        "Beispiel:",
+        "",
+        "  heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag;ergebnis",
+        "  TG Lauingen;SV Wörnitzstein-Berg;Bezirksliga;26.07.2026;15:00;;nein;1;0:4",
+        "  SV Wörnitzstein-Berg;TSV Meitingen;Bezirksliga;29.07.2026;18:30;Wörnitzstein;ja;2;",
+        "  SV Wörnitzstein-Berg;SG Alerheim;Bezirksliga;02.08.2026;15:00;Wörnitzstein;ja;3;",
+        "",
+        "Die Spalte 'ergebnis' bleibt leer, solange nicht gespielt wurde.",
+        "Sie wird nur für die Anzeige des letzten Spiels gebraucht – für die",
+        "Auswahl der nächsten Partie zählt allein das Datum.",
     ]
     return "\n".join(zeilen) + "\n"

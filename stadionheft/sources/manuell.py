@@ -15,10 +15,17 @@ Datei                            Inhalt
 ``<schluessel>_spieler.csv``       platz;spieler;spiele;tore;vorlagen;elfmeter;
                                    gelb;gelb_rot;rot;ein;aus;minuten
 ``<schluessel>_gegner_spieler.csv``  wie ``_spieler.csv`` (Kader des Gegners)
-``<schluessel>_naechstes_spiel.csv`` heim;gast;wettbewerb;datum;uhrzeit;
-                                   spielort;heimspiel;spieltag
+``<schluessel>_spielplan.csv``     alle Spiele der Saison, eine Zeile je Partie:
+                                   heim;gast;wettbewerb;datum;uhrzeit;spielort;
+                                   heimspiel;spieltag;ergebnis
 ``<schluessel>_spielbericht.md``   Freitext (Markdown oder einfacher Text)
 ===============================  ==========================================
+
+Der **Spielplan** ist der Schluessel zu wenig Pflegeaufwand: einmal im Sommer
+ausfuellen, danach sucht das Programm bei jedem Heft anhand des Datums selbst
+heraus, gegen wen als naechstes gespielt wird. Wer lieber vor jedem Heft eine
+einzelne Partie eintraegt, kann stattdessen
+``<schluessel>_naechstes_spiel.csv`` mit genau einer Zeile verwenden.
 
 Robust gegen die ueblichen Excel-Eigenheiten:
 
@@ -33,12 +40,14 @@ Robust gegen die ueblichen Excel-Eigenheiten:
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 from ..config import Konfiguration, Mannschaft
 from ..errors import ManuelleDatenFehlenFehler
 from ..logging_setup import logger
-from ..models import MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile, TorjaegerZeile
+from ..models import (MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile,
+                      TorjaegerZeile, spiele_einordnen)
 from .base import basis_daten
 
 KODIERUNGEN = ("utf-8-sig", "utf-8", "cp1252")
@@ -114,16 +123,11 @@ class ManuelleQuelle:
             daten.spieler = [SpielerZeile.aus_csv(z) for z in zeilen]
             gefunden += 1
 
-        zeilen = self._lesen(mannschaft, "gegner_spieler", daten, still=True)
-        if zeilen:
-            daten.gegner_spieler = [SpielerZeile.aus_csv(z) for z in zeilen]
-
-        zeilen = self._lesen(mannschaft, "naechstes_spiel", daten)
-        if zeilen:
-            daten.naechstes_spiel = Spiel.aus_csv(zeilen[0])
-            if not daten.naechstes_spiel.wettbewerb:
-                daten.naechstes_spiel.wettbewerb = mannschaft.liga
+        # Spielplan zuerst -- erst danach ist bekannt, wer der Gegner ist.
+        if self._spielplan(mannschaft, daten):
             gefunden += 1
+
+        self._gegnerkader(mannschaft, daten)
 
         bericht = self._textdatei(mannschaft, "spielbericht")
         if bericht:
@@ -138,6 +142,109 @@ class ManuelleQuelle:
                          f"{mannschaft.schluessel}_tabelle.csv im Ordner "
                          f"{self.ordner}."))
         return daten
+
+    # -- Spielplan ----------------------------------------------------------
+
+    def _spielplan(self, mannschaft: Mannschaft, daten: MannschaftsDaten) -> bool:
+        """Liest den Spielplan und sucht die Partie, die als naechste ansteht.
+
+        Zwei Dateinamen sind erlaubt:
+
+        * ``<team>_spielplan.csv``       -- **empfohlen**: alle Spiele der
+          Saison. Einmal im Sommer ausfuellen, danach findet das Programm zu
+          jedem Heft automatisch die richtige Partie. Auch das zuletzt
+          gespielte Spiel wird so erkannt.
+        * ``<team>_naechstes_spiel.csv`` -- eine einzelne Partie, die vor
+          jedem Heft von Hand geaendert wird.
+
+        Liegen beide Dateien vor, gewinnt der Spielplan.
+        """
+        for art in ("spielplan", "naechstes_spiel"):
+            zeilen = self._lesen(mannschaft, art, daten, still=True)
+            if not zeilen:
+                continue
+
+            spiele = [Spiel.aus_csv(z) for z in zeilen]
+            for spiel in spiele:
+                if not spiel.wettbewerb:
+                    spiel.wettbewerb = mannschaft.liga
+
+            if art == "naechstes_spiel":
+                # Der Benutzer sagt hier ausdruecklich "das ist die naechste
+                # Partie" -- das wird uebernommen, auch wenn das Datum schon
+                # vorbei ist (z. B. Heft am Abend des Spieltags nachdrucken).
+                daten.naechstes_spiel = spiele[0]
+            else:
+                # Im Spielplan entscheidet immer das Datum -- auch dann, wenn
+                # nur eine einzige Partie eingetragen ist.
+                daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(spiele)
+
+            if daten.naechstes_spiel is None:
+                daten.warnungen.append(
+                    f"In {mannschaft.schluessel}_{art}.csv steht kein Spiel, das "
+                    f"noch bevorsteht – alle Termine liegen in der Vergangenheit. "
+                    f"Bitte den Spielplan ergänzen.")
+                return False
+
+            logger().info("%s: nächstes Spiel %s am %s",
+                          mannschaft.anzeigename,
+                          daten.naechstes_spiel.paarung or "?",
+                          daten.naechstes_spiel.datum or "ohne Datum")
+            return True
+
+        logger().info("Kein Spielplan für %s – Gegner und Anstoß bleiben leer.",
+                      mannschaft.schluessel)
+        daten.warnungen.append(
+            f"Weder {mannschaft.schluessel}_spielplan.csv noch "
+            f"{mannschaft.schluessel}_naechstes_spiel.csv gefunden – "
+            f"Gegner, Datum und Anstoß fehlen im Heft.")
+        return False
+
+    # -- Gegnerkader --------------------------------------------------------
+
+    def _gegnerkader(self, mannschaft: Mannschaft, daten: MannschaftsDaten) -> None:
+        """Sucht den Kader des naechsten Gegners.
+
+        Zwei Ablagen sind moeglich -- die erste ist die sichere:
+
+        * ``<team>_gegner_<gegnername>.csv`` -- je Gegner eine Datei, z. B.
+          ``herren1_gegner_sg-alerheim.csv``. Einmal je Saison fuer alle
+          Ligagegner angelegt, passt danach immer die richtige Liste.
+        * ``<team>_gegner_spieler.csv`` -- eine einzige Datei, die vor jedem
+          Heft von Hand ausgetauscht wird.
+
+        Beim zweiten Weg kann die Liste unbemerkt zum falschen Gegner
+        gehoeren. Deshalb wird dann ausdruecklich darauf hingewiesen.
+        """
+        gegner = daten.naechstes_spiel.gegner if daten.naechstes_spiel else ""
+
+        if gegner:
+            datei = self.ordner / f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv"
+            if datei.exists():
+                daten.gegner_spieler = [SpielerZeile.aus_csv(z)
+                                        for z in csv_lesen(datei)]
+                logger().info("Gegnerkader aus %s (%d Spieler).",
+                              datei.name, len(daten.gegner_spieler))
+                return
+
+        zeilen = self._lesen(mannschaft, "gegner_spieler", daten, still=True)
+        if not zeilen:
+            if gegner:
+                daten.warnungen.append(
+                    f"Kein Kader für {gegner} hinterlegt – die Seite "
+                    f"„Vorstellung Gegner“ bleibt leer. Erwartet wird "
+                    f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv")
+            return
+
+        daten.gegner_spieler = [SpielerZeile.aus_csv(z) for z in zeilen]
+        if gegner:
+            daten.warnungen.append(
+                f"Der Gegnerkader stammt aus der allgemeinen Datei "
+                f"{mannschaft.schluessel}_gegner_spieler.csv. Bitte prüfen, ob "
+                f"die Spieler wirklich zu {gegner} gehören – die Datei wird "
+                f"nicht automatisch zum Gegner passend gewechselt. "
+                f"Dauerhafte Lösung: je Gegner eine Datei "
+                f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv anlegen.")
 
     # -- Hilfen -------------------------------------------------------------
 
@@ -170,7 +277,20 @@ class ManuelleQuelle:
                         continue
         return ""
 
+    @staticmethod
+    def _dateiname_gegner(gegner: str) -> str:
+        return _slug(gegner)
+
     def _eigener_kern(self) -> str:
         """Kurzform des Vereinsnamens zum Hervorheben eigener Zeilen."""
         kern = (self.vereinsname or "").replace("SV", "").replace("e.V.", "").strip()
         return kern.split("-")[0].strip()
+
+
+def _slug(name: str) -> str:
+    """'SG Alerheim' -> 'sg-alerheim'  (fuer Dateinamen je Gegner)."""
+    text = (name or "").lower()
+    for alt, neu in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
+        text = text.replace(alt, neu)
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")
