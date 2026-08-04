@@ -140,6 +140,53 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
     def hilfe():
         return render_template("hilfe.html", konfiguration=k)
 
+    # -- FuPa-Verbindung pruefen -------------------------------------------
+    # Bewusst als Knopf in der Oberflaeche und nicht nur als Befehl auf der
+    # Kommandozeile: Der Test ist der eine Schritt, der den automatischen
+    # Datenabruf freischaltet -- dafuer soll niemand ein Terminal oeffnen
+    # muessen.
+
+    @app.get("/fupa-test")
+    def fupa_test():
+        return render_template("fupa_test.html", konfiguration=k,
+                               mannschaften=k.aktive_mannschaften(),
+                               bericht=None)
+
+    @app.post("/fupa-test")
+    def fupa_test_starten():
+        from ..sources.fupa_api import probe_fupa
+
+        auswahl = request.form.get("mannschaft") or None
+        try:
+            bericht = probe_fupa(k, auswahl)
+            fehler = None
+        except StadionheftFehler as ausnahme:
+            logger().error("FuPa-Test fehlgeschlagen: %s", ausnahme.technisch)
+            bericht, fehler = None, ausnahme.as_dict()
+
+        return render_template("fupa_test.html", konfiguration=k,
+                               mannschaften=k.aktive_mannschaften(),
+                               bericht=bericht, fehler=fehler)
+
+    @app.get("/fupa-test/download")
+    def fupa_test_download():
+        """Packt die Rohantworten als ZIP -- die Datei, die zur Auswertung
+        weitergegeben wird."""
+        import io
+        import zipfile
+
+        ordner = Path(k.arbeits_ordner) / "fupa_probe"
+        if not ordner.is_dir():
+            abort(404)
+
+        puffer = io.BytesIO()
+        with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as archiv:
+            for datei in sorted(ordner.glob("*.json")):
+                archiv.write(datei, arcname=datei.name)
+        puffer.seek(0)
+        return send_file(puffer, mimetype="application/zip", as_attachment=True,
+                         download_name="fupa_probe.zip")
+
     # -- Fehlerbehandlung ---------------------------------------------------
 
     @app.errorhandler(404)

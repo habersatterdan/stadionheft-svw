@@ -33,10 +33,11 @@ def _ersatz_app(fehler: StadionheftFehler) -> Flask:
     def kontext():
         return {"konfiguration": _Platzhalter()}
 
-    # Die Endpunktnamen 'start' und 'hilfe' muessen existieren, weil das
-    # gemeinsame Seitengeruest per url_for darauf verweist.
+    # Diese Endpunktnamen muessen existieren, weil das gemeinsame
+    # Seitengeruest (_layout.html) per url_for darauf verweist.
     @app.route("/", endpoint="start", defaults={"pfad": ""})
     @app.route("/hilfe", endpoint="hilfe", defaults={"pfad": "hilfe"})
+    @app.route("/fupa-test", endpoint="fupa_test", defaults={"pfad": "fupa-test"})
     @app.route("/<path:pfad>")
     def einrichtung(pfad: str):
         return render_template(

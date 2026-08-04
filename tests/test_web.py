@@ -64,3 +64,71 @@ def test_kompletter_durchlauf_ueber_die_oberflaeche(konfiguration: Konfiguration
     download = client.get(f"/lauf/{lauf_id}/download")
     assert download.status_code == 200
     assert download.data[:4] == b"%PDF"
+
+
+# ---------------------------------------------------------------------------
+# FuPa-Verbindungstest
+# ---------------------------------------------------------------------------
+
+def test_fupa_testseite_erklaert_sich(konfiguration: Konfiguration):
+    antwort = _client(konfiguration).get("/fupa-test")
+    assert antwort.status_code == 200
+    text = antwort.get_data(as_text=True)
+    assert "Verbindung jetzt prüfen" in text
+    assert "nichts verändert" in text
+
+
+def test_fupa_test_zeigt_ergebnis(konfiguration: Konfiguration, monkeypatch):
+    bericht = {
+        "basis_url": "https://api.fupa.net/",
+        "mannschaft": "herren1",
+        "team_slug": "sv-woernitzstein-berg-m1-2026-27",
+        "ablage": "/tmp/fupa_probe",
+        "ergebnisse": {
+            "tabelle": {"url": "https://api.fupa.net/x", "status": 200,
+                        "bewertung": "ok", "gefundene_zeilen": 16},
+            "torjaeger": {"url": "https://api.fupa.net/y", "status": 404,
+                          "bewertung": "kein verwertbares JSON"},
+        },
+    }
+    monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa",
+                        lambda *a, **k: bericht)
+
+    antwort = _client(konfiguration).post("/fupa-test",
+                                          data={"mannschaft": "herren1"})
+    assert antwort.status_code == 200
+    text = antwort.get_data(as_text=True)
+    assert "1 von 2 Abfragen" in text
+    assert "16 Datenzeilen erkannt" in text
+    assert "Ergebnis herunterladen" in text
+
+
+def test_fupa_test_ohne_treffer_bietet_keinen_download(konfiguration: Konfiguration,
+                                                       monkeypatch):
+    bericht = {
+        "basis_url": "x", "mannschaft": "herren1", "team_slug": "s", "ablage": "",
+        "ergebnisse": {"tabelle": {"bewertung": "nicht erreichbar: timeout"}},
+    }
+    monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa",
+                        lambda *a, **k: bericht)
+    text = _client(konfiguration).post("/fupa-test", data={}).get_data(as_text=True)
+    assert "Keine der 1 Abfragen" in text
+    assert "Ergebnis herunterladen" not in text
+
+
+def test_fupa_test_faengt_fehler_ab(konfiguration: Konfiguration, monkeypatch):
+    from stadionheft.errors import DatenquelleNichtErreichbarFehler
+
+    def kaputt(*_a, **_k):
+        raise DatenquelleNichtErreichbarFehler(
+            "timeout", benutzer_text="FuPa ist nicht erreichbar.",
+            hinweis="Später erneut versuchen.")
+
+    monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa", kaputt)
+    antwort = _client(konfiguration).post("/fupa-test", data={})
+    assert antwort.status_code == 200
+    assert "FuPa ist nicht erreichbar." in antwort.get_data(as_text=True)
+
+
+def test_download_ohne_ergebnis_ist_404(konfiguration: Konfiguration):
+    assert _client(konfiguration).get("/fupa-test/download").status_code == 404

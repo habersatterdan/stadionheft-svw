@@ -1,0 +1,130 @@
+{% extends "_layout.html" %}
+{% block titel %}FuPa-Verbindung prüfen{% endblock %}
+
+{% block inhalt %}
+<h1>FuPa-Verbindung prüfen</h1>
+<p style="color:#666; margin-top:0">
+  Dieser Test klärt, ob die Statistiken automatisch von FuPa geholt werden
+  können – oder ob sie weiter von Hand gepflegt werden müssen.
+</p>
+
+{% if not bericht and not fehler %}
+  <div class="karte">
+    <h2 style="margin-top:0">Was passiert hier?</h2>
+    <p>
+      Das Programm ruft die in der Konfiguration hinterlegten FuPa-Adressen auf
+      und schaut nach, was zurückkommt. Es wird <strong>nichts verändert</strong> –
+      nur gelesen. Der Test dauert etwa 20 Sekunden.
+    </p>
+    <p style="color:#666; font-size:.92rem">
+      FuPa bietet keine offizielle Schnittstelle an. Die hinterlegten Adressen
+      sind deshalb zunächst Platzhalter. Das Ergebnis dieses Tests zeigt, ob sie
+      stimmen – und liefert die Datei, mit der sich der Abruf fertigstellen lässt.
+    </p>
+
+    <form method="post">
+      <div class="feld">
+        <label for="mannschaft">Mit welcher Mannschaft testen?</label>
+        <select id="mannschaft" name="mannschaft">
+          {% for m in mannschaften %}
+            <option value="{{ m.schluessel }}">{{ m.anzeigename }}</option>
+          {% endfor %}
+        </select>
+        <p class="hilfe">Eine genügt – die Adressen sind für alle gleich aufgebaut.</p>
+      </div>
+      <button type="submit">Verbindung jetzt prüfen</button>
+      <p class="hilfe" style="margin-top:.6rem">
+        Bitte die Seite danach nicht schließen, bis das Ergebnis erscheint.
+      </p>
+    </form>
+  </div>
+{% endif %}
+
+{% if fehler %}
+  <div class="karte">
+    <div class="fehlerkasten">
+      <strong>{{ fehler.meldung }}</strong>
+      {% if fehler.hinweis %}
+        <p style="margin:.6rem 0 0; white-space:pre-line">{{ fehler.hinweis }}</p>
+      {% endif %}
+    </div>
+    <p><a class="knopf-zweit" href="{{ url_for('fupa_test') }}">Erneut versuchen</a></p>
+  </div>
+{% endif %}
+
+{% if bericht %}
+  {% set treffer = bericht.ergebnisse.values()|selectattr('bewertung', 'equalto', 'ok')|list|length %}
+  {% set gesamt = bericht.ergebnisse|length %}
+
+  <div class="karte">
+    {% if treffer == gesamt %}
+      <div class="erfolg">
+        <strong>Alle {{ gesamt }} Abfragen haben funktioniert.</strong><br>
+        Der automatische Abruf lässt sich einrichten.
+      </div>
+    {% elif treffer > 0 %}
+      <div class="hinweis">
+        <strong>{{ treffer }} von {{ gesamt }} Abfragen haben funktioniert.</strong><br>
+        Ein Teil der Adressen stimmt noch nicht.
+      </div>
+    {% else %}
+      <div class="fehlerkasten">
+        <strong>Keine der {{ gesamt }} Abfragen hat funktioniert.</strong><br>
+        Entweder stimmen die Adressen nicht, oder FuPa ist gerade nicht
+        erreichbar. Die Statistiken müssen bis auf Weiteres über die
+        CSV-Dateien gepflegt werden.
+      </div>
+    {% endif %}
+
+    <table class="info" style="margin-top:1rem">
+      <tr><td>Getestete Mannschaft</td><td>{{ bericht.mannschaft }}</td></tr>
+      <tr><td>Team-Bezeichner</td><td>{{ bericht.team_slug }}</td></tr>
+      <tr><td>Basis-Adresse</td><td>{{ bericht.basis_url }}</td></tr>
+    </table>
+  </div>
+
+  <div class="karte">
+    <h2 style="margin-top:0">Ergebnis im Einzelnen</h2>
+    {% for name, eintrag in bericht.ergebnisse.items() %}
+      <div class="{{ 'erfolg' if eintrag.bewertung == 'ok' else 'hinweis' }}"
+           style="margin-bottom:.6rem">
+        <strong>{{ name }}</strong>
+        {% if eintrag.status %}<span class="status ok">HTTP {{ eintrag.status }}</span>{% endif %}
+        <br>
+        {{ eintrag.bewertung }}
+        {% if eintrag.gefundene_zeilen %}
+          – {{ eintrag.gefundene_zeilen }} Datenzeilen erkannt
+        {% endif %}
+        {% if eintrag.url %}
+          <br><span style="color:#666; font-size:.85rem">{{ eintrag.url }}</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  {% if treffer > 0 %}
+    <div class="karte">
+      <h2 style="margin-top:0">Nächster Schritt</h2>
+      <p>
+        Bitte die folgende Datei herunterladen und weitergeben. Sie enthält die
+        Antworten von FuPa und wird gebraucht, um den Abruf fertigzustellen.
+      </p>
+      <p>
+        <a class="knopf-zweit" href="{{ url_for('fupa_test_download') }}"
+           style="background:#E52421;color:#fff;border-color:#E52421">
+          Ergebnis herunterladen (ZIP)
+        </a>
+      </p>
+      <p style="color:#666; font-size:.9rem">
+        Die Datei enthält ausschließlich öffentlich abrufbare Spieldaten –
+        keine Zugangsdaten.
+      </p>
+    </div>
+  {% endif %}
+
+  <p>
+    <a class="knopf-zweit" href="{{ url_for('fupa_test') }}">Test wiederholen</a>
+    <a class="knopf-zweit" href="{{ url_for('start') }}">Zum Start</a>
+  </p>
+{% endif %}
+{% endblock %}
