@@ -53,15 +53,34 @@ selbst.
 
 | | |
 |---|---|
-| DSM-Version | 7.0 oder neuer |
-| Paket | **Container Manager** (heißt in DSM 6 „Docker") |
-| NAS-Modell | Muss Docker unterstützen – Modelle mit Intel/AMD-CPU (z. B. DS220+, DS920+, DS923+). Reine ARM-Einsteigermodelle wie DS120j können es **nicht**. |
-| Arbeitsspeicher | 2 GB reichen aus |
+| DSM-Version | **7.2 oder neuer** empfohlen (siehe Kasten unten) |
+| Paket | **Container Manager** – heißt bis DSM 7.1 noch „Docker" |
+| NAS-Modell | Muss Docker unterstützen – Modelle mit Intel/AMD-CPU (z. B. DS220+, DS720+, DS920+, DS923+). Reine ARM-Einsteigermodelle wie DS120j können es **nicht**. |
+| Arbeitsspeicher | 2 GB genügen |
 | Speicherplatz | ca. 700 MB für das Abbild |
 
 **Modell prüfen:** DSM → Systemsteuerung → Info-Center. Steht dort bei
 Modell ein „+" oder „play", passt es meistens. Im Zweifel: Paket-Zentrum
-öffnen und nach „Container Manager" suchen – wird es angeboten, geht es.
+öffnen und nach „Container Manager" bzw. „Docker" suchen – wird eines davon
+angeboten, geht es.
+
+> ### Wichtig bei DSM 7.1 und älter
+>
+> Die bequeme Einrichtung über **Projekt → docker-compose.yml einfügen** gibt
+> es erst ab **DSM 7.2**. Dort wurde das alte Paket „Docker" durch den
+> „Container Manager" ersetzt, der als neue Funktion Docker Compose mitbringt.
+>
+> Auf DSM 7.1 heißt das Paket noch „Docker" und hat **keine Projekt-Ansicht**.
+> Zwei Möglichkeiten:
+>
+> 1. **DSM auf 7.2+ aktualisieren** (Systemsteuerung → Aktualisieren und
+>    Wiederherstellen). Danach steht der Container Manager bereit – das ist
+>    der einfachere Weg.
+> 2. **Über SSH einrichten**: Terminal in DSM aktivieren, dann
+>    `sudo docker compose up -d --build` im Projektordner ausführen.
+>
+> Vor einem DSM-Update: Datensicherung prüfen und das Update nicht kurz vor
+> einem Spieltag einspielen.
 
 ---
 
