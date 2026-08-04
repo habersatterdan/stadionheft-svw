@@ -35,23 +35,28 @@ seiten:
     optional: true
     # Bei zu langem Text laeuft der Inhalt automatisch auf Folgeseiten weiter.
 
-  # --- Seite 4-11: Werbeblock vorne ---------------------------------------
-  - typ: pdf
-    quelle: "02_werbung/werbung_vorne.pdf"
+  # --- Werbeblock vorne ----------------------------------------------------
+  # Alle PDF-Dateien aus dem Ordner, sortiert nach Dateiname.
+  # Anzeige dazu    -> Datei hineinlegen
+  # Anzeige raus    -> Datei loeschen oder nach _pausiert/ verschieben
+  # Reihenfolge     -> Zahl am Dateianfang aendern
+  # Befristet       -> Datum in den Dateinamen, z. B.
+  #                    010_sommerfest__bis_2026-07-15.pdf
+  - typ: werbeblock
+    ordner: "02_werbung/vorne"
     optional: true
-    bemerkung: "Werbeseiten 4-11 der Vorlage. Eine PDF mit mehreren Seiten oder mehrere Eintraege."
 
-  # --- Seiten 12-18 (je Mannschaft): Trenner, Gegner, Tabelle, ... ---------
+  # --- Mannschaftsseiten ---------------------------------------------------
   - typ: mannschaftsbloecke
     # Zwischen zwei Mannschaftsbloecken zusaetzlich einbinden (optional):
     trenner_zwischen:
-      - typ: pdf
-        quelle: "02_werbung/werbung_zwischen.pdf"
+      - typ: werbeblock
+        ordner: "02_werbung/zwischen"
         optional: true
 
   # --- Werbeblock hinten ---------------------------------------------------
-  - typ: pdf
-    quelle: "02_werbung/werbung_hinten.pdf"
+  - typ: werbeblock
+    ordner: "02_werbung/hinten"
     optional: true
 
   # --- Kontaktlisten -------------------------------------------------------

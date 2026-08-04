@@ -33,6 +33,7 @@ from .logging_setup import logger
 from .models import Ausgabe, MannschaftsDaten, Spiel
 from .render.assemble import Heftseite, MontageErgebnis, zusammenfuegen
 from .render.pages import SEITEN_VORLAGEN, SeitenRenderer
+from .render.werbung import werbeblock
 from .sources.base import quelle_erzeugen
 from .storage.nas import NasAblage
 
@@ -294,12 +295,19 @@ def _plan_abarbeiten(konfiguration: Konfiguration, renderer: SeitenRenderer,
         elif typ == "pdf":
             liste.append(_pdf_eintrag(konfiguration, eintrag))
 
+        elif typ == "werbeblock":
+            liste.extend(_werbeblock_eintraege(konfiguration, eintrag, warnungen))
+
         elif typ == "mannschaftsbloecke":
             zwischen = eintrag.get("trenner_zwischen") or []
             for index, daten in enumerate(ausgabe.mannschaften):
                 if index > 0:
                     for z in zwischen:
-                        liste.append(_pdf_eintrag(konfiguration, z))
+                        if str(z.get("typ")) == "werbeblock":
+                            liste.extend(_werbeblock_eintraege(
+                                konfiguration, z, warnungen))
+                        else:
+                            liste.append(_pdf_eintrag(konfiguration, z))
                 mannschaft = konfiguration.mannschaft(daten.schluessel)
                 for art in mannschaft.seiten:
                     if art not in SEITEN_VORLAGEN:
@@ -309,6 +317,27 @@ def _plan_abarbeiten(konfiguration: Konfiguration, renderer: SeitenRenderer,
                         f"{daten.anzeigename} – {art}"))
 
     return liste
+
+
+def _werbeblock_eintraege(konfiguration: Konfiguration, eintrag: dict,
+                          warnungen: list[str]) -> list[Heftseite]:
+    """Baut einen Werbeblock aus allen gueltigen Anzeigen eines Ordners."""
+    quelle = str(eintrag.get("ordner") or eintrag.get("quelle") or "")
+    pfad = Path(quelle)
+    if not pfad.is_absolute():
+        pfad = konfiguration.daten_wurzel / quelle
+
+    anzeigen, hinweise = werbeblock(pfad)
+    warnungen.extend(hinweise)
+
+    if not anzeigen and not bool(eintrag.get("optional", True)):
+        raise VorlageFehltFehler(
+            f"Werbeordner {pfad} liefert keine Anzeige.",
+            benutzer_text=f"Im Werbeordner '{pfad.name}' liegt keine gültige Anzeige.",
+            hinweis=f"Erwartet werden PDF-Dateien in: {pfad}")
+
+    return [Heftseite(pfad=a.pfad, beschreibung=f"Werbung: {a.titel}", pflicht=False)
+            for a in anzeigen]
 
 
 def _pdf_eintrag(konfiguration: Konfiguration, eintrag: dict) -> Heftseite:

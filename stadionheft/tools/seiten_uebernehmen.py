@@ -112,6 +112,44 @@ def uebernehmen(konfiguration: Konfiguration, quelle: str | Path,
     return ziel, angaben
 
 
+def einzeln_zerlegen(konfiguration: Konfiguration, quelle: str | Path,
+                     seiten: str, zielordner: Path,
+                     schrittweite: int = 10) -> list[Path]:
+    """Zerlegt einen Seitenbereich in **eine PDF-Datei je Seite**.
+
+    Gedacht fuer Werbeblöcke: danach liegt jede Anzeige als eigene Datei im
+    Ordner und laesst sich einzeln austauschen, umsortieren oder befristen --
+    siehe ``stadionheft/render/werbung.py``.
+
+    Die Dateinamen werden in Zehnerschritten nummeriert, damit sich spaeter
+    bequem etwas dazwischen schieben laesst.
+    """
+    quell_pfad = Path(quelle).expanduser()
+    if not quell_pfad.exists():
+        raise VorlageFehltFehler(
+            f"{quell_pfad} nicht gefunden.",
+            benutzer_text=f"Die Datei '{quell_pfad}' wurde nicht gefunden.")
+
+    leser = PdfReader(str(quell_pfad))
+    if leser.is_encrypted:
+        leser.decrypt("")
+    indizes = seiten_bereich(seiten, len(leser.pages))
+
+    zielordner.mkdir(parents=True, exist_ok=True)
+    geschrieben: list[Path] = []
+    for lauf, index in enumerate(indizes, start=1):
+        schreiber = PdfWriter()
+        schreiber.add_page(leser.pages[index])
+        ziel = zielordner / f"{lauf * schrittweite:03d}_anzeige_seite{index + 1}.pdf"
+        with ziel.open("wb") as datei:
+            schreiber.write(datei)
+        geschrieben.append(ziel)
+
+    logger().info("%d Einzelanzeigen nach %s geschrieben.",
+                  len(geschrieben), zielordner)
+    return geschrieben
+
+
 #: Was typischerweise aus einem bestehenden Heft uebernommen wird.
 #: Die Seitenzahlen stammen aus der Ausgabe vom 29.07.2026 und muessen bei
 #: einem anders aufgebauten Heft angepasst werden.

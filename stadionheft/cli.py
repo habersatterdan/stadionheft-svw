@@ -164,9 +164,31 @@ def befehl_beispieldaten(args) -> int:
 
 def befehl_uebernehmen(args) -> int:
     """Seiten aus einem bestehenden Heft als feste PDF-Seiten uebernehmen."""
-    from .tools.seiten_uebernehmen import VORSCHLAEGE, uebernehmen
+    from .tools.seiten_uebernehmen import (VORSCHLAEGE, einzeln_zerlegen,
+                                           uebernehmen)
 
     k = _konfiguration(args)
+
+    if args.einzeln:
+        if not args.seiten:
+            print("Bitte --seiten angeben, z. B. --seiten 4-11")
+            return 1
+        ordner = (Path(args.ordner) if args.ordner
+                  else k.werbung_ordner / (args.als or "block"))
+        dateien = einzeln_zerlegen(k, args.aus, args.seiten, ordner)
+        print(f"{len(dateien)} Einzelanzeigen geschrieben nach {ordner}:")
+        for datei in dateien:
+            print(f"  {datei.name}")
+        print("\nJetzt sinnvoll umbenennen, z. B.:")
+        print("  010_teamshop.pdf")
+        print("  020_jako-katalog-1.pdf")
+        print("\nBefristete Anzeigen bekommen das Enddatum in den Namen:")
+        print("  010_bayern-spiel__bis_2026-08-01.pdf")
+        print("  -> faellt ab dem 02.08.2026 automatisch aus dem Heft.")
+        print("\nIm Heftplan wird der Ordner so eingebunden:")
+        print("  - typ: werbeblock")
+        print(f"    ordner: \"02_werbung/{ordner.name}\"")
+        return 0
 
     if args.alles:
         auftraege = [(name, seiten, titel) for name, seiten, titel in VORSCHLAEGE]
@@ -286,6 +308,10 @@ def parser_bauen() -> argparse.ArgumentParser:
     b.add_argument("--alles", action="store_true",
                    help="alle ueblichen Seiten auf einmal (Kontakte, Impressum, "
                         "Werbung, Ruecktitel)")
+    b.add_argument("--einzeln", action="store_true",
+                   help="Seitenbereich in einzelne Anzeigen-PDFs zerlegen "
+                        "(fuer typ: werbeblock)")
+    b.add_argument("--ordner", help="Zielordner fuer --einzeln")
     b.set_defaults(funktion=befehl_uebernehmen)
 
     b = unter.add_parser("web", help="Weboberflaeche starten")

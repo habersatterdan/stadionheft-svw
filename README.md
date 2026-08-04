@@ -159,6 +159,51 @@ Einzelne Seiten gehen genauso:
 stadionheft seiten-uebernehmen --aus alt.pdf --seiten 24-25 --als kontaktlisten
 ```
 
+### Werbung: ein Ordner statt einer Sammel-PDF
+
+Jede Anzeige liegt als eigene Datei in einem Ordner. Das Heft wird bei jedem
+Lauf daraus neu zusammengebaut:
+
+```
+daten/02_werbung/vorne/
+├── 010_bayern-fcn-freundschaftsspiel__bis_2026-08-01.pdf
+├── 020_teamshop-jako.pdf
+├── 030_jako-katalog-1.pdf
+├── 031_jako-katalog-2.pdf
+├── 040_ullmann-universa.pdf
+└── _pausiert/            ← hier abgelegte Anzeigen bleiben draußen
+```
+
+| Was | Wie |
+|---|---|
+| Anzeige aufnehmen | PDF in den Ordner legen |
+| Anzeige entfernen | Datei löschen oder nach `_pausiert/` schieben |
+| Reihenfolge ändern | Zahl am Dateianfang ändern (Zehnerschritte lassen Platz) |
+| Anzeige befristen | `__bis_JJJJ-MM-TT` in den Dateinamen |
+| Anzeige später starten | `__ab_JJJJ-MM-TT` in den Dateinamen |
+
+**Befristete Anzeigen verschwinden von selbst.** Die Ankündigung eines Spiels
+am 01.08. heißt `…__bis_2026-08-01.pdf` und fällt ab dem 02.08. automatisch
+aus dem Heft – mit einem Hinweis im Protokoll, damit es nicht unbemerkt
+passiert. Niemand muss daran denken, sie herauszunehmen.
+
+Im Heftplan:
+
+```yaml
+- typ: werbeblock
+  ordner: "02_werbung/vorne"
+  optional: true
+```
+
+Einen bestehenden Werbeblock in Einzeldateien zerlegen:
+
+```bash
+stadionheft seiten-uebernehmen --aus alt.pdf --seiten 4-11 --einzeln --als vorne
+```
+
+Danach die Dateien sinnvoll umbenennen – der Ordner ist dann gleichzeitig die
+Übersicht, welche Anzeigen im Heft sind.
+
 ---
 
 ## Konfiguration

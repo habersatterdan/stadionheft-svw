@@ -161,3 +161,59 @@ def test_text_zu_absaetzen_mit_raute():
 
 def test_text_zu_absaetzen_leer():
     assert text_zu_absaetzen("") == []
+
+
+# ---------------------------------------------------------------------------
+# Werbeblock aus einem Ordner
+# ---------------------------------------------------------------------------
+
+def _leere_anzeige(ziel: Path) -> None:
+    from pypdf import PageObject, PdfWriter
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    schreiber = PdfWriter()
+    schreiber.add_page(PageObject.create_blank_page(width=419.53, height=595.28))
+    with ziel.open("wb") as datei:
+        schreiber.write(datei)
+
+
+def test_werbeblock_bindet_ordner_ein(konfiguration: Konfiguration):
+    ordner = konfiguration.werbung_ordner / "vorne"
+    for name in ("010_a.pdf", "020_b.pdf", "030_c.pdf"):
+        _leere_anzeige(ordner / name)
+
+    plan = [{"typ": "titelseite"},
+            {"typ": "werbeblock", "ordner": "02_werbung/vorne"}]
+    ergebnis = heft_erstellen(konfiguration, ["herren1"], heftplan=plan,
+                              nas_hochladen=False)
+    assert ergebnis.seitenzahl == 4      # Titel + drei Anzeigen
+
+
+def test_abgelaufene_anzeige_fehlt_im_fertigen_heft(konfiguration: Konfiguration):
+    """Eine befristete Ankuendigung darf nach Ablauf nicht mehr auftauchen."""
+    ordner = konfiguration.werbung_ordner / "vorne"
+    _leere_anzeige(ordner / "010_dauerkunde.pdf")
+    _leere_anzeige(ordner / "020_altes_spiel__bis_2000-01-01.pdf")
+
+    plan = [{"typ": "titelseite"},
+            {"typ": "werbeblock", "ordner": "02_werbung/vorne"}]
+    ergebnis = heft_erstellen(konfiguration, ["herren1"], heftplan=plan,
+                              nas_hochladen=False)
+    assert ergebnis.seitenzahl == 2      # Titel + nur die gueltige Anzeige
+    assert any("abgelaufen" in w for w in ergebnis.warnungen)
+
+
+def test_leerer_werbeordner_bricht_nicht_ab(konfiguration: Konfiguration):
+    plan = [{"typ": "titelseite"},
+            {"typ": "werbeblock", "ordner": "02_werbung/gibtsnicht"}]
+    ergebnis = heft_erstellen(konfiguration, ["herren1"], heftplan=plan,
+                              nas_hochladen=False)
+    assert ergebnis.seitenzahl == 1
+    assert any("existiert nicht" in w for w in ergebnis.warnungen)
+
+
+def test_pflicht_werbeblock_ohne_anzeigen_bricht_ab(konfiguration: Konfiguration):
+    plan = [{"typ": "werbeblock", "ordner": "02_werbung/leer", "optional": False}]
+    (konfiguration.werbung_ordner / "leer").mkdir(parents=True, exist_ok=True)
+    with pytest.raises(VorlageFehltFehler):
+        heft_erstellen(konfiguration, ["herren1"], heftplan=plan,
+                       nas_hochladen=False)

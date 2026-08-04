@@ -28,7 +28,7 @@ ERLAUBTE_SEITENTYPEN = {
 }
 ERLAUBTE_HEFTPLAN_TYPEN = {
     "titelseite", "trennseite", "freitext", "kontakte",
-    "impressum", "mannschaftsbloecke", "pdf",
+    "impressum", "mannschaftsbloecke", "pdf", "werbeblock",
 }
 GUELTIGE_MODI = {"api", "manuell", "demo"}
 
