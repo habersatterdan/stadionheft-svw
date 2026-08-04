@@ -38,6 +38,13 @@ entsprechen exakt der bisherigen InDesign-Vorlage.
   Unter Windows und macOS bringt WeasyPrint alles Nötige mit
   (siehe [WeasyPrint-Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html)).
 
+> **Nutzt ihr verschiedene Systeme (Linux, Windows, iOS, Android) und habt alle
+> Zugriff auf die Synology NAS?** Dann überspring diesen Abschnitt und geh
+> direkt zu [Betrieb auf der Synology NAS](#betrieb-auf-der-synology-nas). Das
+> Programm läuft dann **einmal** im Container, und alle anderen Geräte brauchen
+> nur einen Browser – keine Installation, keine Systemunterschiede. Der
+> Abschnitt hier ist für den Einzelplatz zum Ausprobieren.
+
 ### Der einfache Weg: Startskript
 
 Nach dem Herunterladen des Projekts genügt ein Doppelklick:

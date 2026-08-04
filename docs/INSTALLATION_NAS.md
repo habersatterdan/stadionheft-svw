@@ -7,6 +7,48 @@ Zeitaufwand: etwa eine halbe Stunde beim ersten Mal.
 
 ---
 
+## Warum das die richtige Lösung ist, wenn ihr verschiedene Systeme nutzt
+
+Das Programm läuft **genau einmal** – im Container auf der NAS. Alle anderen
+Geräte brauchen nur einen Browser. Kein Python, keine Installation, keine
+Unterschiede zwischen den Systemen.
+
+| Gerät | Was installiert werden muss | Was geht |
+|---|---|---|
+| **Synology NAS** | Container Manager (einmalig) | Hier läuft alles |
+| **Fedora / Linux** | nichts | Heft erstellen, Dateien pflegen |
+| **Windows** | nichts | Heft erstellen, Dateien pflegen |
+| **macOS** | nichts | Heft erstellen, Dateien pflegen |
+| **iPhone / iPad** | nichts (optional: DS file) | Heft erstellen, PDF ansehen |
+| **Android** | nichts (optional: DS file) | Heft erstellen, PDF ansehen |
+
+Weil die Werbedateien, die Eingaben und die fertigen Hefte **ohnehin schon auf
+der NAS liegen**, entfällt jedes Kopieren: Der Container greift direkt auf
+dieselben Ordner zu, die ihr in der Dateistation seht. Legt jemand von seinem
+Fedora-Rechner eine neue Werbeanzeige nach `02_Werbung/vorne/`, ist sie beim
+nächsten Heft automatisch dabei – egal, wer es erstellt und womit.
+
+**Nur für die einmalige Einrichtung** braucht es einen Rechner mit Browser
+(Fedora, Windows oder macOS – egal welcher). DSM lässt sich am Handy zwar
+bedienen, der Container Manager ist dort aber unangenehm klein.
+
+### Wer pflegt welche Dateien womit?
+
+| Aufgabe | Fedora / Windows / macOS | iOS / Android |
+|---|---|---|
+| Heft erstellen | Browser | Browser |
+| Werbung austauschen | Dateistation im Browser, Synology Drive oder Netzlaufwerk | DS file |
+| Vorwort schreiben | Text-Editor der Dateistation oder lokal | DS file, Notiz-App |
+| CSV-Zahlen pflegen | Excel, LibreOffice Calc, Numbers | eher unpraktisch |
+| Titelbild hochladen | Dateistation | DS file (direkt aus der Fotos-App) |
+
+CSV-Dateien sind ein reines Textformat – LibreOffice Calc unter Fedora, Excel
+unter Windows und Numbers unter macOS können sie alle. Wichtig ist nur, beim
+Speichern **UTF-8** zu wählen; das Programm erkennt Semikolon und Komma
+selbst.
+
+---
+
 ## Voraussetzungen
 
 | | |
@@ -129,6 +171,17 @@ Die IP findest du in DSM unter Systemsteuerung → Netzwerk → Netzwerkschnitts
 
 **Tipp:** Der NAS eine feste IP geben (im Router als DHCP-Reservierung),
 damit sich die Adresse nie ändert.
+
+---
+
+## FuPa-Abruf einrichten – ohne Kommandozeile
+
+In der Fußzeile der Oberfläche steht **„FuPa-Verbindung prüfen"**. Diese Seite
+testet die hinterlegten Adressen und zeigt an, ob der automatische Abruf von
+Tabelle und Statistiken funktioniert.
+
+Das läuft im Container auf der NAS – also von jedem Gerät aus, auch vom Handy.
+Ein Terminal wird dafür nicht gebraucht.
 
 ---
 
