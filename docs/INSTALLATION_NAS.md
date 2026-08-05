@@ -233,11 +233,20 @@ Drei Wege, vom sichersten zum bequemsten:
 
 #### VPN – die Empfehlung
 
-DSM → Systemsteuerung → **VPN Server** (WireGuard). Das Handy verbindet sich
-ins Vereinsnetz, danach funktioniert die lokale Adresse wie zu Hause – und
-zwar für alles auf der NAS, nicht nur für das Stadionheft.
+Das Gerät verbindet sich ins Vereinsnetz, danach funktioniert die lokale
+Adresse wie zu Hause – und zwar für alles auf der NAS, nicht nur für das
+Stadionheft. Die Anwendung steht dabei zu keinem Zeitpunkt offen im Internet.
 
-Die Anwendung steht dabei zu keinem Zeitpunkt offen im Internet.
+Welcher Weg passt, hängt am Router-Zugriff:
+
+* **ohne Router-Zugriff** → Tailscale (keine Portfreigabe nötig)
+* **mit Router-Zugriff** → OpenVPN aus dem Paket „VPN Server"
+
+Ausführlich: [Zugriff von unterwegs](VPN_EINRICHTEN.md)
+
+!!! note "WireGuard gibt es im VPN Server von Synology nicht"
+    Das Paket bietet PPTP, OpenVPN und L2TP/IPSec. PPTP bitte nicht
+    verwenden – die Verschlüsselung gilt als gebrochen.
 
 #### Reverse Proxy – wenn es ohne VPN gehen soll
 

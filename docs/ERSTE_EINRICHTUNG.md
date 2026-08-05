@@ -198,14 +198,17 @@ Nichts weiter nötig. Adresse weitergeben, fertig. Am Handy lohnt sich
 
 ### Von unterwegs – der sichere Weg
 
-Über **VPN**. Eigene Schritt-für-Schritt-Anleitung:
-**[VPN einrichten](VPN_EINRICHTEN.md)**
+Über einen VPN-Tunnel. Eigene Anleitung:
+**[Zugriff von unterwegs](VPN_EINRICHTEN.md)**
 
-Kurz: DDNS einrichten, VPN Server installieren, WireGuard aktivieren, einen
-einzigen UDP-Port im Router freigeben, je Gerät ein Profil per QR-Code.
+Welcher Weg passt, hängt an einer Frage:
 
-Wer sich per VPN verbindet, erreicht die App wie zu Hause – und alles andere
-auf der NAS gleich mit.
+* **Kein Zugriff auf den Router?** → Tailscale. Braucht keine Portfreigabe.
+* **Router-Zugriff vorhanden?** → OpenVPN aus dem Paket „VPN Server", dazu
+  DynDNS und eine Freigabe von UDP 1194.
+
+Wer verbunden ist, erreicht die App wie zu Hause – und alles andere auf der
+NAS gleich mit.
 
 !!! danger "Nicht einfach den Port im Router freigeben"
     Die App hat im Auslieferungszustand keine Anmeldung. Wer die Adresse
@@ -227,6 +230,84 @@ auf der NAS gleich mit.
 
     QuickConnect hilft hier übrigens nicht – es leitet nur DSM-eigene
     Dienste weiter, keine Container-Ports.
+
+---
+
+## App ohne Weboberflaeche testen
+
+Solange du nicht im Vereinsnetz bist und noch kein Tunnel steht, kommst du
+nicht an Port 8080. **Prüfen kannst du die App trotzdem** – über den
+Aufgabenplaner. Der läuft auf der NAS und ist über DSM erreichbar, also auch
+aus dem Internet.
+
+Damit siehst du, ob Konfiguration, Werbung, Daten und PDF-Erzeugung
+zusammenspielen – ohne einen einzigen Port zu öffnen.
+
+### Schritt 1: Aufgabe anlegen
+
+**Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
+Benutzerdefiniertes Skript**
+
+| Reiter | Einstellung |
+|---|---|
+| Allgemein → Aufgabenname | `Stadionheft Test` |
+| Allgemein → Benutzer | `root` |
+| Zeitplan | Häkchen bei „Aktiviert" **entfernen** – die Aufgabe soll nur von Hand laufen |
+| Aufgabeneinstellungen → Benutzerdefiniertes Skript | siehe unten |
+
+Als Skript:
+
+```bash
+docker exec stadionheft python -m stadionheft.cli erstellen --mannschaften herren1
+```
+
+Zusätzlich bei **Aufgabeneinstellungen** den Haken setzen bei
+**„Ausführungsdetails per E-Mail senden"** und deine Adresse eintragen –
+dann bekommst du die komplette Ausgabe zugeschickt.
+
+### Schritt 2: Ausführen
+
+Aufgabe markieren → oben **Ausführen** → bestätigen.
+
+### Schritt 3: Ergebnis ansehen
+
+**In der Dateistation:** In `SVW/Stadionheft/Saison 26-27/05_Ausgaben` sollte
+jetzt eine PDF-Datei liegen, z. B. `20260809_WaB_Druck.pdf`. Die kannst du
+direkt herunterladen und ansehen.
+
+**Im Protokoll:** Aufgabenplaner → Aufgabe markieren → **Aktion → Ergebnis
+anzeigen**. Dort steht dieselbe Ausgabe wie auf einer Kommandozeile:
+
+```
+Herren 1: nächstes Spiel SV Wörnitzstein-Berg - SG Alerheim am 09.08.2026
+Anzeige „bayern-fcn-freundschaftsspiel" ist seit dem 01.08.2026 abgelaufen ...
+Stadionheft erstellt : /app/daten/05_ausgaben/20260809_WaB_Druck.pdf
+Seiten               : 24
+```
+
+### Weitere nützliche Befehle
+
+Dasselbe Verfahren, nur anderes Skript:
+
+```bash
+# Prueft Konfiguration, Ordner und Wappen -- erzeugt nichts
+docker exec stadionheft python -m stadionheft.cli pruefen
+```
+
+```bash
+# Testet die FuPa-Verbindung und legt die Rohantworten ab
+docker exec stadionheft python -m stadionheft.cli probe-fupa
+```
+
+```bash
+# Alle aktiven Mannschaften auf einmal
+docker exec stadionheft python -m stadionheft.cli erstellen
+```
+
+!!! tip "Die Aufgabe darf stehen bleiben"
+    Sie ist deaktiviert und läuft nie von selbst. Als Notfallknopf ist sie
+    praktisch: Sollte die Weboberfläche einmal klemmen, lässt sich ein Heft
+    darüber trotzdem erzeugen.
 
 ---
 

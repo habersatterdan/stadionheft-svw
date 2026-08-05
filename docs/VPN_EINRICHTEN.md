@@ -1,160 +1,150 @@
-# VPN einrichten – Zugriff von unterwegs
+# Zugriff von unterwegs
 
-Mit VPN verhält sich dein Handy oder Laptop so, als wärst du zu Hause im
-Vereinsnetz. Danach funktioniert `http://svwnas:8080` von überall – und alles
-andere auf der NAS gleich mit.
-
-**Das ist der sichere Weg.** Nichts wird offen ins Internet gestellt.
-
-Dauer: etwa 20 Minuten, danach pro Person 5 Minuten.
+Ziel: `http://svwnas:8080` funktioniert auch, wenn du nicht im Vereinsnetz
+bist.
 
 ---
 
-## Voraussetzung: Erreichbarkeit von außen
+## Zuerst die entscheidende Frage: Kommst du an den Router?
 
-Ein VPN-Server muss von außen ansprechbar sein. Prüfe zuerst, was ihr habt.
+Davon hängt alles ab.
 
-### Habt ihr eine feste IP oder DynDNS?
+| Situation | Weg |
+|---|---|
+| **Kein Zugriff auf den Router** | → [Tailscale](#tailscale-ohne-router-zugriff) |
+| Router-Zugriff vorhanden | → [OpenVPN](#openvpn-mit-router-zugriff) |
 
-Die meisten Privatanschlüsse bekommen alle 24 Stunden eine neue IP-Adresse.
-Deshalb braucht es einen Namen, der immer auf die aktuelle zeigt.
+!!! warning "Der VPN Server von Synology reicht allein nicht"
+    Das Paket **VPN Server** bietet PPTP, OpenVPN und L2TP/IPSec.
+    **WireGuard ist nicht dabei** – anders als oft behauptet.
 
-Synology bringt das kostenlos mit:
+    Wichtiger noch: **Alle drei brauchen eine Portfreigabe im Router.**
+    Ohne Zugriff auf den Router nützt das Einrichten in DSM nichts – der
+    Dienst läuft dann zwar, ist aber von außen nicht erreichbar.
+
+---
+
+## Tailscale – ohne Router-Zugriff
+
+Tailscale baut die Verbindung von innen nach außen auf. **Keine
+Portfreigabe, keine DynDNS, kein Router-Zugriff nötig** – es funktioniert
+sogar hinter DS-Lite.
+
+Alle Geräte, die mit demselben Konto angemeldet sind, sehen sich
+gegenseitig, als wären sie im selben Netz.
+
+### Einrichten
+
+1. **Konto anlegen** auf [tailscale.com](https://tailscale.com) – kostenlos
+   für private Nutzung, Anmeldung mit Google- oder GitHub-Konto
+2. **Paket für die NAS holen**: Auf tailscale.com unter *Download →
+   Synology* das Paket für die passende Architektur herunterladen.
+   Die DS720+ hat einen Intel Celeron J4125, also **x86_64 / Apollolake**.
+3. **In DSM installieren**: Paket-Zentrum → **Manuelle Installation** →
+   die heruntergeladene `.spk` auswählen
+4. **Tailscale öffnen** (erscheint im Hauptmenü) → **Log in** → der
+   angezeigte Link führt zur Anmeldung im Browser
+5. Nach der Anmeldung erscheint die NAS in der Tailscale-Übersicht mit
+   einer eigenen Adresse, z. B. `100.101.102.103`
+
+### Auf dem Handy und am Rechner
+
+1. Tailscale-App installieren (App Store, Play Store, oder
+   [tailscale.com/download](https://tailscale.com/download))
+2. Mit **demselben Konto** anmelden
+3. Fertig – die NAS ist erreichbar
+
+### Aufrufen
+
+```
+http://100.101.102.103:8080
+```
+
+Die Adresse steht in der Tailscale-Übersicht. Mit aktiviertem *MagicDNS*
+geht auch `http://svwnas:8080`.
+
+!!! tip "Warum das ohne Router-Zugriff geht"
+    Beide Geräte melden sich bei einem Vermittlungsdienst und bauen die
+    Verbindung dann direkt zueinander auf – so wie ein Videoanruf
+    funktioniert, ohne dass jemand Ports freigibt.
+
+!!! note "Nicht selbst verifiziert"
+    Diese Anleitung beruht auf der Dokumentation von Tailscale, nicht auf
+    einem Test auf eurer NAS. Falls etwas abweicht, sag Bescheid.
+
+---
+
+## OpenVPN – mit Router-Zugriff
+
+Nur sinnvoll, wenn jemand an den Router kommt.
+
+### Voraussetzung: DynDNS
+
+Privatanschlüsse bekommen regelmäßig eine neue IP-Adresse. Deshalb braucht
+es einen festen Namen:
 
 **Systemsteuerung → Externer Zugriff → DDNS → Hinzufügen**
 
 | Feld | Eingabe |
 |---|---|
 | Dienstanbieter | `Synology` |
-| Hostname | z. B. `svwoernitzstein` → ergibt `svwoernitzstein.synology.me` |
-| E-Mail / Konto | euer Synology-Konto (`sv.woernitzsteinberg@gmx.de`) |
+| Hostname | z. B. `svwoernitzstein` → `svwoernitzstein.synology.me` |
+| Konto | euer Synology-Konto |
 
-Nach dem Speichern sollte der Status **„Normal"** sein.
+Status muss danach **„Normal"** sein.
 
-!!! warning "Kabelanschluss? Erst prüfen!"
-    Bei Vodafone/Kabel-Anschlüssen gibt es oft nur **DS-Lite** – dann seid ihr
-    von außen gar nicht direkt erreichbar, und VPN funktioniert nicht ohne
-    Weiteres.
+### VPN Server einrichten
 
-    **Test:** Bei [wieistmeineip.de](https://www.wieistmeineip.de) die
-    öffentliche IP ansehen und mit der WAN-IP im Router vergleichen. Sind sie
-    verschieden, habt ihr DS-Lite.
-
-    In dem Fall: beim Anbieter eine „echte IPv4-Adresse" beantragen (bei
-    vielen kostenlos auf Anfrage) – oder auf den Reverse-Proxy-Weg ausweichen
-    (siehe unten).
-
----
-
-## Schritt 1: VPN Server installieren
-
-**Paket-Zentrum** → nach `VPN Server` suchen → **Installieren**
-
----
-
-## Schritt 2: WireGuard aktivieren
-
-**VPN Server** öffnen → links **WireGuard** → Haken bei
-**WireGuard-VPN-Server aktivieren**
+**VPN Server → OpenVPN** – die Voreinstellungen passen:
 
 | Einstellung | Wert |
 |---|---|
-| Port | `51820` (Standard, so lassen) |
-| Dynamische IP-Adresse | `10.6.0.0/24` (Standard) |
+| Port | `1194` |
+| Protokoll | `UDP` |
+| Verschlüsselung | `AES-256-CBC` oder `Auto` |
+| Authentifizierung | `SHA512` |
+| **Clients Zugriff auf das LAN des Servers erlauben** | **anhaken** |
 
-**Übernehmen** klicken.
+Der letzte Punkt ist wichtig, sonst erreichst du nur die NAS selbst.
 
-??? note "Warum WireGuard und nicht OpenVPN?"
-    WireGuard ist deutlich schneller, verbraucht weniger Akku und die
-    Einrichtung am Handy geht per QR-Code. OpenVPN funktioniert auch, ist aber
-    umständlicher.
+**Übernehmen** → dann **Konfiguration exportieren** → du bekommst eine
+ZIP-Datei mit der `.ovpn`-Datei.
 
----
+!!! danger "PPTP nicht verwenden"
+    PPTP steht in derselben Liste, gilt aber seit Jahren als gebrochen. Die
+    Verschlüsselung lässt sich mit vertretbarem Aufwand knacken. Finger weg.
 
-## Schritt 3: Port im Router freigeben
+### Berechtigung setzen
 
-Das ist die **einzige** Freigabe, die ihr braucht – und sie ist ungefährlich,
-weil dahinter nur der verschlüsselte VPN-Tunnel liegt.
+**VPN Server → Privileg** → bei den Personen, die VPN nutzen dürfen, den
+Haken bei **OpenVPN** setzen.
 
-**FRITZ!Box:** Internet → Freigaben → Portfreigaben → **Gerät für Freigaben
-hinzufügen** → SVWNAS auswählen → **Neue Freigabe**
+### Port im Router freigeben
 
-| Feld | Wert |
-|---|---|
-| Anwendung | Andere Anwendung |
-| Bezeichnung | `WireGuard` |
-| Protokoll | **UDP** |
-| Port | `51820` bis `51820` |
-| An Port | `51820` |
+**UDP 1194** auf die NAS weiterleiten. Das ist die einzige nötige Freigabe.
 
-!!! danger "Nur diesen einen Port"
+!!! danger "Nur diesen Port"
     Port **8080** (die App) und Port **22** (SSH) bleiben **geschlossen**.
-    Die erreichst du künftig durch den VPN-Tunnel.
+
+### Client einrichten
+
+1. **OpenVPN Connect** installieren (Handy: App Store / Play Store;
+   Rechner: [openvpn.net](https://openvpn.net/client/))
+2. Die `.ovpn`-Datei importieren
+3. In der Datei die Zeile `remote YOUR_SERVER_IP 1194` auf euren
+   DynDNS-Namen ändern, also z. B.
+   `remote svwoernitzstein.synology.me 1194`
+4. Mit DSM-Benutzername und -Passwort verbinden
 
 ---
 
-## Schritt 4: Profil für eine Person anlegen
+## Testen
 
-**VPN Server → WireGuard → Peer hinzufügen**
+**Wichtig: WLAN ausschalten** und über Mobilfunk gehen – sonst bist du
+ohnehin im Heimnetz und merkst nicht, ob der Tunnel wirkt.
 
-* Name: z. B. `daniel-handy` – für **jedes Gerät ein eigenes Profil**
-* **Erstellen**
-
-Danach erscheint ein **QR-Code** und ein Download-Knopf für die
-Konfigurationsdatei.
-
-!!! tip "Ein Profil je Gerät"
-    Nicht dasselbe Profil auf mehreren Geräten benutzen. So kann man den
-    Zugang einer einzelnen Person später sperren, ohne alle anderen zu stören.
-
----
-
-## Schritt 5: Gerät verbinden
-
-### Handy (iOS und Android)
-
-1. App **WireGuard** installieren (kostenlos, vom WireGuard-Entwicklerteam)
-2. In der App auf **+** → **Aus QR-Code erstellen**
-3. Den QR-Code aus DSM abfotografieren
-4. Namen vergeben, speichern
-5. Schalter umlegen – verbunden
-
-### Windows / Fedora / macOS
-
-1. WireGuard von [wireguard.com/install](https://www.wireguard.com/install/)
-   installieren (unter Fedora: `sudo dnf install wireguard-tools`)
-2. In DSM die Konfigurationsdatei herunterladen (`.conf`)
-3. In WireGuard **Tunnel importieren** → Datei auswählen
-4. **Aktivieren**
-
----
-
-## Schritt 6: Testen
-
-**Wichtig: Zum Testen das WLAN ausschalten** und über Mobilfunk gehen – sonst
-bist du ja ohnehin im Heimnetz und merkst nicht, ob das VPN wirkt.
-
-1. VPN einschalten
-2. Im Browser `http://svwnas:8080` öffnen
-
-Klappt der Name nicht, die interne IP nehmen, z. B.
-`http://192.168.178.42:8080`.
-
-!!! tip "Name funktioniert nicht?"
-    Über VPN wird der NAS-Name nicht immer aufgelöst. Zwei Möglichkeiten:
-
-    * Einfach die interne IP als Lesezeichen speichern
-    * Oder in DSM unter **VPN Server → Allgemeine Einstellungen** die NAS als
-      DNS-Server für VPN-Clients eintragen
-
----
-
-## Alltag
-
-VPN einschalten → App benutzen → VPN wieder ausschalten.
-
-Auf dem Handy sind das zwei Fingertipps. Wer die App oft nutzt, kann
-„Bei Bedarf verbinden" aktivieren – dann geht das VPN automatisch an.
+1. VPN bzw. Tailscale einschalten
+2. `http://svwnas:8080` öffnen – oder die IP-Adresse
 
 ---
 
@@ -162,33 +152,18 @@ Auf dem Handy sind das zwei Fingertipps. Wer die App oft nutzt, kann
 
 | Problem | Ursache / Lösung |
 |---|---|
-| Verbindung kommt nicht zustande | Portfreigabe prüfen: **UDP** 51820, nicht TCP |
-| Verbunden, aber NAS nicht erreichbar | Interne IP statt Name probieren |
-| Klappt im WLAN, nicht per Mobilfunk | DS-Lite-Problem – siehe Kasten oben |
-| DDNS zeigt „Fehler" | Hostname schon vergeben, anderen wählen |
-| Nach Router-Neustart tot | DDNS-Status in DSM prüfen |
+| OpenVPN verbindet nicht | Portfreigabe prüfen: **UDP** 1194, nicht TCP |
+| Verbunden, NAS nicht erreichbar | „Clients Zugriff auf das LAN erlauben" anhaken |
+| Name wird nicht gefunden | Interne IP statt Name verwenden |
+| Klappt im WLAN, nicht mobil | Anschluss ohne öffentliche IPv4 (DS-Lite) – dann Tailscale nehmen |
+| Tailscale: NAS erscheint nicht | Beide Geräte mit demselben Konto angemeldet? |
 
 ---
 
-## Alternative ohne VPN
+## Und ohne alles?
 
-Wenn VPN nicht geht (z. B. wegen DS-Lite), bleibt der Reverse Proxy:
+Solange kein Tunnel steht, ist die App von außen nicht erreichbar – das ist
+so gewollt, sie hat keine Anmeldung.
 
-1. **DSM → Anmeldeportal → Reverse Proxy** → Regel von
-   `stadionheft.svwoernitzstein.synology.me` (HTTPS, 443) auf
-   `localhost:8080`
-2. **Zertifikat** über Let's Encrypt in DSM anfordern
-3. **Passwortschutz einschalten** – in `config.yaml`:
-   ```yaml
-   zugang:
-     passwortschutz: true
-     benutzername: "svw"
-     passwort_umgebungsvariable: "STADIONHEFT_PASSWORT"
-   ```
-   Das Passwort im Container Manager unter **Umgebung** setzen.
-4. Port **443** im Router freigeben
-
-!!! warning "Punkt 3 ist nicht optional"
-    Ohne Passwortschutz stünde die App offen im Internet. Der Schutz wirkt
-    nur zusammen mit HTTPS aus Punkt 2 – über eine unverschlüsselte
-    Verbindung wären die Zugangsdaten mitlesbar.
+Du kannst sie trotzdem **prüfen**, ohne sie zu öffnen: siehe
+[Erste Einrichtung → App ohne Weboberfläche testen](ERSTE_EINRICHTUNG.md#app-ohne-weboberflaeche-testen).
