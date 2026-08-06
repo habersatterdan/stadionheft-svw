@@ -1,7 +1,10 @@
 # FuPa-Anbindung
 
-Tabelle, Torschützenliste und Spielerstatistik können automatisch von
-fupa.net geholt werden – dann entfällt die Pflege der CSV-Dateien.
+Tabelle, Torschützenliste, Spielerstatistik und Spielplan werden automatisch
+von fupa.net geholt – dann entfällt die Pflege der CSV-Dateien.
+
+Das ist seit der aktuellen Fassung die **Voreinstellung**. Es muss dafür nichts
+eingestellt werden.
 
 Diese Seite richtet sich an Administratoren.
 
@@ -16,79 +19,139 @@ lädt ihre Inhalte zwar über interne JSON-Aufrufe nach, aber diese sind:
 * nicht zugesichert
 * jederzeit ohne Ankündigung änderbar
 
-Deshalb ist das Programm so gebaut, dass ein Ausfall nichts blockiert:
+Der naheliegende Weg – eine feste Adresse anrufen und feste Feldnamen erwarten –
+funktioniert deshalb genau so lange, bis FuPa etwas umstellt. Das Programm geht
+darum einen anderen Weg.
 
-* Alle Adressen stehen in der Konfiguration, nicht im Programmcode
-* Die Feldzuordnung sucht nach mehreren möglichen Namen statt nach genau einem
-* Bei einem Fehlschlag wird automatisch auf die CSV-Dateien umgeschaltet
-* Es gibt ein Diagnosewerkzeug, das ohne Raten zeigt, was tatsächlich ankommt
+---
+
+## Wie der Abruf funktioniert
+
+Das Programm **rät nicht, es sucht**. In drei Schritten:
+
+### 1. Mehrere Adressen durchprobieren
+
+Für jede Mannschaft steht eine Liste von Adressen bereit – in dieser
+Reihenfolge:
+
+1. die in `config.yaml` eingetragenen Endpunkte
+2. die **Teamseite der Mannschaft** (`fupa_team_url`) – die verlässlichste
+   Adresse überhaupt, denn die hat der Verein selbst eingetragen
+3. selbst ergänzte Adressen aus `zusatz_adressen`
+4. eine eingebaute Liste weiterer Kandidaten (`/tabelle`, `/spielplan`,
+   `/kader`, `/statistiken` …)
+
+Sobald alle vier Datenteile beisammen sind, hört das Programm auf. In der Regel
+genügt **eine einzige** Seite.
+
+### 2. Die Daten aus der Seite holen
+
+Antwortet eine Adresse mit JSON, wird das direkt verwendet. Antwortet sie mit
+HTML – also mit einer ganz normalen Webseite –, sucht das Programm die
+JSON-Blöcke, die in der Seite eingebettet sind. Moderne Websites liefern ihre
+Daten genau so aus (`__NEXT_DATA__`, `window.__NUXT__` und Ähnliches).
+
+**Das ist der entscheidende Punkt:** Die Adresse der öffentlichen Teamseite ist
+bekannt und stabil. Sie muss nicht erraten werden.
+
+### 3. Erkennen, was was ist
+
+Aus allem gefundenen JSON sucht das Programm heraus, was wie eine Tabelle, eine
+Torschützenliste, eine Spielerstatistik oder ein Spielplan **aussieht** – an der
+Struktur, nicht an den Feldnamen:
+
+* Eine **Tabelle** hat mehrere Zeilen mit Mannschaftsname, Punkten, Siegen,
+  Niederlagen und Toren.
+* Eine **Torschützenliste** hat Spielernamen und Tore, aber keine
+  Einsatzminuten.
+* Eine **Spielerstatistik** hat Spielernamen *mit* Minuten und Karten.
+* Ein **Spielplan** hat Paarungen mit einem Datum.
+
+Ob das Feld `points` oder `punkte` heißt, ob der Vereinsname direkt drinsteht
+oder in einem verschachtelten `team`-Objekt: alles egal. Kommen mehrere
+Kandidaten in Frage, gewinnt die vollständigste Liste.
+
+!!! note "Warum dieser Umweg"
+    Weil er hält. Eine feste Feldzuordnung müsste nach jeder Umstellung bei FuPa
+    von Hand nachgezogen werden – und bis das jemand merkt, steht im Heft nichts
+    oder Falsches.
 
 ---
 
 ## Verbindung prüfen
 
 In der Fußzeile der Oberfläche steht **„FuPa-Verbindung prüfen"**. Die Seite
-ruft die hinterlegten Adressen auf und zeigt je Adresse an, was zurückkommt.
+klappert alle Adressen ab und zeigt für jede an, was zurückkam und was sich
+daraus lesen ließ.
 
-Der Test **liest nur** – es wird nichts verändert. Er dauert etwa 20 Sekunden.
+Der Test **liest nur** – es wird nichts verändert. Er dauert etwa eine halbe
+Minute.
 
-### Die drei möglichen Ergebnisse
+Oben steht die Bilanz:
 
 | Ergebnis | Bedeutung |
 |---|---|
-| **Alle Abfragen haben funktioniert** | Der automatische Abruf lässt sich einschalten |
-| **Ein Teil hat funktioniert** | Einzelne Adressen stimmen nicht – Rohantworten herunterladen und auswerten |
-| **Keine hat funktioniert** | Adressen stimmen nicht oder FuPa ist nicht erreichbar |
+| **Alle vier Datenteile gefunden** | Es ist nichts zu tun |
+| **Ein Teil gefunden** | Was fehlt, bleibt im Heft leer und muss per CSV gepflegt werden |
+| **Nichts gefunden** | FuPa ist nicht erreichbar, oder die Seiten sind anders aufgebaut als erwartet |
 
-Sobald mindestens eine Adresse geantwortet hat, gibt es einen Knopf
-**„Ergebnis herunterladen (ZIP)"**. Darin stehen die Rohantworten – aus ihnen
-lässt sich die genaue Feldzuordnung ablesen.
+Darunter steht Adresse für Adresse, was passiert ist. Der Knopf **„Ergebnis
+herunterladen (ZIP)"** liefert die Rohantworten – die braucht, wer der Sache
+nachgehen will.
+
+Dasselbe im Terminal:
+
+```bash
+docker exec stadionheft python -m stadionheft.cli probe-fupa --mannschaft herren1
+```
 
 ---
 
-## Richtige Adressen selbst finden
+## Wenn etwas nicht gefunden wird
 
-Falls der Test nichts liefert, sind die hinterlegten Adressen veraltet. So
-findest du die aktuellen:
+Erst prüfen, ob die Teamseite überhaupt stimmt: Die `fupa_team_url` der
+Mannschaft im Browser öffnen. Zeigt sie die richtige Mannschaft in der
+richtigen Saison?
 
-1. FuPa-Teamseite im Browser öffnen, z. B.
-   `https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27`
+Wenn ja, lässt sich eine zusätzliche Adresse nachtragen, ohne am Programm etwas
+zu ändern:
+
+1. FuPa-Teamseite im Browser öffnen
 2. Taste `F12` drücken (Entwicklerwerkzeuge)
 3. Reiter **Netzwerk** wählen, Filter **Fetch/XHR**
 4. Seite mit `F5` neu laden
-5. In der Liste erscheinen die tatsächlich benutzten Adressen
+5. In der Liste stehen die tatsächlich benutzten Adressen
 
-Diese in `config.yaml` eintragen:
+Diese in `config.yaml` eintragen – `{slug}` wird durch den Team-Bezeichner
+ersetzt:
 
 ```yaml
 datenquelle:
   fupa:
-    basis_url: "https://api.fupa.net"
-    endpunkte:
-      team: "/v1/teams/{team_slug}"
-      tabelle: "/v1/teams/{team_slug}/standing"
-      spielplan: "/v1/teams/{team_slug}/matches"
-      spieler: "/v1/teams/{team_slug}/players"
-      torjaeger: "/v1/teams/{team_slug}/topscorers"
+    zusatz_adressen:
+      - "https://api.fupa.net/v2/teams/{slug}/statistics"
 ```
 
-`{team_slug}` wird automatisch aus der `fupa_team_url` der Mannschaft
-gebildet.
+Danach den Test noch einmal laufen lassen.
 
 ---
 
-## Einschalten
-
-Wenn der Test erfolgreich war, in `config.yaml`:
+## Einstellungen
 
 ```yaml
 datenquelle:
-  modus: "api"
-  fallback_modus: "manuell"
+  modus: "api"              # Voreinstellung
+  fallback_modus: "manuell" # wenn nichts kommt: CSV-Dateien
+
+  fupa:
+    zusatz_adressen: []     # eigene Adressen, siehe oben
+    max_abrufe: 12          # Obergrenze je Mannschaft
 ```
 
-`fallback_modus` sorgt dafür, dass bei einem Ausfall automatisch auf die
-CSV-Dateien umgeschaltet wird – das Heft entsteht dann trotzdem.
+`fallback_modus` greift in **zwei** Fällen: wenn FuPa gar nicht erreichbar ist,
+und wenn der Abruf zwar durchläuft, aber nichts liefert. Ein Heft mit lauter
+leeren Statistikseiten wäre sonst formal ein Erfolg – und fällt erst im Druck
+auf.
 
 ---
 
@@ -102,7 +165,9 @@ Das Programm verhält sich bewusst zurückhaltend:
 * Wiederholung mit wachsender Wartezeit bei Netzfehlern
 * Zwischenspeicher: dieselbe Adresse wird innerhalb von zwei Stunden nicht
   erneut abgerufen
-* Insgesamt rund ein Dutzend Abrufe alle zwei Wochen
+* Der Abruf **hört auf**, sobald alles gefunden ist – meist nach einer Seite
+* Höchstens `max_abrufe` Seiten je Mannschaft (Standard 12)
+* Insgesamt eine Handvoll Abrufe alle zwei Wochen
 
 Weist FuPa den Zugriff ab (403 oder 429), meldet das Programm das im Klartext
 und schaltet um. Es versucht **nicht**, eine Sperre zu umgehen.

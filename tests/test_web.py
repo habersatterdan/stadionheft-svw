@@ -84,12 +84,16 @@ def test_fupa_test_zeigt_ergebnis(konfiguration: Konfiguration, monkeypatch):
         "mannschaft": "herren1",
         "team_slug": "sv-woernitzstein-berg-m1-2026-27",
         "ablage": "/tmp/fupa_probe",
+        "geprueft": 2,
         "ergebnisse": {
-            "tabelle": {"url": "https://api.fupa.net/x", "status": 200,
-                        "bewertung": "ok", "gefundene_zeilen": 16},
-            "torjaeger": {"url": "https://api.fupa.net/y", "status": 404,
-                          "bewertung": "kein verwertbares JSON"},
+            "fupa.net/team/x/tabelle": {
+                "url": "https://www.fupa.net/team/x/tabelle", "status": 200,
+                "bewertung": "ok", "gefundene_zeilen": 16,
+                "erkannt": {"tabelle": 16}},
+            "api.fupa.net/y": {"url": "https://api.fupa.net/y", "status": 404,
+                               "bewertung": "antwortet mit HTTP 404"},
         },
+        "zusammenfassung": {"tabelle": 16},
     }
     monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa",
                         lambda *a, **k: bericht)
@@ -98,21 +102,40 @@ def test_fupa_test_zeigt_ergebnis(konfiguration: Konfiguration, monkeypatch):
                                           data={"mannschaft": "herren1"})
     assert antwort.status_code == 200
     text = antwort.get_data(as_text=True)
-    assert "1 von 2 Abfragen" in text
-    assert "16 Datenzeilen erkannt" in text
+    assert "1 von 4 Datenteilen" in text
+    assert "gefunden, 16 Zeilen" in text
+    assert "Tabelle (16)" in text
     assert "Ergebnis herunterladen" in text
+
+
+def test_fupa_test_zeigt_vollstaendigen_treffer(konfiguration: Konfiguration,
+                                                monkeypatch):
+    bericht = {
+        "basis_url": "x", "mannschaft": "herren1", "team_slug": "s", "ablage": "",
+        "geprueft": 10,
+        "ergebnisse": {"fupa.net/team/s": {"bewertung": "ok", "status": 200,
+                                           "erkannt": {"tabelle": 16}}},
+        "zusammenfassung": {"tabelle": 16, "torjaeger": 20, "spieler": 22,
+                            "spiele": 30},
+    }
+    monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa",
+                        lambda *a, **k: bericht)
+    text = _client(konfiguration).post("/fupa-test", data={}).get_data(as_text=True)
+    assert "Alle vier Datenteile wurden gefunden" in text
+    assert "nicht gefunden" not in text
 
 
 def test_fupa_test_ohne_treffer_bietet_keinen_download(konfiguration: Konfiguration,
                                                        monkeypatch):
     bericht = {
         "basis_url": "x", "mannschaft": "herren1", "team_slug": "s", "ablage": "",
-        "ergebnisse": {"tabelle": {"bewertung": "nicht erreichbar: timeout"}},
+        "geprueft": 1, "zusammenfassung": {},
+        "ergebnisse": {"api.fupa.net/x": {"bewertung": "nicht erreichbar: timeout"}},
     }
     monkeypatch.setattr("stadionheft.sources.fupa_api.probe_fupa",
                         lambda *a, **k: bericht)
     text = _client(konfiguration).post("/fupa-test", data={}).get_data(as_text=True)
-    assert "Keine der 1 Abfragen" in text
+    assert "keine Spieldaten gefunden" in text
     assert "Ergebnis herunterladen" not in text
 
 

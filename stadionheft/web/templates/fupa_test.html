@@ -12,14 +12,17 @@
   <div class="karte">
     <h2 style="margin-top:0">Was passiert hier?</h2>
     <p>
-      Das Programm ruft die in der Konfiguration hinterlegten FuPa-Adressen auf
-      und schaut nach, was zurückkommt. Es wird <strong>nichts verändert</strong> –
-      nur gelesen. Der Test dauert etwa 20 Sekunden.
+      Das Programm ruft nacheinander alle Adressen auf, die für FuPa in Frage
+      kommen, und schaut nach, was zurückkommt. Es wird
+      <strong>nichts verändert</strong> – nur gelesen. Der Test dauert etwa
+      eine halbe Minute.
     </p>
     <p style="color:#666; font-size:.92rem">
-      FuPa bietet keine offizielle Schnittstelle an. Die hinterlegten Adressen
-      sind deshalb zunächst Platzhalter. Das Ergebnis dieses Tests zeigt, ob sie
-      stimmen – und liefert die Datei, mit der sich der Abruf fertigstellen lässt.
+      FuPa bietet keine offizielle Schnittstelle an. Deshalb wird nicht auf eine
+      bestimmte Adresse gesetzt: Das Programm probiert mehrere durch und erkennt
+      an der <em>Struktur</em> der Antwort, was davon Tabelle, Torschützenliste,
+      Spielerstatistik oder Spielplan ist. Unten steht für jede Adresse, was
+      dabei herausgekommen ist.
     </p>
 
     <form method="post">
@@ -56,30 +59,48 @@
   {% set treffer = bericht.ergebnisse.values()|selectattr('bewertung', 'equalto', 'ok')|list|length %}
   {% set gesamt = bericht.ergebnisse|length %}
 
+  {% set bilanz = bericht.zusammenfassung or {} %}
+  {% set beschriftung = {'tabelle': 'Tabelle', 'torjaeger': 'Torschützenliste',
+                         'spieler': 'Spielerstatistik', 'spiele': 'Spielplan'} %}
+
   <div class="karte">
-    {% if treffer == gesamt %}
+    {% if bilanz|length == 4 %}
       <div class="erfolg">
-        <strong>Alle {{ gesamt }} Abfragen haben funktioniert.</strong><br>
-        Der automatische Abruf lässt sich einrichten.
+        <strong>Alle vier Datenteile wurden gefunden.</strong><br>
+        Die Statistiken können automatisch von FuPa geholt werden – dafür muss
+        nichts weiter eingestellt werden.
       </div>
-    {% elif treffer > 0 %}
+    {% elif bilanz %}
       <div class="hinweis">
-        <strong>{{ treffer }} von {{ gesamt }} Abfragen haben funktioniert.</strong><br>
-        Ein Teil der Adressen stimmt noch nicht.
+        <strong>{{ bilanz|length }} von 4 Datenteilen wurden gefunden.</strong><br>
+        Was fehlt, bleibt im Heft leer und muss über die CSV-Dateien gepflegt
+        werden.
       </div>
     {% else %}
       <div class="fehlerkasten">
-        <strong>Keine der {{ gesamt }} Abfragen hat funktioniert.</strong><br>
-        Entweder stimmen die Adressen nicht, oder FuPa ist gerade nicht
-        erreichbar. Die Statistiken müssen bis auf Weiteres über die
-        CSV-Dateien gepflegt werden.
+        <strong>Es wurden keine Spieldaten gefunden.</strong><br>
+        Entweder ist FuPa gerade nicht erreichbar, oder die Seiten sind anders
+        aufgebaut als erwartet. Die Statistiken müssen bis auf Weiteres über
+        die CSV-Dateien gepflegt werden.
       </div>
     {% endif %}
 
     <table class="info" style="margin-top:1rem">
       <tr><td>Getestete Mannschaft</td><td>{{ bericht.mannschaft }}</td></tr>
       <tr><td>Team-Bezeichner</td><td>{{ bericht.team_slug }}</td></tr>
-      <tr><td>Basis-Adresse</td><td>{{ bericht.basis_url }}</td></tr>
+      <tr><td>Geprüfte Adressen</td><td>{{ bericht.geprueft }}</td></tr>
+      {% for name, titel in beschriftung.items() %}
+        <tr>
+          <td>{{ titel }}</td>
+          <td>
+            {% if bilanz.get(name) %}
+              gefunden, {{ bilanz[name] }} Zeilen
+            {% else %}
+              nicht gefunden
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
     </table>
   </div>
 
@@ -92,8 +113,11 @@
         {% if eintrag.status %}<span class="status ok">HTTP {{ eintrag.status }}</span>{% endif %}
         <br>
         {{ eintrag.bewertung }}
-        {% if eintrag.gefundene_zeilen %}
-          – {{ eintrag.gefundene_zeilen }} Datenzeilen erkannt
+        {% if eintrag.erkannt %}
+          <br>Erkannt:
+          {% for schluessel, anzahl in eintrag.erkannt.items() %}
+            {{ beschriftung.get(schluessel, schluessel) }} ({{ anzahl }}){% if not loop.last %}, {% endif %}
+          {% endfor %}
         {% endif %}
         {% if eintrag.url %}
           <br><span style="color:#666; font-size:.85rem">{{ eintrag.url }}</span>
@@ -104,10 +128,19 @@
 
   {% if treffer > 0 %}
     <div class="karte">
-      <h2 style="margin-top:0">Nächster Schritt</h2>
+      <h2 style="margin-top:0">
+        {% if bilanz|length == 4 %}Falls doch etwas nicht stimmt{% else %}Nächster Schritt{% endif %}
+      </h2>
       <p>
-        Bitte die folgende Datei herunterladen und weitergeben. Sie enthält die
-        Antworten von FuPa und wird gebraucht, um den Abruf fertigzustellen.
+        {% if bilanz|length == 4 %}
+          Alles Nötige wurde gefunden – es ist nichts weiter zu tun. Sollte im
+          Heft trotzdem etwas fehlen, hilft die folgende Datei bei der Suche:
+          Sie enthält die Antworten von FuPa im Original.
+        {% else %}
+          Bitte die folgende Datei herunterladen und weitergeben. Sie enthält
+          die Antworten von FuPa und zeigt, woran es bei den fehlenden Teilen
+          hakt.
+        {% endif %}
       </p>
       <p>
         <a class="knopf-zweit" href="{{ url_for('fupa_test_download') }}"

@@ -133,6 +133,36 @@ def test_fallback_auf_manuelle_daten(konfiguration: Konfiguration, heftplan_mini
     assert any("umgeschaltet" in w for w in ergebnis.warnungen)
 
 
+def test_leere_antwort_gilt_als_ausfall(konfiguration: Konfiguration,
+                                        heftplan_minimal, monkeypatch):
+    """Eine Quelle, die zwar antwortet, aber nichts liefert, ist auch ein Ausfall.
+
+    Sonst entstuende ein Heft mit lauter leeren Statistikseiten -- und das
+    faellt erst beim Druck auf.
+    """
+    from stadionheft.sources.base import basis_daten, quelle_erzeugen
+
+    class LeereQuelle:
+        name = "api"
+
+        def __init__(self, konfiguration):
+            pass
+
+        def hole(self, mannschaft):
+            return basis_daten(mannschaft, "api")
+
+    def ersatz(modus, k):
+        return LeereQuelle(k) if modus == "api" else quelle_erzeugen(modus, k)
+
+    monkeypatch.setattr("stadionheft.build.quelle_erzeugen", ersatz)
+    konfiguration.roh["datenquelle"]["fallback_modus"] = "demo"
+
+    ergebnis = heft_erstellen(konfiguration, ["herren1"], datenquelle="api",
+                              heftplan=heftplan_minimal, nas_hochladen=False)
+    assert ergebnis.verwendete_quelle == "demo"
+    assert any("keine verwertbaren Daten" in w for w in ergebnis.warnungen)
+
+
 # ---------------------------------------------------------------------------
 # Rendering-Details
 # ---------------------------------------------------------------------------

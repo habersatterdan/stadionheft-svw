@@ -356,30 +356,42 @@ werden beide erkannt, ebenso deutsche und englische Spaltennamen
 Fehlt eine Datei, bleibt nur die betreffende Seite leer – das Heft wird
 trotzdem erzeugt.
 
-### FuPa-Abruf einrichten
+### FuPa-Abruf
 
-> **Wichtig:** FuPa veröffentlicht keine dokumentierte, zugesagte
-> Schnittstelle. Die Endpunkte in `config.example.yaml` sind **Platzhalter**
-> und müssen einmal überprüft werden. Bitte vorher
-> [KONZEPT.md, Abschnitt 10](docs/KONZEPT.md#10-rechtliche-und-technische-einschränkungen)
-> zu den rechtlichen Aspekten lesen.
+`datenquelle.modus: "api"` ist die Voreinstellung – einzurichten ist nichts.
+
+FuPa veröffentlicht keine dokumentierte Schnittstelle, deshalb setzt das
+Programm nicht auf eine feste Adresse mit festen Feldnamen. Stattdessen:
+
+1. Es probiert mehrere Adressen durch – konfigurierte Endpunkte, die
+   **Teamseite der Mannschaft** (`fupa_team_url`), weitere Kandidaten.
+2. Antwortet eine Adresse mit HTML statt JSON, holt es die JSON-Blöcke aus der
+   Seite (`__NEXT_DATA__`, `window.__NUXT__` und Ähnliches).
+3. Es erkennt an der **Struktur**, was Tabelle, Torschützenliste,
+   Spielerstatistik und Spielplan ist – unabhängig davon, ob ein Feld `points`
+   oder `punkte` heißt.
+
+Sobald alles beisammen ist, hört der Abruf auf; meist genügt eine Seite.
+Kommt nichts an, wird automatisch auf `fallback_modus` (CSV) umgeschaltet.
+
+Was tatsächlich gefunden wird, zeigt:
 
 ```bash
 stadionheft probe-fupa
 ```
 
-Ruft die konfigurierten Adressen auf und meldet je Endpunkt Status, Inhaltstyp,
-erkannte Zeilen und Feldnamen. Die Rohantworten landen in
+Der Befehl klappert dieselben Adressen ab und meldet je Adresse Status und was
+sich daraus lesen ließ. Die Rohantworten landen in
 `daten/04_zwischenergebnisse/fupa_probe/`.
 
-Stimmt eine Adresse nicht, findest du die richtige so: FuPa-Teamseite öffnen →
-`F12` → Reiter **Netzwerk** → Filter **Fetch/XHR** → Seite neu laden. Die
-angezeigten Adressen in `config.yaml` unter `datenquelle.fupa.endpunkte`
-eintragen.
+Fehlt etwas, lässt sich eine Adresse nachtragen, ohne am Programm etwas zu
+ändern – `datenquelle.fupa.zusatz_adressen`, Details in
+[docs/fupa.md](docs/fupa.md).
 
 Das Programm verhält sich dabei fair: sprechender User-Agent mit
 Kontaktadresse, `robots.txt` wird respektiert, Pause zwischen Anfragen,
-Zwischenspeicher von zwei Stunden.
+Zwischenspeicher von zwei Stunden. Zu den rechtlichen Aspekten:
+[KONZEPT.md, Abschnitt 10](docs/KONZEPT.md#10-rechtliche-und-technische-einschränkungen).
 
 ### Reproduzierbarkeit
 

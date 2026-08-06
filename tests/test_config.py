@@ -19,6 +19,8 @@ def test_fupa_slug_aus_url(konfiguration: Konfiguration):
 
 def test_fupa_slug_leer_bei_unsinniger_url():
     daten = yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8"))
+    # Ohne API-Modus ist eine unbrauchbare URL nur folgenlos, kein Fehler
+    daten["datenquelle"]["modus"] = "demo"
     daten["mannschaften"] = {"x": {"anzeigename": "X",
                                    "fupa_team_url": "https://example.org/foo"}}
     k = Konfiguration(daten)

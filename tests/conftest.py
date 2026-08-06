@@ -18,6 +18,9 @@ def konfiguration(tmp_path: Path) -> Konfiguration:
     for ordner in ("03_eingaben", "04_zwischenergebnisse", "05_ausgaben", "02_werbung"):
         (tmp_path / ordner).mkdir(parents=True, exist_ok=True)
 
+    # Tests duerfen nie ins Netz gehen. Wer den API-Modus prueft, setzt ihn
+    # selbst und ersetzt dabei den HTTP-Teil.
+    daten["datenquelle"]["modus"] = "demo"
     daten["datenquelle"]["manuell"]["ordner"] = str(tmp_path / "03_eingaben")
     daten["datenquelle"]["cache"]["ordner"] = str(tmp_path / "cache")
     daten["ausgabe"]["ordner"] = str(tmp_path / "05_ausgaben")

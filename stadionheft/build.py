@@ -73,6 +73,10 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
     komplett auf die Ersatzquelle umgeschaltet. Bewusst *komplett* und nicht je
     Mannschaft: ein Heft, dessen Mannschaften aus verschiedenen Quellen mit
     verschiedenen Staenden stammen, waere schwer nachvollziehbar.
+
+    Als Ausfall gilt nicht nur ein Fehler, sondern auch eine Quelle, die zwar
+    antwortet, aber **nichts liefert**. Ein Heft mit lauter leeren Seiten waere
+    formal ein Erfolg und praktisch wertlos.
     """
     primaer = modus or str(konfiguration.get("datenquelle.modus", "demo"))
     ersatz = str(konfiguration.get("datenquelle.fallback_modus", "") or "")
@@ -92,6 +96,14 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
                               mannschaft.anzeigename, aktueller_modus)
                 daten = quelle.hole(mannschaft)
                 ergebnis.append(daten)
+            if versuch == 0 and ersatz and not _brauchbar(ergebnis):
+                logger().warning(
+                    "Datenquelle '%s' hat geantwortet, aber keine Spieldaten "
+                    "geliefert.", aktueller_modus)
+                warnungen.append(
+                    f"Von '{aktueller_modus}' kamen keine verwertbaren Daten. "
+                    f"Es wurde automatisch auf '{ersatz}' umgeschaltet.")
+                continue
             return ergebnis, aktueller_modus, warnungen
         except StadionheftFehler as fehler:
             logger().error("Datenquelle '%s' fehlgeschlagen: %s",
@@ -107,6 +119,16 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
         "Keine nutzbare Datenquelle.",
         benutzer_text="Es konnte keine Datenquelle verwendet werden.",
         hinweis="Bitte datenquelle.modus in config/config.yaml pruefen.")
+
+
+def _brauchbar(ergebnis: list[MannschaftsDaten]) -> bool:
+    """Steckt in dem Ergebnis ueberhaupt Inhalt fuer ein Heft?
+
+    Es genuegt, wenn *eine* Mannschaft etwas geliefert hat -- bei den unteren
+    Mannschaften ist eine leere Torschuetzenliste voellig normal.
+    """
+    return any(d.tabelle or d.torjaeger or d.spieler or d.naechstes_spiel
+               for d in ergebnis)
 
 
 # ---------------------------------------------------------------------------

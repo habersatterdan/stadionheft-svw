@@ -127,26 +127,43 @@ def befehl_erstellen(args) -> int:
     return 0
 
 
+BEZEICHNUNGEN = {"tabelle": "Tabelle", "torjaeger": "Torschuetzenliste",
+                 "spieler": "Spielerstatistik", "spiele": "Spielplan"}
+
+
 def befehl_probe(args) -> int:
-    """Prueft, welche FuPa-Endpunkte tatsaechlich antworten."""
+    """Prueft, welche FuPa-Adressen antworten und was sich daraus lesen laesst."""
     from .sources.fupa_api import probe_fupa
 
     k = _konfiguration(args)
     bericht = probe_fupa(k, args.mannschaft)
 
-    print(f"Basis-URL   : {bericht['basis_url']}")
     print(f"Mannschaft  : {bericht['mannschaft']} ({bericht['team_slug']})")
+    print(f"Geprueft    : {bericht['geprueft']} Adressen")
     print(f"Rohantworten: {bericht['ablage']}")
     print()
     for name, eintrag in bericht["ergebnisse"].items():
-        print(f"  {name:<12} {str(eintrag.get('status', '-')):<5} "
-              f"{eintrag.get('bewertung', '')}")
-        if eintrag.get("beispiel_felder"):
-            felder = ", ".join(eintrag["beispiel_felder"][:12])
-            print(f"               Felder: {felder}")
+        print(f"  {str(eintrag.get('status', '-')):<5} {name}")
+        print(f"        {eintrag.get('bewertung', '')}")
+        if eintrag.get("erkannt"):
+            teile = ", ".join(f"{BEZEICHNUNGEN.get(s, s)}: {n}"
+                              for s, n in eintrag["erkannt"].items())
+            print(f"        Erkannt: {teile}")
+
+    bilanz = bericht.get("zusammenfassung") or {}
     print()
-    print("Naechster Schritt: die gespeicherten JSON-Dateien ansehen und in")
-    print("stadionheft/sources/fupa_api.py die Feldnamen ergaenzen, falls noetig.")
+    print("Ergebnis:")
+    for schluessel, titel in BEZEICHNUNGEN.items():
+        anzahl = bilanz.get(schluessel)
+        print(f"  {titel:<18} "
+              + (f"gefunden ({anzahl} Zeilen)" if anzahl else "nicht gefunden"))
+    if len(bilanz) == len(BEZEICHNUNGEN):
+        print()
+        print("Alles Noetige wird gefunden - datenquelle.modus: api genuegt.")
+    else:
+        print()
+        print("Was fehlt, bleibt im Heft leer. Die gespeicherten JSON-Dateien")
+        print("zeigen, was FuPa stattdessen geliefert hat.")
     return 0
 
 

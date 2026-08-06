@@ -25,20 +25,25 @@ saison: "2026/2027"
 # Woher kommen die Daten?
 # ---------------------------------------------------------------------------
 datenquelle:
-  # demo     = eingebaute Beispieldaten (funktioniert sofort, ohne Internet)
-  # manuell  = CSV-Dateien aus datenquelle.manuell.ordner (empfohlener Start)
-  # api      = automatischer Abruf von FuPa (Endpunkte muessen erst verifiziert
-  #            werden, siehe README Abschnitt "FuPa-Abruf einrichten")
-  modus: "demo"
+  # api      = automatischer Abruf von FuPa. Das Programm probiert mehrere
+  #            Adressen durch und erkennt Tabelle, Torschuetzenliste,
+  #            Spielerstatistik und Spielplan an ihrer *Struktur*. Es muss
+  #            also nicht wissen, wie FuPa seine Felder gerade nennt.
+  # manuell  = CSV-Dateien aus datenquelle.manuell.ordner
+  # demo     = eingebaute Beispieldaten. Laeuft ohne Internet, zeigt aber immer
+  #            denselben alten Spieltag - nur zum Ausprobieren der Oberflaeche.
+  modus: "api"
 
-  # Wenn der gewaehlte Modus fehlschlaegt: auf diesen Modus zurueckfallen,
-  # statt den ganzen Lauf abzubrechen. "" = kein Fallback.
+  # Wenn der gewaehlte Modus nichts Brauchbares liefert: auf diesen Modus
+  # zurueckfallen, statt ein leeres Heft zu bauen. "" = kein Fallback.
   fallback_modus: "manuell"
 
   fupa:
-    # TODO PRUEFEN: Diese Basis-URL und die Endpunkte sind PLATZHALTER.
-    # FuPa veroeffentlicht keine offizielle, dokumentierte API. Bitte einmalig
-    # mit `python -m stadionheft.cli probe-fupa` pruefen und hier eintragen.
+    # Die Endpunkte unten sind Startpunkte, keine Gewissheit: FuPa
+    # veroeffentlicht keine dokumentierte API. Antwortet keiner davon, holt
+    # das Programm die oeffentliche Teamseite (fupa_team_url) und liest die
+    # Daten aus deren eingebettetem JSON. Was tatsaechlich antwortet, zeigt
+    # der Knopf "FuPa-Verbindung pruefen" in der Weboberflaeche.
     basis_url: "https://api.fupa.net"
     endpunkte:
       team: "/v1/teams/{team_slug}"
@@ -46,6 +51,13 @@ datenquelle:
       spielplan: "/v1/teams/{team_slug}/matches"
       spieler: "/v1/teams/{team_slug}/players"
       torjaeger: "/v1/teams/{team_slug}/topscorers"
+    # Zusaetzliche Adressen, die mitprobiert werden. {slug} wird durch den
+    # Team-Bezeichner ersetzt. Stellt FuPa etwas um, genuegt hier ein Eintrag -
+    # am Programm muss nichts geaendert werden.
+    zusatz_adressen: []
+    # Wie viele Seiten hoechstens je Mannschaft geholt werden. Sobald alle
+    # vier Datenteile beisammen sind, hoert das Programm ohnehin auf.
+    max_abrufe: 12
     timeout_sekunden: 20
     wiederholungen: 2
     pause_zwischen_anfragen_sekunden: 1.5

@@ -42,7 +42,7 @@ Sortiert nach Dringlichkeit. Ohne Punkt 1 und 2 läuft nur der Demo-Modus.
 
 | # | Frage | Auswirkung |
 |---|---|---|
-| 6 | **Darf ich die FuPa-Endpunkte auf deinem Rechner testen?** Ein Befehl: `python -m stadionheft.cli probe-fupa`. Ergebnis (eine JSON-Datei) an mich – dann kann ich den automatischen Abruf fertigstellen. | siehe Abschnitt 9 – **das ist der wichtigste offene Punkt** |
+| 6 | **Läuft der FuPa-Abruf bei euch?** Ein Klick: „FuPa-Verbindung prüfen" in der Oberfläche, oder `python -m stadionheft.cli probe-fupa`. Das Programm sucht sich Adressen und Feldnamen selbst; der Test zeigt, ob es fündig wird. | siehe Abschnitt 9 – aus meiner Umgebung ist fupa.net gesperrt, geprüft werden kann es nur bei euch |
 | 7 | Habt ihr bei FuPa/Vereinsheim einen **Vereinszugang mit Exportfunktion**? | Ein offizieller Export wäre jedem Scraping vorzuziehen |
 | 8 | Sollen die **Kader der Gegner** weiter ins Heft? Das ist die aufwendigste Abfrage (fremdes Team, fremde Liga). | ggf. Seite streichen und Aufwand halbieren |
 | 9 | **Titelseite**: selbst erzeugen (funktioniert, kommt dem Original nahe) oder weiter vom Designstudio als PDF? | beides möglich, eine Zeile im Heftplan |
@@ -289,7 +289,7 @@ Zusätzlich gibt es unter `/hilfe` eine Tabelle „Was tun, wenn …".
 | Neue Saison | `fupa_team_url` aller Mannschaften auf das neue Saisonkürzel ändern (`…-2027-28`), `saison` anpassen, `liga` prüfen |
 | Neue Werbeanzeigen | PDFs nach `02_Werbung`, ggf. `heftplan.yaml` anpassen |
 | Neue Mannschaft | Block in `config.yaml` ergänzen |
-| FuPa liefert nichts mehr | `python -m stadionheft.cli probe-fupa` – meldet je Endpunkt Status und speichert die Rohantwort; danach Endpunkte in `config.yaml` korrigieren |
+| FuPa liefert nichts mehr | „FuPa-Verbindung prüfen“ bzw. `probe-fupa` – meldet je Adresse Status und was erkannt wurde; notfalls Adresse in `datenquelle.fupa.zusatz_adressen` nachtragen. Bis dahin greift der Rückfall auf CSV. |
 | Layout anpassen | `stadionheft/static/css/heft.css` – alle Maße stehen als Variablen am Anfang |
 | Fehlersuche | `99_Logs/stadionheft_JJJJ-MM.log` |
 
@@ -307,38 +307,60 @@ Schnittstelle – sie funktioniert immer.
 
 **Ich konnte die FuPa-Schnittstellen aus meiner Arbeitsumgebung heraus nicht
 testen** – der Netzzugang zu `fupa.net` und `api.fupa.net` ist hier gesperrt
-(HTTP 403 vom Proxy). Alles, was das Programm an konkreten Endpunkt-Adressen
-enthält, ist deshalb **als Platzhalter gekennzeichnet und muss einmal überprüft
-werden**. Ich habe die Architektur bewusst so gebaut, dass diese
-Unsicherheit nichts blockiert.
+(HTTP 403 vom Proxy). Ich weiß also weder, welche Adressen antworten, noch wie
+FuPa seine Felder nennt.
+
+Die erste Fassung hat daraus die falsche Konsequenz gezogen: feste Adressen,
+feste Feldnamen, beides als „Platzhalter" markiert und zur Prüfung an den
+Verein weitergereicht. Das funktioniert nur, wenn jemand die Prüfung macht –
+und bricht wieder, sobald FuPa etwas umstellt.
+
+Die jetzige Fassung dreht das um: **Das Programm findet beides selbst heraus.**
 
 ### Die drei technisch möglichen Wege
 
 | Weg | Wie es funktioniert | Bewertung |
 |---|---|---|
-| **A – Interne JSON-Schnittstelle** | Die FuPa-Website lädt Tabellen und Statistiken über eigene JSON-Aufrufe nach. Diese lassen sich direkt ansprechen. | **Sauberster Weg**, wenn er zugänglich ist: stabile Feldnamen, kein HTML-Parsen, geringe Last. Aber undokumentiert und jederzeit änderbar. |
-| **B – HTML auslesen (Scraping)** | Die Seite abrufen und die Tabellen aus dem HTML lesen. | Funktioniert immer, bricht aber bei jeder Designänderung. Bei modernen, per JavaScript aufgebauten Seiten zusätzlich unzuverlässig. **Nur Rückfalloption.** |
-| **C – Manuelle Eingabe (CSV)** | Zahlen aus FuPa in Excel übertragen bzw. per Copy-Paste einfügen, als CSV speichern. | **Immer verfügbar, keine rechtliche Grauzone.** Aufwand ~10 Minuten je Mannschaft. Bereits vollständig umgesetzt. |
+| **A – Interne JSON-Schnittstelle** | Die FuPa-Website lädt Tabellen und Statistiken über eigene JSON-Aufrufe nach. Diese lassen sich direkt ansprechen. | Sauber, wenn zugänglich: kein HTML-Parsen, geringe Last. Aber undokumentiert und jederzeit änderbar. |
+| **B – Eingebettetes JSON aus der Teamseite** | Die öffentliche Teamseite abrufen und die JSON-Blöcke lesen, die im HTML stecken (`__NEXT_DATA__` und Ähnliches). | **Der verlässliche Weg.** Die Adresse steht in der Konfiguration, sie muss nicht erraten werden. Kein Parsen von HTML-Struktur, nur von Daten. |
+| **C – Manuelle Eingabe (CSV)** | Zahlen aus FuPa in Excel übertragen bzw. per Copy-Paste einfügen, als CSV speichern. | **Immer verfügbar, keine rechtliche Grauzone.** Aufwand ~10 Minuten je Mannschaft. Bleibt als Rückfall bestehen. |
 
-### Wie du Weg A in fünf Minuten klärst
+Das Programm nutzt A und B **nacheinander in einem Durchgang** und fällt bei
+Bedarf auf C zurück.
+
+### Wie das Suchen funktioniert
+
+1. **Adressen durchprobieren.** Konfigurierte Endpunkte, dann die Teamseite der
+   Mannschaft, dann selbst ergänzte Adressen, dann eingebaute Kandidaten
+   (`/tabelle`, `/spielplan`, `/kader`, `/statistiken`). Abbruch, sobald alles
+   beisammen ist – meist nach einer Seite.
+2. **Nutzdaten gewinnen.** JSON direkt; bei HTML werden die eingebetteten
+   JSON-Blöcke herausgelöst (`stadionheft/sources/html_daten.py`).
+3. **Erkennen statt zuordnen.** In allen gefundenen Daten wird gesucht, was wie
+   eine Tabelle, eine Torschützenliste, eine Spielerstatistik oder ein
+   Spielplan *aussieht* – an der Struktur, nicht an den Feldnamen
+   (`stadionheft/sources/erkennung.py`).
+
+Eine Tabellenzeile ist eine Zeile mit Mannschaftsname, Punkten, Siegen,
+Niederlagen und Toren – ob das Feld `points`, `punkte` oder `pts` heißt und ob
+der Name direkt drinsteht oder in einem verschachtelten `team`-Objekt, spielt
+keine Rolle. Torschützen unterscheiden sich von der Spielerstatistik dadurch,
+dass Letztere Einsatzminuten und Karten führt. Kommen mehrere Kandidaten in
+Frage, gewinnt die vollständigste Liste.
+
+### Prüfen, was tatsächlich ankommt
 
 ```bash
 python -m stadionheft.cli probe-fupa
 ```
 
-Der Befehl ruft die konfigurierten Endpunkte auf und gibt je Endpunkt aus:
-HTTP-Status, Inhaltstyp, Anzahl erkannter Datenzeilen und die gefundenen
-Feldnamen. Die vollständigen Rohantworten landen als JSON in
-`04_Zwischenergebnisse/fupa_probe/`.
+Der Befehl klappert dieselben Adressen ab und meldet je Adresse Status und was
+sich daraus erkennen ließ, am Ende eine Bilanz über alle vier Datenteile. Die
+Rohantworten landen als JSON in `04_Zwischenergebnisse/fupa_probe/`. Dasselbe
+gibt es als Knopf in der Weboberfläche.
 
-Falls der Standardpfad nicht stimmt, ist er in zwei Minuten selbst gefunden:
-FuPa-Teamseite im Browser öffnen → F12 → Reiter **Netzwerk** → Filter **Fetch/XHR**
-→ Seite neu laden → die Einträge zeigen die tatsächlich benutzten Adressen.
-Diese in `config.yaml` unter `datenquelle.fupa.endpunkte` eintragen.
-
-**Schick mir die Dateien aus `fupa_probe/`, dann stelle ich den automatischen
-Abruf fertig.** Die Feldzuordnung ist schon nachsichtig gebaut (sie probiert je
-Feld mehrere gängige Namen), aber mit den echten Antworten wird sie exakt.
+Fehlt etwas, lässt sich eine Adresse in `datenquelle.fupa.zusatz_adressen`
+nachtragen – am Programm muss dafür nichts geändert werden.
 
 ### Was das Programm heute schon richtig macht
 
@@ -463,7 +485,7 @@ InDesign-Skripting.
 
 - [x] Vorlage analysiert, Maße und Farbe übernommen
 - [x] Projektstruktur, Konfiguration mit Validierung
-- [x] Drei Datenquellen: FuPa (Gerüst), CSV, Demo – mit automatischem Rückfall
+- [x] Drei Datenquellen: FuPa (selbstsuchend), CSV, Demo – mit automatischem Rückfall
 - [x] Seitensatz aller Seitentypen im Layout der Vorlage
 - [x] PDF-Montage inkl. Vereinheitlichung unterschiedlicher Seitenboxen
 - [x] Weboberfläche mit Fortschrittsanzeige und verständlichen Fehlermeldungen
@@ -471,7 +493,7 @@ InDesign-Skripting.
 - [x] NAS-Ablage (Mount und SMB)
 - [x] Snapshot-Mechanismus für reproduzierbare Läufe
 - [x] Docker-Setup für die Synology NAS
-- [x] 58 automatische Tests
+- [x] 159 automatische Tests
 
 ### Schritt 1 – Betriebsbereit (etwa ein Abend, ohne FuPa)
 
@@ -483,12 +505,14 @@ InDesign-Skripting.
 
 **Ergebnis:** Das Heft ist mit manueller Dateneingabe vollständig erstellbar.
 
-### Schritt 2 – FuPa automatisch (ein bis zwei Stunden, nach Klärung)
+### Schritt 2 – FuPa automatisch (Voreinstellung, nur noch prüfen)
 
-1. `probe-fupa` ausführen, Ergebnis auswerten.
-2. Endpunkte und Feldzuordnung festziehen.
-3. Test mit allen fünf Mannschaften.
-4. `datenquelle.modus: api` setzen.
+`datenquelle.modus: api` ist bereits gesetzt. Zu tun bleibt:
+
+1. „FuPa-Verbindung prüfen" anklicken und die Bilanz ansehen.
+2. Was nicht gefunden wird: Adresse in `zusatz_adressen` nachtragen oder per
+   CSV pflegen.
+3. Probelauf mit allen fünf Mannschaften.
 
 **Ergebnis:** Mannschaften anhaken → Knopf → fertiges Heft.
 

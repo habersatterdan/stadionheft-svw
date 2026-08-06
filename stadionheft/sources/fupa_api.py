@@ -46,10 +46,12 @@ from urllib.parse import urljoin, urlparse
 from ..config import Konfiguration, Mannschaft
 from ..errors import DatenNichtLesbarFehler, DatenquelleNichtErreichbarFehler
 from ..logging_setup import logger
-from ..models import (MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile,
-                      TorjaegerZeile, spiele_einordnen)
+from ..models import MannschaftsDaten, Spiel, spiele_einordnen
 from .base import basis_daten
 from .cache import DateiCache
+from .erkennung import (spiele_erkennen, spieler_erkennen, tabelle_erkennen,
+                        torjaeger_erkennen)
+from .html_daten import json_aus_html
 
 # ---------------------------------------------------------------------------
 # Nachsichtige Feldsuche
@@ -129,6 +131,11 @@ class FupaClient:
                                    "https://api.fupa.net")).rstrip("/") + "/"
         self.endpunkte: dict[str, str] = dict(
             k.get("datenquelle.fupa.endpunkte", {}) or {})
+        # Frei ergaenzbare Adressen aus der Konfiguration. Falls FuPa etwas
+        # umstellt, laesst sich hier eine Adresse nachtragen, ohne dass am
+        # Programm etwas geaendert werden muss.
+        self.zusatz_adressen: list[str] = [
+            str(a) for a in (k.get("datenquelle.fupa.zusatz_adressen", []) or [])]
         self.timeout = float(k.get("datenquelle.fupa.timeout_sekunden", 20))
         self.wiederholungen = int(k.get("datenquelle.fupa.wiederholungen", 2))
         self.pause = float(k.get(
@@ -143,7 +150,9 @@ class FupaClient:
             bool(k.get("datenquelle.cache.aktiv", True)),
         )
         self._letzte_anfrage = 0.0
-        self._robots: urllib.robotparser.RobotFileParser | None = None
+        # Je Host eine eigene robots.txt: api.fupa.net und www.fupa.net sind
+        # verschiedene Server und duerfen verschiedene Regeln haben.
+        self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
         self._session = None
 
     # -- Hilfen -------------------------------------------------------------
@@ -169,18 +178,19 @@ class FupaClient:
     def _robots_erlaubt(self, url: str) -> bool:
         if not self.robots_beachten:
             return True
-        if self._robots is None:
-            teile = urlparse(url)
-            self._robots = urllib.robotparser.RobotFileParser()
-            self._robots.set_url(f"{teile.scheme}://{teile.netloc}/robots.txt")
+        teile = urlparse(url)
+        if teile.netloc not in self._robots:
+            regeln = urllib.robotparser.RobotFileParser()
+            regeln.set_url(f"{teile.scheme}://{teile.netloc}/robots.txt")
             try:
-                self._robots.read()
+                regeln.read()
             except Exception as fehler:  # robots.txt nicht abrufbar
-                logger().info("robots.txt nicht lesbar (%s) - Abruf wird fortgesetzt.",
-                              fehler)
-                self._robots = urllib.robotparser.RobotFileParser()
-                self._robots.parse([])   # leere Regeln = alles erlaubt
-        return self._robots.can_fetch(self.user_agent, url)
+                logger().info("robots.txt von %s nicht lesbar (%s) - Abruf wird "
+                              "fortgesetzt.", teile.netloc, fehler)
+                regeln = urllib.robotparser.RobotFileParser()
+                regeln.parse([])         # leere Regeln = alles erlaubt
+            self._robots[teile.netloc] = regeln
+        return self._robots[teile.netloc].can_fetch(self.user_agent, url)
 
     def _drosseln(self) -> None:
         wartezeit = self.pause - (time.monotonic() - self._letzte_anfrage)
@@ -274,13 +284,189 @@ class FupaClient:
                      "Alternativ im Programm auf 'Manuelle Eingabe' umstellen."),
         )
 
+    def abrufen(self, url: str):
+        """Holt eine Adresse und gibt die rohe Antwort zurueck.
+
+        Anders als :meth:`hole_json` wird hier **nicht** vorausgesetzt, dass
+        JSON zurueckkommt: Die oeffentlichen FuPa-Seiten liefern HTML, in dem
+        die Daten eingebettet sind. Der Accept-Kopf laesst deshalb beides zu.
+        """
+        if not self._robots_erlaubt(url):
+            raise DatenquelleNichtErreichbarFehler(
+                f"robots.txt verbietet den Abruf von {url}.",
+                benutzer_text="FuPa erlaubt den automatischen Abruf dieser Seite nicht.",
+                hinweis=("Bitte in der Konfiguration auf den Modus 'manuell' "
+                         "umstellen und die Daten als CSV bereitstellen."),
+            )
+
+        import requests
+
+        kopf = {"Accept": ("text/html,application/xhtml+xml,"
+                           "application/json;q=0.9,*/*;q=0.8")}
+        letzter_fehler: Exception | None = None
+        for versuch in range(1, self.wiederholungen + 2):
+            try:
+                self._drosseln()
+                logger().debug("GET %s (Versuch %d)", url, versuch)
+                return self._sitzung().get(url, timeout=self.timeout, headers=kopf)
+            except requests.RequestException as fehler:
+                letzter_fehler = fehler
+                if versuch <= self.wiederholungen:
+                    wartezeit = 2 ** versuch
+                    logger().warning("Abruf fehlgeschlagen (%s) - neuer Versuch in %ds.",
+                                     fehler, wartezeit)
+                    time.sleep(wartezeit)
+
+        raise DatenquelleNichtErreichbarFehler(
+            f"{url}: {letzter_fehler}",
+            benutzer_text="FuPa ist im Moment nicht erreichbar.",
+            hinweis=("Bitte Internetverbindung pruefen und spaeter erneut versuchen. "
+                     "Alternativ im Programm auf 'Manuelle Eingabe' umstellen."),
+        )
+
+    def hole_nutzlasten(self, url: str) -> list[Any]:
+        """Alle JSON-Daten hinter einer Adresse -- egal ob API oder Webseite.
+
+        Kommt JSON zurueck, ist das die einzige Nutzlast. Kommt HTML zurueck,
+        werden die eingebetteten JSON-Bloecke herausgeloest. Ein 404 oder eine
+        leere Seite ist hier **kein Fehler**: Beim Durchprobieren mehrerer
+        Adressen ist "hier ist nichts" eine voellig normale Antwort.
+        """
+        # Eigener Cache-Schluessel: Unter der blossen Adresse liegt
+        # moeglicherweise schon eine Antwort von hole_json -- das ist etwas
+        # anderes als eine Liste von Bloecken.
+        schluessel = f"bloecke|{url}"
+        zwischengespeichert = self.cache.lesen(schluessel)
+        if isinstance(zwischengespeichert, list):
+            logger().debug("Aus Cache: %s", url)
+            return zwischengespeichert
+
+        antwort = self.abrufen(url)
+        if antwort.status_code in (403, 429):
+            raise DatenquelleNichtErreichbarFehler(
+                f"HTTP {antwort.status_code} fuer {url}",
+                benutzer_text=("FuPa hat den automatischen Abruf abgelehnt "
+                               f"(Code {antwort.status_code})."),
+                hinweis=("Bitte spaeter erneut versuchen oder auf manuelle "
+                         "Eingabe umstellen."),
+            )
+        if not antwort.ok:
+            logger().debug("%s antwortet mit %d", url, antwort.status_code)
+            return []
+
+        bloecke = _nutzlasten_aus(antwort)
+        self.cache.schreiben(schluessel, bloecke)
+        return bloecke
+
+
+def _nutzlasten_aus(antwort: Any) -> list[Any]:
+    """Zerlegt eine HTTP-Antwort in die JSON-Bloecke, die darin stecken."""
+    typ = (antwort.headers.get("Content-Type") or "").lower()
+    if "json" in typ:
+        try:
+            return [antwort.json()]
+        except (json.JSONDecodeError, ValueError):
+            return []
+    text = antwort.text or ""
+    if not text.strip():
+        return []
+    # Manche Server melden text/plain, liefern aber JSON.
+    if text.lstrip()[:1] in "[{":
+        try:
+            return [json.loads(text)]
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return json_aus_html(text)
+
 
 # ---------------------------------------------------------------------------
 # Datenquelle
 # ---------------------------------------------------------------------------
 
+#: Adressen, die der Reihe nach ausprobiert werden, bis verwertbare Daten
+#: ankommen. ``{slug}`` wird durch den Team-Bezeichner ersetzt.
+#:
+#: Ganz oben stehen moegliche JSON-Schnittstellen, darunter die **oeffentlichen
+#: Teamseiten**. Letztere sind der verlaessliche Teil: Ihre Adresse steht in
+#: der Konfiguration und muss nicht geraten werden. Die Daten stecken dort im
+#: eingebetteten JSON der Seite (siehe :mod:`stadionheft.sources.html_daten`).
+KANDIDATEN: tuple[str, ...] = (
+    # Moegliche JSON-Schnittstellen
+    "https://api.fupa.net/v1/teams/{slug}",
+    "https://api.fupa.net/v1/teams/{slug}/standing",
+    "https://api.fupa.net/v1/teams/{slug}/matches",
+    "https://api.fupa.net/v1/teams/{slug}/players",
+    "https://api.fupa.net/v1/teams/{slug}/topscorers",
+    # Oeffentliche Seiten -- Daten stecken im eingebetteten JSON
+    "https://www.fupa.net/team/{slug}",
+    "https://www.fupa.net/team/{slug}/tabelle",
+    "https://www.fupa.net/team/{slug}/spielplan",
+    "https://www.fupa.net/team/{slug}/kader",
+    "https://www.fupa.net/team/{slug}/statistiken",
+)
+
+
+def adressen_fuer(client: FupaClient, mannschaft: Mannschaft) -> list[str]:
+    """Alle Adressen, die fuer eine Mannschaft in Frage kommen.
+
+    Reihenfolge: konfigurierte Endpunkte, dann die konfigurierte Teamseite,
+    dann frei ergaenzbare Zusatzadressen, zuletzt die Standardkandidaten.
+    Doppelte Eintraege fallen heraus.
+    """
+    slug = mannschaft.fupa_slug
+    adressen: list[str] = []
+
+    for name in client.endpunkte:
+        try:
+            adressen.append(client.url_fuer(name, team_slug=slug))
+        except DatenNichtLesbarFehler:
+            continue
+
+    # Die konfigurierte Teamseite ist die zuverlaessigste Adresse ueberhaupt:
+    # Sie hat der Verein selbst eingetragen, sie muss nicht geraten werden.
+    if mannschaft.fupa_team_url:
+        adressen.append(mannschaft.fupa_team_url.rstrip("/"))
+
+    for muster in (*client.zusatz_adressen, *KANDIDATEN):
+        try:
+            adressen.append(muster.format(slug=slug, team_slug=slug))
+        except (KeyError, IndexError):
+            adressen.append(muster)
+
+    gesehen: set[str] = set()
+    eindeutig: list[str] = []
+    for adresse in adressen:
+        if adresse and adresse not in gesehen:
+            gesehen.add(adresse)
+            eindeutig.append(adresse)
+    return eindeutig
+
+
+def _kurz(adresse: str) -> str:
+    """Adresse gekuerzt fuers Protokoll."""
+    return adresse.replace("https://", "").replace("www.", "")
+
+
 class FupaApiQuelle:
-    """Holt Tabelle, Torjaeger, Spielerstatistik und naechstes Spiel von FuPa."""
+    """Holt Tabelle, Torjaeger, Spielerstatistik und Spielplan von FuPa.
+
+    Vorgehen -- bewusst suchend statt raten:
+
+    1. Alle in Frage kommenden Adressen werden der Reihe nach abgerufen
+       (konfigurierte Endpunkte zuerst, dann die Teamseite, dann die
+       Standardkandidaten).
+    2. Von jeder Antwort wird alles eingesammelt, was JSON ist -- auch
+       JSON, das in einer HTML-Seite eingebettet ist.
+    3. :mod:`stadionheft.sources.erkennung` sucht darin nach dem, was wie
+       eine Tabelle, eine Torschuetzenliste, eine Spielerstatistik oder ein
+       Spielplan **aussieht** -- unabhaengig von den Feldnamen.
+    4. Sobald alle vier Teile beisammen sind, wird abgebrochen. Es werden
+       also nur so viele Seiten geholt wie noetig.
+
+    Dadurch spielt es keine Rolle, ob FuPa seine Felder ``points`` oder
+    ``punkte`` nennt und ob die Daten aus einer Schnittstelle oder aus dem
+    HTML der oeffentlichen Seite kommen.
+    """
 
     name = "api"
 
@@ -288,193 +474,142 @@ class FupaApiQuelle:
         self.konfiguration = konfiguration
         self.client = FupaClient(konfiguration)
         self.vereinsname = konfiguration.vereinsname
+        self.max_abrufe = int(konfiguration.get("datenquelle.fupa.max_abrufe", 12))
+
+    # -- Schnittstelle ------------------------------------------------------
 
     def hole(self, mannschaft: Mannschaft) -> MannschaftsDaten:
         daten = basis_daten(mannschaft, self.name)
-        slug = mannschaft.fupa_slug
-        if not slug:
+        if not mannschaft.fupa_slug:
             raise DatenNichtLesbarFehler(
                 f"Kein Team-Bezeichner in '{mannschaft.fupa_team_url}'.",
                 benutzer_text=(f"Fuer {mannschaft.anzeigename} fehlt ein gueltiger "
                                f"FuPa-Link."),
                 hinweis=("Erwartet wird eine Adresse der Form "
-                         "https://www.fupa.net/team/<name>-<saison>"),
-            )
+                         "https://www.fupa.net/team/<name>-<saison>"))
 
-        logger().info("Hole FuPa-Daten fuer %s (%s) ...", mannschaft.anzeigename, slug)
-
-        daten.tabelle = self._tabelle(slug, daten)
-        daten.torjaeger = self._torjaeger(slug, daten)
-        daten.spieler = self._spieler(slug, daten)
-        self._spiele(slug, daten)
+        logger().info("Hole FuPa-Daten fuer %s (%s) ...",
+                      mannschaft.anzeigename, mannschaft.fupa_slug)
+        self._einsammeln(mannschaft, daten)
+        self._melden(daten)
         return daten
 
-    # -- Einzelteile --------------------------------------------------------
+    # -- Suchen und erkennen ------------------------------------------------
 
-    def _sicher(self, beschreibung: str, daten: MannschaftsDaten, funktion):
-        """Fuehrt einen Teilabruf aus; ein Fehlschlag ist nur eine Warnung."""
-        try:
-            return funktion()
-        except DatenquelleNichtErreichbarFehler:
-            raise      # Netzausfall betrifft alles -> nach oben durchreichen
-        except Exception as fehler:
-            logger().warning("%s konnte nicht geladen werden: %s", beschreibung, fehler)
-            daten.warnungen.append(
-                f"{beschreibung} konnte nicht von FuPa geladen werden "
-                f"- die Seite bleibt leer.")
-            return None
+    def _einsammeln(self, mannschaft: Mannschaft, daten: MannschaftsDaten) -> None:
+        """Adressen der Reihe nach abklappern und alles Erkannte sammeln."""
+        adressen = adressen_fuer(self.client, mannschaft)
+        partien: list[Spiel] = []
+        abrufe = 0
+        netzfehler: Exception | None = None
+        fehlschlaege = 0
 
-    def _tabelle(self, slug: str, daten: MannschaftsDaten) -> list[TabellenZeile]:
-        def laden():
-            nutzlast = self.client.hole_json(
-                self.client.url_fuer("tabelle", team_slug=slug), pflicht=False)
-            zeilen: list[TabellenZeile] = []
-            for nr, eintrag in enumerate(_liste_finden(nutzlast, "standing", "table"), 1):
-                name = _text(eintrag, "team.name", "teamName", "name", "club.name")
-                zeilen.append(TabellenZeile(
-                    platz=_zahl(eintrag, "place", "position", "rank", "platz",
-                                standard=nr),
-                    mannschaft=name,
-                    spiele=_zahl(eintrag, "matches", "games", "played", "spiele"),
-                    siege=_zahl(eintrag, "wins", "won", "siege"),
-                    unentschieden=_zahl(eintrag, "draws", "drawn", "unentschieden"),
-                    niederlagen=_zahl(eintrag, "losses", "lost", "niederlagen"),
-                    tore=_zahl(eintrag, "goals", "goalsFor", "goalsScored", "tore"),
-                    gegentore=_zahl(eintrag, "goalsAgainst", "goalsConceded",
-                                    "gegentore"),
-                    punkte=_zahl(eintrag, "points", "punkte"),
-                    eigene=bool(self.vereinsname) and self._ist_eigene(name),
-                ))
-            return zeilen
-        return self._sicher("Die Tabelle", daten, laden) or []
+        for adresse in adressen:
+            if abrufe >= self.max_abrufe or self._vollstaendig(daten, partien):
+                break
+            try:
+                bloecke = self.client.hole_nutzlasten(adresse)
+            except DatenquelleNichtErreichbarFehler as fehler:
+                netzfehler = fehler
+                fehlschlaege += 1
+                # Scheitern mehrere Adressen hintereinander am Netz, ist nicht
+                # die Adresse das Problem, sondern die Verbindung. Dann bringt
+                # Weiterprobieren nur Wartezeit.
+                if fehlschlaege >= 3 and abrufe == 0:
+                    break
+                continue
+            except Exception as fehler:                       # noqa: BLE001
+                logger().debug("%s nicht verwertbar: %s", adresse, fehler)
+                continue
 
-    def _torjaeger(self, slug: str, daten: MannschaftsDaten) -> list[TorjaegerZeile]:
-        def laden():
-            nutzlast = self.client.hole_json(
-                self.client.url_fuer("torjaeger", team_slug=slug), pflicht=False)
-            zeilen: list[TorjaegerZeile] = []
-            for nr, eintrag in enumerate(_liste_finden(nutzlast, "scorers", "topscorers"), 1):
-                verein = _text(eintrag, "team.name", "club.name", "teamName")
-                zeilen.append(TorjaegerZeile(
-                    platz=_zahl(eintrag, "place", "position", "rank", standard=nr),
-                    spieler=self._spielername(eintrag),
-                    mannschaft=verein,
-                    tore=_zahl(eintrag, "goals", "tore"),
-                    vorlagen=_zahl(eintrag, "assists", "vorlagen"),
-                    spiele=_zahl(eintrag, "matches", "games", "spiele"),
-                    eigene=self._ist_eigene(verein),
-                ))
-            return zeilen
-        return self._sicher("Die Torschuetzenliste", daten, laden) or []
+            abrufe += 1
+            if bloecke:
+                partien = self._auswerten(bloecke, daten, partien, adresse)
 
-    def _spieler(self, slug: str, daten: MannschaftsDaten) -> list[SpielerZeile]:
-        def laden():
-            nutzlast = self.client.hole_json(
-                self.client.url_fuer("spieler", team_slug=slug), pflicht=False)
-            return self._spielerliste(nutzlast)
-        return self._sicher("Die Spielerstatistik", daten, laden) or []
+        if abrufe == 0:
+            if netzfehler is not None:
+                raise netzfehler
+            raise DatenquelleNichtErreichbarFehler(
+                f"Keine der {len(adressen)} Adressen lieferte eine Antwort.",
+                benutzer_text="Von FuPa kam keine verwertbare Antwort.",
+                hinweis=("Bitte in der Oberflaeche auf 'FuPa-Verbindung pruefen' "
+                         "klicken - dort steht, was genau zurueckkam."))
 
-    def _spielerliste(self, nutzlast: Any) -> list[SpielerZeile]:
-        zeilen: list[SpielerZeile] = []
-        for nr, eintrag in enumerate(_liste_finden(nutzlast, "players", "squad"), 1):
-            elfmeter = _text(eintrag, "penalties", "penalty", standard="0/0")
-            getroffen, _, gesamt = elfmeter.partition("/")
-            zeilen.append(SpielerZeile(
-                platz=_zahl(eintrag, "place", "position", "rank", standard=nr),
-                spieler=self._spielername(eintrag),
-                spiele=_zahl(eintrag, "matches", "games", "appearances", "spiele"),
-                tore=_zahl(eintrag, "goals", "tore"),
-                vorlagen=_zahl(eintrag, "assists", "vorlagen"),
-                elfmeter_getroffen=_zahl({"w": getroffen}, "w"),
-                elfmeter_gesamt=_zahl({"w": gesamt}, "w"),
-                gelb=_zahl(eintrag, "yellowCards", "yellow", "gelb"),
-                gelb_rot=_zahl(eintrag, "yellowRedCards", "yellowRed", "gelbRot"),
-                rot=_zahl(eintrag, "redCards", "red", "rot"),
-                eingewechselt=_zahl(eintrag, "substitutedIn", "subIn", "in"),
-                ausgewechselt=_zahl(eintrag, "substitutedOut", "subOut", "out"),
-                minuten=_zahl(eintrag, "minutes", "minutesPlayed", "minuten"),
-            ))
-        return zeilen
+        if partien:
+            daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(partien)
+        if not daten.liga:
+            daten.liga = self._liga_aus(partien, daten)
 
-    def _spiele(self, slug: str, daten: MannschaftsDaten) -> None:
-        """Ermittelt die naechste und die letzte Partie -- anhand des Datums.
+    def _auswerten(self, bloecke: list[Any], daten: MannschaftsDaten,
+                   partien: list[Spiel], adresse: str) -> list[Spiel]:
+        """Nimmt aus jedem Block das Beste. Die laengere Liste gewinnt.
 
-        Bewusst nicht "erster Eintrag ohne Ergebnis": Spielplaene kommen nicht
-        immer sortiert, und ein noch nicht nachgetragenes Ergebnis wuerde sonst
-        eine laengst gespielte Partie auf die Titelseite bringen.
+        Kommt dieselbe Tabelle auf mehreren Seiten vor, ist das kein Problem:
+        Es bleibt die vollstaendigste Fassung stehen.
         """
-        def laden():
-            nutzlast = self.client.hole_json(
-                self.client.url_fuer("spielplan", team_slug=slug), pflicht=False)
-            spiele = [self._spiel_aus(e)
-                      for e in _liste_finden(nutzlast, "matches", "fixtures")]
-            return spiele_einordnen(spiele)
+        for block in bloecke:
+            gefunden = tabelle_erkennen(block, self.vereinsname)
+            if len(gefunden) > len(daten.tabelle):
+                daten.tabelle = gefunden
+                logger().info("Tabelle erkannt (%d Zeilen) auf %s",
+                              len(gefunden), _kurz(adresse))
 
-        ergebnis = self._sicher("Der Spielplan", daten, laden)
-        if ergebnis:
-            daten.naechstes_spiel, daten.letztes_spiel = ergebnis
-        if daten.naechstes_spiel is None:
-            daten.warnungen.append(
-                "Es wurde kein kommendes Spiel gefunden - moeglicherweise ist "
-                "die Saison zu Ende oder der Spielplan noch nicht "
-                "veroeffentlicht. Bitte Gegner, Datum und Anstoss von Hand "
-                "eintragen.")
-        else:
-            logger().info("Naechstes Spiel: %s am %s",
-                          daten.naechstes_spiel.paarung or "?",
-                          daten.naechstes_spiel.datum or "ohne Datum")
+            schuetzen = torjaeger_erkennen(block, self.vereinsname)
+            if len(schuetzen) > len(daten.torjaeger):
+                daten.torjaeger = schuetzen
+                logger().info("Torschuetzenliste erkannt (%d Zeilen) auf %s",
+                              len(schuetzen), _kurz(adresse))
 
-    def _spiel_aus(self, eintrag: dict) -> Spiel:
-        heim = _text(eintrag, "homeTeam.name", "home.name", "homeTeamName", "heim")
-        gast = _text(eintrag, "awayTeam.name", "away.name", "awayTeamName", "gast")
-        anstoss = _text(eintrag, "kickoff", "kickoffDate", "date", "startDate",
-                        "scheduledDate")
-        tore_heim = _wert(eintrag, "homeGoals", "result.home", "goalsHome")
-        tore_gast = _wert(eintrag, "awayGoals", "result.away", "goalsAway")
-        ergebnis = ""
-        if tore_heim is not None and tore_gast is not None:
-            ergebnis = f"{tore_heim}:{tore_gast}"
-        return Spiel(
-            heim=heim,
-            gast=gast,
-            wettbewerb=_text(eintrag, "competition.name", "league.name", "competition"),
-            anstoss=_iso(anstoss),
-            spielort=_text(eintrag, "venue.name", "ground", "location", "spielort"),
-            heimspiel=self._ist_eigene(heim),
-            spieltag=_text(eintrag, "matchday", "round", "spieltag"),
-            ergebnis=ergebnis,
-        )
+            kader = spieler_erkennen(block)
+            if len(kader) > len(daten.spieler):
+                daten.spieler = kader
+                logger().info("Spielerstatistik erkannt (%d Zeilen) auf %s",
+                              len(kader), _kurz(adresse))
 
-    # -- Kleinkram ----------------------------------------------------------
+            spielplan = spiele_erkennen(block, self.vereinsname)
+            if len(spielplan) > len(partien):
+                partien = spielplan
+                logger().info("Spielplan erkannt (%d Partien) auf %s",
+                              len(spielplan), _kurz(adresse))
+        return partien
 
     @staticmethod
-    def _spielername(eintrag: dict) -> str:
-        name = _text(eintrag, "player.name", "playerName", "name", "spieler")
-        if name:
-            return name
-        vor = _text(eintrag, "player.firstName", "firstName")
-        nach = _text(eintrag, "player.lastName", "lastName")
-        return f"{vor} {nach}".strip()
+    def _vollstaendig(daten: MannschaftsDaten, partien: list[Spiel]) -> bool:
+        return bool(daten.tabelle and daten.torjaeger and daten.spieler and partien)
 
-    def _ist_eigene(self, name: str) -> bool:
-        if not name or not self.vereinsname:
-            return False
-        # "SV Wörnitzstein-Berg" vs. FuPa-Kurzform "Wörnitzstein"
-        kern = self.vereinsname.replace("SV", "").replace("e.V.", "").strip()
-        kern = kern.split("-")[0].strip().lower()
-        return bool(kern) and kern in name.lower()
+    @staticmethod
+    def _liga_aus(partien: list[Spiel], daten: MannschaftsDaten) -> str:
+        """Ligabezeichnung aus dem Spielplan uebernehmen, wenn sie fehlt."""
+        for spiel in partien:
+            if spiel.wettbewerb:
+                return spiel.wettbewerb
+        return daten.liga
 
+    def _melden(self, daten: MannschaftsDaten) -> None:
+        """Was nicht gefunden wurde, muss der Benutzer erfahren.
 
-def _iso(wert: str) -> str:
-    """Normalisiert einen Zeitstempel nach ISO 8601 ohne Zeitzone."""
-    if not wert:
-        return ""
-    text = str(wert).strip().replace("Z", "+00:00")
-    try:
-        from datetime import datetime
-        return datetime.fromisoformat(text).replace(tzinfo=None).isoformat()
-    except ValueError:
-        return text
+        Ein halb gefuelltes Heft ohne Hinweis waere schlimmer als eine leere
+        Seite mit Erklaerung -- der Fehler faellt sonst erst im Druck auf.
+        """
+        fehlend = []
+        if not daten.tabelle:
+            fehlend.append("die Tabelle")
+        if not daten.torjaeger:
+            fehlend.append("die Torschützenliste")
+        if not daten.spieler:
+            fehlend.append("die Spielerstatistik")
+        if not daten.naechstes_spiel:
+            fehlend.append("das nächste Spiel")
+
+        if fehlend:
+            daten.warnungen.append(
+                "Von FuPa konnte " + ", ".join(fehlend) + " nicht gelesen werden. "
+                "Die betreffenden Seiten bleiben leer. Über den Knopf "
+                "'FuPa-Verbindung prüfen' lässt sich nachsehen, was zurückkam.")
+        if daten.naechstes_spiel:
+            logger().info("Nächstes Spiel: %s am %s",
+                          daten.naechstes_spiel.paarung or "?",
+                          daten.naechstes_spiel.datum or "ohne Datum")
 
 
 # ---------------------------------------------------------------------------
@@ -483,11 +618,19 @@ def _iso(wert: str) -> str:
 
 def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None = None,
                ausgabe_ordner: Path | None = None) -> dict:
-    """Probiert die konfigurierten Endpunkte aus und speichert die Rohantworten.
+    """Probiert **alle** in Frage kommenden Adressen aus und berichtet.
 
-    Ergebnis: ein Bericht (dict) mit Status je Endpunkt. Die Rohantworten
-    landen als JSON-Dateien im Arbeitsordner -- daraus laesst sich die exakte
-    Feldzuordnung ablesen, ohne raten zu muessen.
+    Getestet wird genau die Liste, die auch beim Hefterstellen abgeklappert
+    wird (:func:`adressen_fuer`). Zu jeder Adresse steht im Bericht,
+
+    * ob sie geantwortet hat und mit welchem Status,
+    * wie viele JSON-Bloecke sich aus der Antwort gewinnen liessen,
+    * und -- das Entscheidende -- was davon als Tabelle, Torschuetzenliste,
+      Spielerstatistik oder Spielplan **erkannt** wurde.
+
+    Die Rohantworten landen als JSON-Dateien im Arbeitsordner. Anders als
+    frueher wird hier nichts abgebrochen: Der Bericht soll auch dann etwas
+    aussagen, wenn die Haelfte der Adressen ins Leere laeuft.
     """
     client = FupaClient(konfiguration)
     client.cache.aktiv = False        # Diagnose soll wirklich abfragen
@@ -503,43 +646,84 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
 
     ziel = Path(ausgabe_ordner or konfiguration.arbeits_ordner) / "fupa_probe"
     ziel.mkdir(parents=True, exist_ok=True)
+    for alt in ziel.glob("*.json"):   # alte Laeufe nicht mit ausliefern
+        alt.unlink(missing_ok=True)
 
+    adressen = adressen_fuer(client, team)
     bericht: dict[str, Any] = {
         "basis_url": client.basis_url,
         "mannschaft": team.schluessel,
         "team_slug": team.fupa_slug,
+        "geprueft": len(adressen),
         "ergebnisse": {},
         "ablage": str(ziel),
     }
 
-    import requests
-    for name in client.endpunkte:
-        eintrag: dict[str, Any] = {}
+    for nummer, url in enumerate(adressen, 1):
+        eintrag: dict[str, Any] = {"url": url}
         try:
-            url = client.url_fuer(name, team_slug=team.fupa_slug)
-            eintrag["url"] = url
-            client._drosseln()
-            antwort = client._sitzung().get(url, timeout=client.timeout)
+            antwort = client.abrufen(url)
             eintrag["status"] = antwort.status_code
-            eintrag["inhaltstyp"] = antwort.headers.get("Content-Type", "")
-            if antwort.ok and "json" in eintrag["inhaltstyp"]:
-                nutzlast = antwort.json()
-                datei = ziel / f"{name}.json"
-                datei.write_text(json.dumps(nutzlast, ensure_ascii=False, indent=2),
-                                 encoding="utf-8")
-                eintrag["gespeichert"] = str(datei)
-                treffer = _liste_finden(nutzlast)
-                eintrag["gefundene_zeilen"] = len(treffer)
-                eintrag["beispiel_felder"] = sorted(treffer[0].keys()) if treffer else []
-                eintrag["bewertung"] = "ok" if treffer else "antwortet, aber keine Liste erkannt"
+            eintrag["inhaltstyp"] = (antwort.headers.get("Content-Type") or "")
+            eintrag["groesse"] = len(antwort.content or b"")
+            if not antwort.ok:
+                eintrag["bewertung"] = f"antwortet mit HTTP {antwort.status_code}"
             else:
-                eintrag["bewertung"] = "kein verwertbares JSON"
-        except requests.RequestException as fehler:
-            eintrag["bewertung"] = f"nicht erreichbar: {fehler}"
+                bloecke = _nutzlasten_aus(antwort)
+                eintrag["json_bloecke"] = len(bloecke)
+                erkannt = _erkennungsbilanz(bloecke, konfiguration.vereinsname)
+                eintrag["erkannt"] = erkannt
+                if bloecke:
+                    datei = ziel / f"{nummer:02d}_{_dateiname(url)}.json"
+                    datei.write_text(
+                        json.dumps(bloecke, ensure_ascii=False, indent=2),
+                        encoding="utf-8")
+                    eintrag["gespeichert"] = datei.name
+                eintrag["gefundene_zeilen"] = sum(erkannt.values())
+                if erkannt:
+                    eintrag["bewertung"] = "ok"
+                elif bloecke:
+                    eintrag["bewertung"] = ("antwortet mit JSON, aber nichts davon "
+                                            "sieht nach Spieldaten aus")
+                else:
+                    eintrag["bewertung"] = "antwortet, enthaelt aber kein JSON"
+        except DatenquelleNichtErreichbarFehler as fehler:
+            eintrag["bewertung"] = f"nicht erreichbar: {fehler.technisch}"
         except Exception as fehler:  # noqa: BLE001 - Diagnose soll nie abbrechen
             eintrag["bewertung"] = f"Fehler: {fehler}"
-        bericht["ergebnisse"][name] = eintrag
+        bericht["ergebnisse"][_kurz(url)] = eintrag
 
+    bericht["zusammenfassung"] = _zusammenfassung(bericht["ergebnisse"])
     (ziel / "_bericht.json").write_text(
         json.dumps(bericht, ensure_ascii=False, indent=2), encoding="utf-8")
     return bericht
+
+
+def _erkennungsbilanz(bloecke: list[Any], vereinsname: str) -> dict[str, int]:
+    """Was liess sich in diesen Bloecken erkennen? Nur nicht-leere Treffer."""
+    bestes: dict[str, int] = {}
+    for block in bloecke:
+        for bezeichnung, treffer in (
+                ("tabelle", tabelle_erkennen(block, vereinsname)),
+                ("torjaeger", torjaeger_erkennen(block, vereinsname)),
+                ("spieler", spieler_erkennen(block)),
+                ("spiele", spiele_erkennen(block, vereinsname))):
+            if len(treffer) > bestes.get(bezeichnung, 0):
+                bestes[bezeichnung] = len(treffer)
+    return {name: anzahl for name, anzahl in bestes.items() if anzahl}
+
+
+def _zusammenfassung(ergebnisse: dict[str, dict]) -> dict[str, int]:
+    """Beste Trefferzahl je Datenart ueber alle Adressen hinweg."""
+    gesamt: dict[str, int] = {}
+    for eintrag in ergebnisse.values():
+        for name, anzahl in (eintrag.get("erkannt") or {}).items():
+            gesamt[name] = max(gesamt.get(name, 0), anzahl)
+    return gesamt
+
+
+def _dateiname(url: str) -> str:
+    """Aus einer Adresse einen brauchbaren Dateinamen machen."""
+    roh = _kurz(url).replace("://", "_")
+    sauber = "".join(z if z.isalnum() or z in "-_" else "_" for z in roh)
+    return sauber.strip("_")[:60] or "antwort"
