@@ -299,6 +299,16 @@ docker exec stadionheft python -m stadionheft.cli pruefen
 docker exec stadionheft python -m stadionheft.cli probe-fupa
 ```
 
+Der FuPa-Test schreibt sein Ergebnis auch als Datei. Sie liegt danach in
+
+```
+_Programm/04_Zwischenergebnisse/fupa_probe/_bericht.txt
+```
+
+und lässt sich in der File Station anklicken und lesen -- praktisch, wenn du
+die Bildschirmausgabe des Aufgabenplaners nicht siehst. Ganz oben steht, ob
+Tabelle, Torschützenliste, Spielerstatistik und Spielplan gefunden wurden.
+
 ```bash
 # Alle aktiven Mannschaften auf einmal
 docker exec stadionheft python -m stadionheft.cli erstellen
@@ -319,7 +329,7 @@ docker exec stadionheft python -m stadionheft.cli erstellen
 | Vorwort | `_Programm/03_Eingaben/vorwort.md` |
 | Titelbild | `_Programm/03_Eingaben/titelbild.jpg` |
 | Spielpläne der anderen Mannschaften | `_Programm/03_Eingaben/<mannschaft>_spielplan.csv` |
-| FuPa automatisch anbinden | in der App unten auf **„FuPa-Verbindung prüfen"** |
+| FuPa-Abruf prüfen | in der App unten auf **„FuPa-Verbindung prüfen"** – oder per Aufgabenplaner, siehe oben |
 
 ---
 

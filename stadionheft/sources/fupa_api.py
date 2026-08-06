@@ -696,7 +696,68 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
     bericht["zusammenfassung"] = _zusammenfassung(bericht["ergebnisse"])
     (ziel / "_bericht.json").write_text(
         json.dumps(bericht, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Zusaetzlich als Text: Wer den Test ueber den Aufgabenplaner der NAS
+    # startet, sieht die Bildschirmausgabe nicht. Diese Datei laesst sich in
+    # der File Station anklicken und lesen.
+    (ziel / "_bericht.txt").write_text(bericht_als_text(bericht),
+                                       encoding="utf-8")
     return bericht
+
+
+#: Menschenlesbare Namen der vier Datenteile.
+DATENTEILE = {"tabelle": "Tabelle", "torjaeger": "Torschützenliste",
+              "spieler": "Spielerstatistik", "spiele": "Spielplan"}
+
+
+def bericht_als_text(bericht: dict) -> str:
+    """Der Probe-Bericht als lesbarer Text -- fuer Datei und Bildschirm."""
+    zeilen: list[str] = [
+        "FuPa-Verbindung geprüft",
+        "=" * 40,
+        f"Mannschaft   : {bericht.get('mannschaft', '?')} "
+        f"({bericht.get('team_slug', '?')})",
+        f"Adressen     : {bericht.get('geprueft', 0)} geprüft",
+        "",
+        "Ergebnis",
+        "-" * 40,
+    ]
+
+    bilanz = bericht.get("zusammenfassung") or {}
+    for schluessel, titel in DATENTEILE.items():
+        anzahl = bilanz.get(schluessel)
+        zeilen.append(f"  {titel:<18} "
+                      + (f"gefunden ({anzahl} Zeilen)" if anzahl
+                         else "NICHT gefunden"))
+
+    zeilen += ["", "Im Einzelnen", "-" * 40]
+    for name, eintrag in (bericht.get("ergebnisse") or {}).items():
+        zeilen.append(f"  [{eintrag.get('status', '---')}] {name}")
+        zeilen.append(f"        {eintrag.get('bewertung', '')}")
+        if eintrag.get("erkannt"):
+            teile = ", ".join(f"{DATENTEILE.get(s, s)}: {n}"
+                              for s, n in eintrag["erkannt"].items())
+            zeilen.append(f"        Erkannt: {teile}")
+
+    zeilen += ["", "Was das bedeutet", "-" * 40]
+    if len(bilanz) == len(DATENTEILE):
+        zeilen += [
+            "  Alles Nötige wird gefunden. Der automatische Abruf funktioniert;",
+            "  es ist nichts weiter einzustellen.",
+        ]
+    elif bilanz:
+        zeilen += [
+            "  Ein Teil wird gefunden, der Rest nicht. Was fehlt, bleibt im Heft",
+            "  leer und muss über die CSV-Dateien gepflegt werden.",
+            "  Die Dateien in diesem Ordner zeigen, was FuPa geliefert hat.",
+        ]
+    else:
+        zeilen += [
+            "  Es kamen keine Spieldaten an. Entweder ist FuPa von der NAS aus",
+            "  nicht erreichbar, oder die Seiten sind anders aufgebaut als",
+            "  erwartet. Das Heft entsteht weiterhin - mit den CSV-Dateien.",
+        ]
+    zeilen.append("")
+    return "\n".join(zeilen)
 
 
 def _erkennungsbilanz(bloecke: list[Any], vereinsname: str) -> dict[str, int]:

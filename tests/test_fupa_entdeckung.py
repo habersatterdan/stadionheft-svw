@@ -396,6 +396,24 @@ def test_probe_berichtet_was_erkannt_wurde(konfiguration: Konfiguration,
     assert any(d.name == "_bericht.json" for d in abgelegt)
     assert len(abgelegt) == 2
 
+    # ... und daneben eine Fassung, die man ohne Werkzeug lesen kann
+    text = (tmp_path / "fupa_probe" / "_bericht.txt").read_text(encoding="utf-8")
+    assert "Tabelle            gefunden (5 Zeilen)" in text
+    assert "Alles Nötige wird gefunden" in text
+
+
+def test_berichtstext_benennt_das_fehlende(konfiguration: Konfiguration,
+                                           monkeypatch, tmp_path):
+    """Wer den Test ueber den Aufgabenplaner startet, liest nur diese Datei."""
+    from stadionheft.sources import fupa_api
+
+    monkeypatch.setattr(fupa_api.FupaClient, "abrufen",
+                        lambda self, url: Antwort("", status=404))
+    bericht = probe_fupa(konfiguration, "herren1", tmp_path)
+    text = fupa_api.bericht_als_text(bericht)
+    assert "Tabelle            NICHT gefunden" in text
+    assert "keine Spieldaten an" in text
+
 
 def test_probe_haelt_fehler_aus(konfiguration: Konfiguration, monkeypatch, tmp_path):
     from stadionheft.sources import fupa_api
