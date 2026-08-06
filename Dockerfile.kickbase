@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# Kickbase-Berater
+#
+# Eigenes Abbild, unabhaengig vom Stadionheft-Generator: der Berater braucht
+# kein WeasyPrint und keine Schriften, deshalb bleibt das Abbild klein.
+#
+# Bauen und starten:
+#     docker compose -f docker-compose.kickbase.yml up -d --build
+# ---------------------------------------------------------------------------
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Europe/Berlin
+
+RUN apt-get update && apt-get install --no-install-recommends -y tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements-kickbase.txt .
+RUN pip install --no-cache-dir -r requirements-kickbase.txt \
+    && pip install --no-cache-dir gunicorn
+
+COPY kickbase/ ./kickbase/
+COPY config/kickbase.example.yaml ./config/
+COPY pyproject.toml README.md ./
+
+# Datenbank und Protokolle liegen in Volumes -- die Ordner muessen aber
+# existieren, sonst schlaegt der erste Schreibversuch fehl.
+RUN mkdir -p /app/daten/kickbase /app/logs \
+    && useradd --create-home --uid 1000 berater \
+    && chown -R berater:berater /app
+USER berater
+
+EXPOSE 8090
+
+HEALTHCHECK --interval=60s --timeout=5s --start-period=15s \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/gesundheit').read()" || exit 1
+
+# Genau ein Arbeitsprozess: der Hintergrundabruf laeuft als Faden darin.
+# Mehrere Prozesse wuerden gleichzeitig bei Kickbase anfragen.
+CMD ["gunicorn", "--bind", "0.0.0.0:8090", "--workers", "1", "--threads", "4", \
+     "--timeout", "120", "kickbase.web.wsgi:app"]

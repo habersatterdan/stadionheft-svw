@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# Kickbase-Berater im Heimlabor
+#
+# Start:
+#     docker compose -f docker-compose.kickbase.yml up -d --build
+# Danach im Browser: http://<adresse-des-servers>:8090
+#
+# Die Zugangsdaten stehen absichtlich NICHT in dieser Datei, sondern in einer
+# Datei `.env` daneben (die gehoert nicht ins Git-Repository):
+#
+#     KICKBASE_EMAIL=du@example.org
+#     KICKBASE_PASSWORT=dein-kickbase-passwort
+#     KICKBASE_WEB_PASSWORT=passwort-fuer-die-weboberflaeche
+#
+# Ohne diese Angaben startet der Berater im Demomodus mit Beispieldaten --
+# gut zum Ausprobieren, aber ohne Bezug zu deiner Liga.
+# ---------------------------------------------------------------------------
+services:
+  kickbase:
+    build:
+      context: .
+      dockerfile: Dockerfile.kickbase
+    image: kickbase-berater:latest
+    container_name: kickbase-berater
+    restart: unless-stopped
+
+    ports:
+      # Linke Zahl aendern, falls 8090 schon belegt ist.
+      - "8090:8090"
+
+    environment:
+      TZ: Europe/Berlin
+      KICKBASE_EMAIL: "${KICKBASE_EMAIL:-}"
+      KICKBASE_PASSWORT: "${KICKBASE_PASSWORT:-}"
+      # Nur noetig, wenn in kickbase.yaml web.passwortschutz auf true steht.
+      KICKBASE_WEB_PASSWORT: "${KICKBASE_WEB_PASSWORT:-}"
+      # Optional: eine bestimmte Liga erzwingen.
+      KICKBASE_LIGA: "${KICKBASE_LIGA:-}"
+
+    volumes:
+      # Die Datenbank. Hier waechst die eigene Marktwerthistorie -- dieser
+      # Ordner ist das Einzige, was gesichert werden muss.
+      - ./daten/kickbase:/app/daten/kickbase
+      # Protokolle.
+      - ./logs:/app/logs
+      # Eigene Konfiguration (optional). Ohne diese Zeile gelten die
+      # Standardwerte aus config/kickbase.example.yaml.
+      - ./config:/app/config
+
+    # Der Berater braucht wenig: ein Kern und ein paar hundert Megabyte
+    # genuegen auch fuer eine ganze Bundesliga.
+    deploy:
+      resources:
+        limits:
+          memory: 512M

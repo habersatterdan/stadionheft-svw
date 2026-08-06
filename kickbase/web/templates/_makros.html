@@ -1,0 +1,85 @@
+{# Bausteine, die auf mehreren Seiten gleich aussehen sollen. #}
+
+{% macro note(bewertung) %}
+  {%- set p = bewertung.gesamtpunkte -%}
+  <div class="note" title="Gesamtnote {{ p|round(1) }} von -100 bis +100">
+    <div class="notenbalken">
+      <i style="{% if p >= 0 %}left:50%;width:{{ (p * 0.46)|round(1) }}px;background:var(--gut){% else %}right:50%;width:{{ (-p * 0.46)|round(1) }}px;background:var(--schlecht){% endif %}"></i>
+    </div>
+    <span class="notenzahl">{{ p|round(0)|int }}</span>
+  </div>
+{% endmacro %}
+
+{% macro stufe(bewertung) %}
+  <span class="stufe stufe-{{ bewertung.stufe }}">{{ bewertung.empfehlung }}</span>
+{% endmacro %}
+
+{% macro spielerkopf(spieler) %}
+  <a href="{{ url_for('spieler', spieler_id=spieler.id) }}">{{ spieler.name }}</a>
+  <div class="nebeninfo">
+    {{ spieler.team_name or "Verein unbekannt" }} · {{ spieler.positions_name }}
+    {%- if not spieler.einsatzbereit %} · <strong>{{ spieler.status_name }}</strong>{% endif %}
+  </div>
+{% endmacro %}
+
+{% macro verlaufsgrafik(spieler) %}
+  {%- set punkte = spieler.verlauf|sparklinie -%}
+  {%- if punkte -%}
+    <svg width="90" height="26" viewBox="0 0 90 26" role="img"
+         aria-label="Marktwertverlauf der letzten Wochen">
+      <polyline points="{{ punkte }}" fill="none" stroke="var(--akzent)"
+                stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+  {%- else -%}
+    <span class="nebeninfo">–</span>
+  {%- endif -%}
+{% endmacro %}
+
+{#
+  Die Standardtabelle. `preisspalte` zeigt den Angebotspreis vom
+  Transfermarkt statt des reinen Marktwerts.
+#}
+{% macro spielertabelle(liste, preisspalte=false, leer_text="Keine Spieler vorhanden.") %}
+  {% if liste %}
+  <div class="tabellenrahmen">
+  <table>
+    <thead>
+      <tr>
+        <th>Spieler</th>
+        <th class="zahl">{{ "Preis" if preisspalte else "Marktwert" }}</th>
+        <th class="verbergen-klein">Verlauf</th>
+        <th class="zahl verbergen-klein">Ø Punkte</th>
+        <th>Note</th>
+        <th>Empfehlung</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in liste %}
+      <tr>
+        <td>{{ spielerkopf(b.spieler) }}</td>
+        <td class="zahl">
+          {% if preisspalte and b.spieler.angebotspreis %}
+            {{ b.spieler.angebotspreis|euro }}
+            <div class="nebeninfo">MW {{ b.spieler.marktwert|euro }}</div>
+          {% else %}
+            {{ b.spieler.marktwert|euro }}
+          {% endif %}
+        </td>
+        <td class="verbergen-klein">{{ verlaufsgrafik(b.spieler) }}</td>
+        <td class="zahl verbergen-klein">{{ b.spieler.punkte_schnitt }}</td>
+        <td>{{ note(b) }}</td>
+        <td>
+          {{ stufe(b) }}
+          {% if b.uebersteuerung %}
+            <div class="nebeninfo">{{ b.uebersteuerung }}</div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    <p class="nebeninfo">{{ leer_text }}</p>
+  {% endif %}
+{% endmacro %}

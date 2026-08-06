@@ -1,0 +1,96 @@
+{% extends "_layout.html" %}
+{% set seite = "start" %}
+{% block titel %}Mein Team{% endblock %}
+
+{% import "_makros.html" as m %}
+
+{% block inhalt %}
+<h1>Mein Team{% if bericht.liga_name %} – {{ bericht.liga_name }}{% endif %}</h1>
+<p class="unterzeile">
+  Stand: {{ bericht.quellen.get("letzter_abruf", "")|zeitpunkt }}
+  {%- if bericht.quellen.get("modus") %} · Quelle: {{ bericht.quellen["modus"] }}{% endif %}
+</p>
+
+{% for warnung in bericht.warnungen %}
+  <div class="hinweis">{{ warnung }}</div>
+{% endfor %}
+
+<div class="kacheln">
+  <div class="kachel">
+    <div class="beschriftung">Budget</div>
+    <div class="wert">{{ bericht.budget|euro }}</div>
+    <div class="fussnote">frei verfügbar</div>
+  </div>
+  <div class="kachel">
+    <div class="beschriftung">Kader</div>
+    <div class="wert">{{ bericht.eigene|length }}</div>
+    <div class="fussnote">Spieler in deinem Team</div>
+  </div>
+  <div class="kachel">
+    <div class="beschriftung">Handlungsbedarf</div>
+    <div class="wert">{{ bericht.verkaufskandidaten|length }}</div>
+    <div class="fussnote">zum Verkauf vorgeschlagen</div>
+  </div>
+  <div class="kachel">
+    <div class="beschriftung">Ausfälle</div>
+    <div class="wert">{{ bericht.ausfaelle|length }}</div>
+    <div class="fussnote">verletzt, gesperrt oder fraglich</div>
+  </div>
+</div>
+
+<div class="karte">
+  <form method="post" action="{{ url_for('abruf') }}"
+        style="display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
+    <button type="submit" {{ "disabled" if laeuft }}>
+      {{ "Abruf läuft …" if laeuft else "Daten jetzt holen" }}
+    </button>
+    <span class="nebeninfo">
+      {% if letzter_abruf %}
+        Letzter Abruf {{ letzter_abruf.zeit|zeitpunkt }} –
+        {{ "erfolgreich" if letzter_abruf.erfolgreich else "fehlgeschlagen" }}.
+        {{ letzter_abruf.meldung }}
+      {% else %}
+        Es wurde noch nie abgerufen.
+      {% endif %}
+    </span>
+  </form>
+</div>
+
+{% if bericht.ausfaelle %}
+  <h2>Sofort ansehen: Ausfälle und Wackelkandidaten</h2>
+  <div class="karte">
+    {% for b in bericht.ausfaelle %}
+      <div style="padding:.55rem 0;border-top:1px solid var(--rahmen)">
+        <div style="display:flex;gap:.7rem;align-items:baseline;flex-wrap:wrap">
+          <strong><a href="{{ url_for('spieler', spieler_id=b.spieler.id) }}"
+             style="color:var(--ink);text-decoration:none">{{ b.spieler.name }}</a></strong>
+          <span class="stufe stufe-{{ 'verkaufen' if b.spieler.faellt_aus else 'pruefen' }}">
+            {{ b.spieler.status_name }}
+          </span>
+          <span class="nebeninfo">{{ b.spieler.team_name }} · {{ b.spieler.marktwert|euro }}</span>
+        </div>
+        {% if b.spieler.verletzungsmeldung %}
+          <div class="nebeninfo">{{ b.spieler.verletzungsmeldung }}</div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<h2>Verkaufsvorschläge</h2>
+{{ m.spielertabelle(bericht.verkaufskandidaten,
+     leer_text="Nichts Dringendes – kein Spieler deines Kaders steht gerade zum Verkauf an.") }}
+
+<h2>Bester Zukauf gerade</h2>
+{% set top = bericht.transfermarkt[:3] + bericht.kandidaten[:3] %}
+{{ m.spielertabelle(top|sort(attribute="gesamtpunkte", reverse=true),
+     leer_text="Noch keine Kandidaten – bitte zuerst Daten holen.") }}
+<p class="nebeninfo">
+  Mehr davon unter <a href="{{ url_for('markt') }}">Transfermarkt</a> und
+  <a href="{{ url_for('kandidaten') }}">Kaufkandidaten</a>.
+</p>
+
+<h2>Vollständiger Kader</h2>
+{{ m.spielertabelle(bericht.eigene,
+     leer_text="Kein Kader gefunden. Läuft der Abruf mit den richtigen Zugangsdaten?") }}
+{% endblock %}

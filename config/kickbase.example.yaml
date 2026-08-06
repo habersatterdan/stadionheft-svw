@@ -1,0 +1,124 @@
+# ---------------------------------------------------------------------------
+# Kickbase-Berater – Beispielkonfiguration
+#
+# Diese Datei nach `config/kickbase.yaml` kopieren und anpassen. Ohne eigene
+# Datei läuft der Berater mit genau diesen Werten weiter – die Datei ist also
+# nur nötig, wenn du etwas ändern willst.
+#
+# WICHTIG: Zugangsdaten gehören NICHT in diese Datei. Sie werden aus
+# Umgebungsvariablen gelesen (siehe unten). So landen sie nicht versehentlich
+# in einer Sicherung oder in Git.
+# ---------------------------------------------------------------------------
+
+kickbase:
+  # Beide Felder bleiben normalerweise leer. Der Berater liest stattdessen
+  # die Umgebungsvariablen KICKBASE_EMAIL und KICKBASE_PASSWORT.
+  # Nur wenn die nicht gesetzt sind, greift er auf diese Werte zurück.
+  email: ""
+  passwort: ""
+
+  # Leer lassen = die erste Liga des Kontos wird genommen. Wer in mehreren
+  # Ligen spielt, trägt hier die gewünschte Liga-ID ein. Beim Start schreibt
+  # der Berater alle gefundenen Ligen mit ihrer ID ins Protokoll.
+  liga_id: ""
+
+  # 1 = Bundesliga. Andere Wettbewerbe sind nicht getestet.
+  wettbewerb_id: "1"
+
+abruf:
+  # Der Hintergrundabruf startet automatisch beim Programmstart.
+  # Auf false setzen, wenn du lieber per Cron `kickbase abruf` aufrufen willst.
+  automatisch: true
+
+  # Alle wie viel Stunden neue Daten geholt werden. Öfter als stündlich ist
+  # unnötig: Kickbase aktualisiert Marktwerte einmal täglich in der Nacht.
+  intervall_stunden: 6
+
+  # Wie weit der Marktwertverlauf bei Kickbase abgefragt wird (in Tagen).
+  marktwert_tage: 92
+
+  # Wie lange eine Antwort zwischengespeichert wird, bevor erneut gefragt wird.
+  cache_minuten: 60
+
+  # Wie viele Spieler je Position im Detail geholt werden (Verlauf und
+  # Spieltagsdaten). Der eigene Kader und der Transfermarkt sind davon
+  # unabhängig und immer vollständig dabei. Höhere Werte bedeuten mehr
+  # Anfragen und einen längeren Abruf.
+  kandidaten_je_position: 25
+
+  # Pause zwischen zwei Anfragen an Kickbase, in Millisekunden.
+  # Nicht unter 100 setzen – die Schnittstelle ist nicht dafür gedacht,
+  # von einem Dauerlauf beschossen zu werden.
+  hoeflichkeitspause_ms: 250
+
+quellen:
+  openligadb:
+    # Freier Spielplan und Tabelle der Bundesliga. Ohne Anmeldung, ohne
+    # Schlüssel. Liefert die Grundlage für die Kennzahl "Nächste Gegner".
+    aktiv: true
+    liga: "bl1"
+    # Leer = die laufende Saison wird selbst bestimmt (ab Juli das neue Jahr).
+    saison: ""
+
+  verletzungen:
+    # ZUSATZQUELLE, ab Werk AUS.
+    #
+    # Der Kickbase-Status (fit / angeschlagen / verletzt / gesperrt) ist die
+    # maßgebliche Quelle und immer aktiv. Hier geht es nur um zusätzliche
+    # Klartextmeldungen ("Muskelfaserriss, drei Wochen").
+    #
+    # Vor dem Einschalten bitte prüfen, ob die Nutzungsbedingungen der Seite
+    # das automatische Auslesen erlauben. Der Berater fragt zusätzlich die
+    # robots.txt und überspringt Seiten, die dort widersprechen.
+    aktiv: false
+    seiten: []
+    # Beispiel:
+    # seiten:
+    #   - name: "Ausfälle"
+    #     url: "https://example.org/bundesliga/ausfaelle"
+
+analyse:
+  # Wie viele Spieltage in die Formberechnung einfließen.
+  form_spieltage: 5
+
+  # Spieler unter diesem Marktwert tauchen nicht in den Kaufkandidaten auf.
+  mindest_marktwert: 300000
+
+  # Unter so vielen gewerteten Spielen wird die Note halbiert – die
+  # Datengrundlage ist dann zu dünn für eine klare Aussage.
+  mindest_spiele: 3
+
+  # Hier stellst du den Berater auf deinen Spielstil ein. Höheres Gewicht =
+  # stärkerer Einfluss auf die Gesamtnote.
+  #
+  #   Du spielst auf schnelle Marktwertgewinne?
+  #     marktwerttrend hoch (1.6), gegnerstaerke runter (0.3)
+  #   Du willst vor allem Punkte am Spieltag?
+  #     form und einsatzzeit hoch, marktwerttrend runter (0.5)
+  #   Du kaufst langfristig und günstig?
+  #     preis_leistung und bewertungsniveau hoch
+  gewichte:
+    verfuegbarkeit: 1.6     # fit, angeschlagen, verletzt, gesperrt
+    form: 1.4               # Punkte der letzten Spieltage gegen Saisonschnitt
+    einsatzzeit: 1.2        # Stammspieler oder Ergänzung
+    marktwerttrend: 1.0     # Marktwertänderung über 7 und 30 Tage
+    preis_leistung: 0.9     # Punkte je Million, verglichen mit der Position
+    gegnerstaerke: 0.6      # Tabellenplatz der nächsten zwei Gegner
+    bewertungsniveau: 0.5   # Marktwert innerhalb seiner eigenen Spanne
+
+web:
+  titel: "Kickbase-Berater"
+
+  # Im eigenen Heimnetz nicht nötig. Sobald die Oberfläche von außen
+  # erreichbar ist, unbedingt einschalten – und das Passwort in der
+  # Umgebungsvariablen KICKBASE_WEB_PASSWORT setzen.
+  passwortschutz: false
+  benutzer: "kickbase"
+
+speicher:
+  # Eine einzige SQLite-Datei. Sichern heißt: diese Datei kopieren.
+  datenbank: "daten/kickbase/kickbase.sqlite3"
+
+protokoll:
+  ordner: "logs"
+  level: "INFO"          # DEBUG, INFO, WARNING oder ERROR

@@ -1,0 +1,45 @@
+{% extends "_layout.html" %}
+{% set seite = "kandidaten" %}
+{% block titel %}Kaufkandidaten{% endblock %}
+
+{% import "_makros.html" as m %}
+
+{% block inhalt %}
+<h1>Kaufkandidaten aus der ganzen Liga</h1>
+<p class="unterzeile">
+  Alle Spieler, die dir nicht gehören, nach Gesamtnote sortiert. Viele davon
+  stehen gerade nicht zum Verkauf – dann lohnt ein Gebot beim Besitzer oder
+  das Vormerken für später.
+</p>
+
+<div class="karte">
+  <form class="filter" method="get">
+    <div>
+      <label for="position">Position</label>
+      <select name="position" id="position">
+        <option value="">alle</option>
+        {% for nummer, name in positionen.items() %}
+          <option value="{{ nummer }}" {{ "selected" if position == nummer|string }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="hoechstpreis">Höchstpreis in Mio.</label>
+      <input type="text" name="hoechstpreis" id="hoechstpreis" size="6"
+             value="{{ hoechstpreis }}" placeholder="z. B. 12">
+    </div>
+    <div class="kasten">
+      <input type="checkbox" name="nur_fit" id="nur_fit" value="1" {{ "checked" if nur_fit }}>
+      <label for="nur_fit" style="margin:0;text-transform:none;font-size:.9rem;color:var(--ink)">
+        nur einsatzbereite
+      </label>
+    </div>
+    <button type="submit">Filtern</button>
+    <a class="knopf knopf-zweit" href="{{ url_for('kandidaten') }}">Zurücksetzen</a>
+  </form>
+</div>
+
+<h2>{{ gesamt }} Treffer{% if gesamt > liste|length %} – die besten {{ liste|length }}{% endif %}</h2>
+{{ m.spielertabelle(liste,
+     leer_text="Kein Spieler passt zu diesen Filtern.") }}
+{% endblock %}

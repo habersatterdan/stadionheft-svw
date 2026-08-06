@@ -542,6 +542,24 @@ vereinheitlicht werden.
 
 ---
 
+## Noch im selben Repository: der Kickbase-Berater
+
+Im Ordner `kickbase/` liegt eine **zweite, eigenständige Anwendung**, die mit
+dem Stadionheft nichts zu tun hat: ein Analysewerkzeug für das Managerspiel
+Kickbase. Es holt Marktwerte, Punkte, Einsatzzeiten und Verletzungsstatus,
+wertet sie aus und gibt begründete Kauf- und Verkaufshinweise.
+
+Eigener Container, eigene Konfiguration, eigene Abhängigkeiten – der
+Stadionheft-Generator bleibt davon vollständig unberührt:
+
+```bash
+docker compose -f docker-compose.kickbase.yml up -d --build
+```
+
+Anleitung: **[KICKBASE.md](KICKBASE.md)**
+
+---
+
 ## Bekannte Einschränkungen
 
 1. **Der FuPa-Abruf ist ein geprüftes Gerüst, keine fertige Funktion.** Die

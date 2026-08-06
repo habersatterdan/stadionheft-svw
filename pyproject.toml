@@ -19,12 +19,18 @@ dependencies = [
 
 [project.scripts]
 stadionheft = "stadionheft.cli:main"
+# Der Kickbase-Berater ist eine eigenstaendige Anwendung im selben
+# Repository. Er teilt sich mit dem Stadionheft nur Flask, Jinja2, PyYAML und
+# requests; im eigenen Container wird er ueber requirements-kickbase.txt
+# ohne WeasyPrint und pypdf installiert.
+kickbase = "kickbase.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["stadionheft*"]
+include = ["stadionheft*", "kickbase*"]
 
 [tool.setuptools.package-data]
 stadionheft = ["templates/*.j2", "static/css/*.css", "static/img/*", "web/templates/*.html"]
+kickbase = ["web/templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,21 @@
+{% extends "_layout.html" %}
+{% block titel %}Fehler{% endblock %}
+
+{% block inhalt %}
+<h1>Das hat nicht geklappt</h1>
+
+<div class="fehlerkasten">
+  <p style="margin:0 0 .4rem"><strong>{{ fehler.meldung }}</strong></p>
+  {% if fehler.hinweis %}<p style="margin:0">{{ fehler.hinweis }}</p>{% endif %}
+</div>
+
+{% if fehler.technisch %}
+  <details class="karte">
+    <summary style="cursor:pointer;font-weight:600">Technische Einzelheiten</summary>
+    <p class="nebeninfo" style="margin:.6rem 0 0">{{ fehler.technisch }}</p>
+    <p class="nebeninfo">Mehr steht im Protokoll unter <code>logs/kickbase.log</code>.</p>
+  </details>
+{% endif %}
+
+<p><a class="knopf knopf-zweit" href="{{ url_for('start') }}">Zurück zur Übersicht</a></p>
+{% endblock %}

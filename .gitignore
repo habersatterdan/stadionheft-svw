@@ -9,6 +9,7 @@ venv/
 # Lokale Konfiguration (enthaelt ggf. Zugangsdaten -> niemals committen!)
 config/config.yaml
 config/heftplan.yaml
+config/kickbase.yaml
 .env
 
 # Arbeitsdaten / Ausgaben
@@ -23,6 +24,9 @@ daten/05_ausgaben/*
 daten/01_vorlagen/*.pdf
 logs/
 *.log
+
+# Kickbase-Berater: Datenbank und Zwischenspeicher
+daten/kickbase/
 
 # OS
 .DS_Store

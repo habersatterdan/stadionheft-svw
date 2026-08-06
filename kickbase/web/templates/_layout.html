@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}Übersicht{% endblock %} – {{ titel or "Kickbase-Berater" }}</title>
+  <style>
+    /* Eine einzige Formatvorlage, direkt in der Seite: der Berater soll auch
+       ohne Internetzugang und ohne zusätzliche Dateien vollständig aussehen. */
+    :root {
+      --grund: #FFFFFF; --seite: #F6F7F8; --ink: #16191D; --ink-2: #4A525C;
+      --ink-3: #79828D; --rahmen: #E1E5EA; --akzent: #0E7C6B;
+      --akzent-weich: #E6F4F1; --gut: #15803D; --gut-weich: #E7F6ED;
+      --warn: #A65A07; --warn-weich: #FDF3E3; --schlecht: #B4241F;
+      --schlecht-weich: #FCEDEC; --neutral-weich: #EEF1F4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --grund: #171A1E; --seite: #101215; --ink: #ECEFF2; --ink-2: #B4BCC5;
+        --ink-3: #838D97; --rahmen: #2B3138; --akzent: #34D3BC;
+        --akzent-weich: #12302C; --gut: #5BD285; --gut-weich: #14301F;
+        --warn: #E9A93C; --warn-weich: #33260F; --schlecht: #F0837C;
+        --schlecht-weich: #371B1A; --neutral-weich: #21262C;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--seite); color: var(--ink);
+           font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+           line-height: 1.5; }
+    a { color: var(--akzent); }
+
+    header { background: var(--grund); border-bottom: 1px solid var(--rahmen); }
+    .kopf { max-width: 1080px; margin: 0 auto; padding: .9rem 1.2rem;
+            display: flex; flex-wrap: wrap; gap: .8rem 1.4rem; align-items: center; }
+    .marke { font-weight: 700; font-size: 1.1rem; color: var(--ink);
+             text-decoration: none; }
+    .marke span { color: var(--akzent); }
+    nav { display: flex; gap: 1.1rem; flex-wrap: wrap; margin-left: auto; }
+    nav a { color: var(--ink-2); text-decoration: none; font-size: .93rem;
+            font-weight: 600; padding: .2rem 0; border-bottom: 2px solid transparent; }
+    nav a:hover { color: var(--akzent); }
+    nav a.aktiv { color: var(--ink); border-bottom-color: var(--akzent); }
+
+    main { max-width: 1080px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+    h1 { font-size: 1.45rem; margin: 0 0 .2rem; letter-spacing: -.01em; }
+    h2 { font-size: 1.05rem; margin: 1.9rem 0 .7rem; }
+    h3 { font-size: .95rem; margin: 1.2rem 0 .4rem; }
+    .unterzeile { color: var(--ink-3); font-size: .9rem; margin: 0 0 1.3rem; }
+
+    .karte { background: var(--grund); border: 1px solid var(--rahmen);
+             border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1.1rem; }
+    .karte > h2:first-child, .karte > h3:first-child { margin-top: 0; }
+
+    .kacheln { display: grid; gap: .8rem; margin-bottom: 1.2rem;
+               grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+    .kachel { background: var(--grund); border: 1px solid var(--rahmen);
+              border-radius: 10px; padding: .85rem 1rem; }
+    .kachel .beschriftung { color: var(--ink-3); font-size: .8rem;
+                            text-transform: uppercase; letter-spacing: .04em;
+                            font-weight: 700; }
+    .kachel .wert { font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em;
+                    font-variant-numeric: tabular-nums; margin-top: .15rem; }
+    .kachel .fussnote { color: var(--ink-3); font-size: .82rem; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    .tabellenrahmen { overflow-x: auto; }
+    th { text-align: left; font-size: .78rem; text-transform: uppercase;
+         letter-spacing: .04em; color: var(--ink-3); font-weight: 700;
+         padding: 0 .6rem .5rem; white-space: nowrap; }
+    td { padding: .55rem .6rem; border-top: 1px solid var(--rahmen);
+         vertical-align: middle; }
+    td.zahl, th.zahl { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr:hover { background: var(--neutral-weich); }
+    td a { text-decoration: none; font-weight: 600; color: var(--ink); }
+    td a:hover { color: var(--akzent); }
+    .nebeninfo { color: var(--ink-3); font-size: .82rem; }
+
+    /* Empfehlungen tragen immer Text -- nie nur Farbe. */
+    .stufe { display: inline-block; padding: .16rem .55rem; border-radius: 99px;
+             font-size: .78rem; font-weight: 700; white-space: nowrap; }
+    .stufe-kaufen { background: var(--gut); color: #FFF; }
+    .stufe-beobachten { background: var(--gut-weich); color: var(--gut); }
+    .stufe-halten { background: var(--neutral-weich); color: var(--ink-2); }
+    .stufe-pruefen { background: var(--warn-weich); color: var(--warn); }
+    .stufe-verkaufen { background: var(--schlecht); color: #FFF; }
+
+    /* Notenbalken: Mitte ist 0, nach rechts positiv, nach links negativ. */
+    .note { display: flex; align-items: center; gap: .5rem; }
+    .notenbalken { position: relative; width: 92px; height: 8px;
+                   background: var(--neutral-weich); border-radius: 99px;
+                   flex: none; }
+    .notenbalken::after { content: ""; position: absolute; left: 50%; top: -2px;
+                          width: 1px; height: 12px; background: var(--rahmen); }
+    .notenbalken i { position: absolute; top: 0; height: 8px; border-radius: 99px; }
+    .notenzahl { font-variant-numeric: tabular-nums; font-weight: 700;
+                 font-size: .86rem; min-width: 2.6rem; text-align: right; }
+
+    .hinweis, .fehlerkasten, .erfolg { border-radius: 0 8px 8px 0;
+        padding: .75rem 1rem; margin: .7rem 0; font-size: .92rem;
+        overflow-wrap: anywhere; }
+    .hinweis { border-left: 4px solid var(--warn); background: var(--warn-weich); }
+    .fehlerkasten { border-left: 4px solid var(--schlecht);
+                    background: var(--schlecht-weich); }
+    .erfolg { border-left: 4px solid var(--gut); background: var(--gut-weich); }
+
+    button, .knopf { background: var(--akzent); color: #FFF; border: none;
+             border-radius: 7px; padding: .6rem 1.1rem; font-size: .95rem;
+             font-weight: 700; cursor: pointer; font-family: inherit;
+             text-decoration: none; display: inline-block; }
+    button:hover, .knopf:hover { filter: brightness(1.08); }
+    button[disabled] { opacity: .55; cursor: default; }
+    .knopf-zweit { background: var(--grund); color: var(--ink);
+                   border: 1px solid var(--rahmen); }
+
+    form.filter { display: flex; flex-wrap: wrap; gap: .7rem; align-items: flex-end; }
+    form.filter label { display: block; font-size: .8rem; font-weight: 700;
+                        color: var(--ink-3); text-transform: uppercase;
+                        letter-spacing: .04em; margin-bottom: .25rem; }
+    form.filter select, form.filter input[type=text] {
+        padding: .5rem .6rem; border: 1px solid var(--rahmen); border-radius: 7px;
+        font-size: .95rem; font-family: inherit; background: var(--grund);
+        color: var(--ink); }
+    form.filter .kasten { display: flex; align-items: center; gap: .4rem;
+                          padding-bottom: .55rem; }
+
+    .gruende { margin: .3rem 0 0; padding-left: 1.1rem; color: var(--ink-2);
+               font-size: .88rem; }
+    .gruende li { margin-bottom: .2rem; }
+
+    footer { max-width: 1080px; margin: 0 auto; padding: 0 1.2rem 2rem;
+             color: var(--ink-3); font-size: .82rem; }
+
+    @media (max-width: 640px) {
+      .verbergen-klein { display: none; }
+      h1 { font-size: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="kopf">
+    <a class="marke" href="{{ url_for('start') }}">Kickbase<span>·Berater</span></a>
+    <nav>
+      <a href="{{ url_for('start') }}" {{ 'class=aktiv' if seite == 'start' }}>Mein Team</a>
+      <a href="{{ url_for('markt') }}" {{ 'class=aktiv' if seite == 'markt' }}>Transfermarkt</a>
+      <a href="{{ url_for('kandidaten') }}" {{ 'class=aktiv' if seite == 'kandidaten' }}>Kaufkandidaten</a>
+      <a href="{{ url_for('hilfe') }}" {{ 'class=aktiv' if seite == 'hilfe' }}>Wie wird gerechnet?</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  {% if demomodus %}
+    <div class="hinweis">
+      <strong>Demomodus.</strong> Alle Spieler, Werte und Empfehlungen auf dieser
+      Seite sind erfunden. Sobald <code>KICKBASE_EMAIL</code> und
+      <code>KICKBASE_PASSWORT</code> gesetzt sind, arbeitet der Berater mit den
+      echten Daten deiner Liga.
+    </div>
+  {% endif %}
+  {% block inhalt %}{% endblock %}
+</main>
+
+<footer>
+  Der Berater gibt Hinweise, keine Garantien. Er kauft und verkauft nichts –
+  jede Entscheidung triffst du selbst in der Kickbase-App.
+</footer>
+</body>
+</html>

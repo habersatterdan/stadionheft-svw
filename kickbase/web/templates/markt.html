@@ -1,0 +1,51 @@
+{% extends "_layout.html" %}
+{% set seite = "markt" %}
+{% block titel %}Transfermarkt{% endblock %}
+
+{% import "_makros.html" as m %}
+
+{% block inhalt %}
+<h1>Transfermarkt deiner Liga</h1>
+<p class="unterzeile">
+  Bewertet wird gegen den <strong>Angebotspreis</strong>, nicht gegen den
+  Marktwert. Ein guter Spieler zu 30 % Aufschlag kann trotzdem ein schlechtes
+  Geschäft sein.
+</p>
+
+{% if bericht.budget %}
+  <div class="karte" style="display:flex;gap:1.4rem;flex-wrap:wrap;align-items:center">
+    <div>
+      <div class="beschriftung nebeninfo">Dein Budget</div>
+      <div style="font-size:1.3rem;font-weight:700">{{ bericht.budget|euro }}</div>
+    </div>
+    <div class="nebeninfo">
+      Angebote über deinem Budget sind unten trotzdem gelistet – sie werden
+      erst nach einem Verkauf interessant.
+    </div>
+  </div>
+{% endif %}
+
+<h2>Angebote ({{ bericht.transfermarkt|length }})</h2>
+{{ m.spielertabelle(bericht.transfermarkt, preisspalte=true,
+     leer_text="Auf dem Transfermarkt steht gerade niemand – oder es wurde noch nicht abgerufen.") }}
+
+{% if bericht.transfermarkt %}
+  <h2>Warum diese Einschätzung?</h2>
+  <div class="karte">
+    {% for b in bericht.transfermarkt[:5] %}
+      <div style="padding:.7rem 0;border-top:1px solid var(--rahmen)">
+        <div style="display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap">
+          <strong>{{ b.spieler.name }}</strong>
+          {{ m.stufe(b) }}
+          <span class="nebeninfo">{{ b.spieler.angebotspreis|euro }}</span>
+        </div>
+        <ul class="gruende">
+          {% for k in b.staerkste_gruende %}
+            <li><strong>{{ k.name }}:</strong> {{ k.begruendung }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

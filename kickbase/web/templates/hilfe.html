@@ -1,0 +1,158 @@
+{% extends "_layout.html" %}
+{% set seite = "hilfe" %}
+{% block titel %}Wie wird gerechnet?{% endblock %}
+
+{% block inhalt %}
+<h1>Wie der Berater zu seiner Empfehlung kommt</h1>
+<p class="unterzeile">
+  Kein Geheimnis und keine künstliche Intelligenz: sieben Kennzahlen, ein
+  gewichteter Durchschnitt, ein paar Vorrangregeln.
+</p>
+
+<h2>Die sieben Kennzahlen</h2>
+<div class="tabellenrahmen">
+<table>
+  <thead>
+    <tr><th>Kennzahl</th><th class="zahl">Gewicht</th><th>Was sie misst</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Verfügbarkeit</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.verfuegbarkeit) }}</td>
+      <td>Fit, angeschlagen, verletzt, gesperrt. Die wichtigste Frage überhaupt –
+          wer nicht spielt, punktet nicht.</td>
+    </tr>
+    <tr>
+      <td><strong>Form</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.form) }}</td>
+      <td>Punkte der letzten Spieltage (jüngere zählen stärker) im Vergleich zum
+          eigenen Saisonschnitt. Zeigt Aufwärts- und Abwärtstrends.</td>
+    </tr>
+    <tr>
+      <td><strong>Einsatzzeit</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.einsatzzeit) }}</td>
+      <td>Stammspieler oder Ergänzung? Drei Spiele ohne Einsatz sind ein
+          Alarmzeichen, noch bevor die Punkte einbrechen.</td>
+    </tr>
+    <tr>
+      <td><strong>Marktwerttrend</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.marktwerttrend) }}</td>
+      <td>Veränderung über 7 und 30 Tage. Bestätigt, dass auch die Mitspieler
+          den Spieler entdeckt haben.</td>
+    </tr>
+    <tr>
+      <td><strong>Preis-Leistung</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.preis_leistung) }}</td>
+      <td>Punkte je Million, verglichen mit dem Mittelwert derselben Position.
+          Ein Torwart wird nicht an einem Stürmer gemessen.</td>
+    </tr>
+    <tr>
+      <td><strong>Nächste Gegner</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.gegnerstaerke) }}</td>
+      <td>Tabellenplatz der nächsten zwei Gegner plus Heimvorteil. Aus dem
+          Spielplan von OpenLigaDB.</td>
+    </tr>
+    <tr>
+      <td><strong>Bewertungsniveau</strong></td>
+      <td class="zahl">{{ "%.1f"|format(gewichte.bewertungsniveau) }}</td>
+      <td>Wo steht der Marktwert in seiner eigenen Spanne? Nahe am Höchststand
+          ist der Einkauf teuer und der Verkauf attraktiv.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Von der Note zur Empfehlung</h2>
+<div class="karte">
+  <p style="margin-top:0">
+    Jede Kennzahl ergibt eine Punktzahl von <strong>-100</strong> bis
+    <strong>+100</strong>. Der mit den Gewichten gemittelte Durchschnitt ist die
+    Gesamtnote:
+  </p>
+  <table>
+    <tbody>
+      <tr><td><span class="stufe stufe-kaufen">Kaufen</span></td>
+          <td>ab +35</td><td class="nebeninfo">deutlich mehr dafür als dagegen</td></tr>
+      <tr><td><span class="stufe stufe-beobachten">Beobachten</span></td>
+          <td>+15 bis +35</td><td class="nebeninfo">interessant, aber kein Selbstläufer</td></tr>
+      <tr><td><span class="stufe stufe-halten">Halten</span></td>
+          <td>-15 bis +15</td><td class="nebeninfo">kein Handlungsbedarf</td></tr>
+      <tr><td><span class="stufe stufe-pruefen">Verkauf prüfen</span></td>
+          <td>-35 bis -15</td><td class="nebeninfo">bei gutem Angebot abgeben</td></tr>
+      <tr><td><span class="stufe stufe-verkaufen">Verkaufen</span></td>
+          <td>unter -35</td><td class="nebeninfo">aktiv anbieten</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>Vorrangregeln</h2>
+<div class="karte">
+  <p style="margin-top:0">
+    Manche Umstände darf kein Durchschnitt wegrechnen. Diese Regeln setzen eine
+    Obergrenze für die Note – sie können nur nach unten wirken:
+  </p>
+  <ul class="gruende">
+    <li><strong>Verletzt oder in Reha:</strong> Note höchstens -45. Kein Kauf bis
+        zur Rückkehr.</li>
+    <li><strong>Gesperrt:</strong> Note höchstens -20 – am nächsten Spieltag
+        garantiert ohne Punkte.</li>
+    <li><strong>Nicht im Kader:</strong> Note höchstens -35.</li>
+    <li><strong>Angeschlagen oder im Aufbautraining:</strong> Note höchstens +20
+        bzw. +5 – erst die Aufstellung abwarten.</li>
+    <li><strong>Drei Spiele ohne Einsatz:</strong> Note höchstens -30.</li>
+    <li><strong>Angebotspreis über 25 % vom Marktwert:</strong> Note höchstens +10.</li>
+    <li><strong>Weniger Spiele als vorgegeben:</strong> Note wird halbiert, weil
+        die Datengrundlage dünn ist.</li>
+  </ul>
+</div>
+
+<h2>Woher die Daten kommen</h2>
+<div class="karte">
+  <ul class="gruende">
+    <li><strong>Kickbase</strong> – Marktwerte, Punkte, Einsatzzeiten, Status,
+        dein Kader und der Transfermarkt deiner Liga. Der Berater meldet sich
+        mit deinen Zugangsdaten an, liest ausschließlich und schreibt
+        <em>nichts</em> zurück: er bietet nicht, kauft nicht und verkauft nicht.</li>
+    <li><strong>OpenLigaDB</strong> – Spielplan und Tabelle der Bundesliga, frei
+        zugänglich und ohne Anmeldung.</li>
+    <li><strong>Eigene Datenbank</strong> – bei jedem Abruf wird der Tagesmarktwert
+        gespeichert. Dadurch wächst mit der Zeit eine eigene Historie, unabhängig
+        davon, was Kickbase gerade ausliefert.</li>
+    <li><strong>Verletzungsseiten</strong> (ab Werk aus) – optionale
+        Klartextmeldungen von Fußballseiten. Der Kickbase-Status bleibt aber die
+        maßgebliche Quelle.</li>
+  </ul>
+</div>
+
+<h2>Grenzen</h2>
+<div class="karte">
+  <p style="margin-top:0">
+    Der Berater kennt keine Pressekonferenzen, keine Trainerentscheidungen und
+    keine Gerüchte. Er rechnet mit dem, was bereits messbar ist. Bei jungen
+    Saisons, nach Winterpausen und bei Neuzugängen ist er entsprechend
+    zurückhaltend – dort steht oft "zu wenig Daten" statt einer Empfehlung.
+    Punkte-Prognosen für einzelne Spiele gibt er bewusst nicht ab.
+  </p>
+</div>
+
+<h2>Letzte Abrufe</h2>
+<div class="tabellenrahmen">
+<table>
+  <thead>
+    <tr><th>Zeitpunkt</th><th>Ergebnis</th><th class="zahl">Dauer</th><th>Meldung</th></tr>
+  </thead>
+  <tbody>
+    {% for a in abrufe %}
+    <tr>
+      <td>{{ a.zeit|zeitpunkt }}</td>
+      <td>{{ "erfolgreich" if a.erfolgreich else "fehlgeschlagen" }}</td>
+      <td class="zahl">{{ "%.0f"|format(a.dauer_s) }} s</td>
+      <td class="nebeninfo" style="white-space:normal">{{ a.meldung }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="nebeninfo">Noch kein Abruf protokolliert.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

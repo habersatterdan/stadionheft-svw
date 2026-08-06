@@ -1,0 +1,227 @@
+{% extends "_layout.html" %}
+{% block titel %}{{ spieler.name }}{% endblock %}
+
+{% import "_makros.html" as m %}
+
+{% block inhalt %}
+<h1>{{ spieler.name }}</h1>
+<p class="unterzeile">
+  {{ spieler.team_name or "Verein unbekannt" }} · {{ spieler.positions_name }} ·
+  Status: {{ spieler.status_name }}
+  {%- if spieler.im_eigenen_team %} · <strong>in deinem Team</strong>{% endif %}
+  {%- if spieler.auf_transfermarkt %} · steht zum Verkauf{% endif %}
+</p>
+
+<div class="karte" style="display:flex;gap:1.6rem;flex-wrap:wrap;align-items:center">
+  <div>
+    <div class="beschriftung nebeninfo">Empfehlung</div>
+    <div style="margin-top:.3rem">{{ m.stufe(bewertung) }}</div>
+  </div>
+  <div>
+    <div class="beschriftung nebeninfo">Gesamtnote</div>
+    <div style="margin-top:.3rem">{{ m.note(bewertung) }}</div>
+  </div>
+  <div>
+    <div class="beschriftung nebeninfo">Marktwert</div>
+    <div style="font-size:1.2rem;font-weight:700">{{ spieler.marktwert|euro }}</div>
+  </div>
+  {% if spieler.angebotspreis %}
+  <div>
+    <div class="beschriftung nebeninfo">Angebotspreis</div>
+    <div style="font-size:1.2rem;font-weight:700">{{ spieler.angebotspreis|euro }}</div>
+  </div>
+  {% endif %}
+  <div>
+    <div class="beschriftung nebeninfo">Ø Punkte</div>
+    <div style="font-size:1.2rem;font-weight:700">{{ spieler.punkte_schnitt }}</div>
+  </div>
+</div>
+
+{% if bewertung.uebersteuerung %}
+  <div class="hinweis"><strong>Vorrangige Regel:</strong> {{ bewertung.uebersteuerung }}</div>
+{% endif %}
+{% for warnung in bewertung.warnungen %}
+  <div class="hinweis">{{ warnung }}</div>
+{% endfor %}
+
+<h2>Marktwert der letzten Monate</h2>
+<div class="karte">
+  {% if diagramm.leer %}
+    <p class="nebeninfo">
+      Noch kein Verlauf gespeichert. Der Berater legt bei jedem Abruf den
+      Tageswert ab – nach einigen Tagen entsteht hier eine Kurve.
+    </p>
+  {% else %}
+    <div id="diagrammfeld" style="position:relative">
+      <svg viewBox="0 0 {{ diagramm.breite }} {{ diagramm.hoehe }}"
+           width="100%" height="{{ diagramm.hoehe }}" id="mwdiagramm"
+           role="img" aria-label="Marktwertverlauf von {{ spieler.name }}"
+           style="overflow:visible">
+        {# Zurückhaltendes Gitter: es soll die Linie nicht überstrahlen. #}
+        {% for y, beschriftung in diagramm.gitter %}
+          <line x1="8" y1="{{ y }}" x2="{{ diagramm.breite - 74 }}" y2="{{ y }}"
+                stroke="var(--rahmen)" stroke-width="1"/>
+          <text x="{{ diagramm.breite - 68 }}" y="{{ y + 4 }}" font-size="11"
+                fill="var(--ink-3)">{{ beschriftung }}</text>
+        {% endfor %}
+        {% for x, beschriftung in diagramm.x_beschriftungen %}
+          <text x="{{ x }}" y="{{ diagramm.hoehe - 8 }}" font-size="11"
+                text-anchor="middle" fill="var(--ink-3)">{{ beschriftung }}</text>
+        {% endfor %}
+
+        <polygon points="{{ diagramm.flaeche }}" fill="var(--akzent)" opacity="0.10"/>
+        <polyline points="{{ diagramm.linie }}" fill="none" stroke="var(--akzent)"
+                  stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+
+        {# Nur die drei aussagekräftigen Punkte werden beschriftet. #}
+        <circle cx="{{ diagramm.letzter.x }}" cy="{{ diagramm.letzter.y }}" r="4.5"
+                fill="var(--akzent)" stroke="var(--grund)" stroke-width="2"/>
+        <text x="{{ diagramm.letzter.x - 6 }}" y="{{ diagramm.letzter.y - 10 }}"
+              font-size="12" font-weight="700" text-anchor="end" fill="var(--ink)">
+          heute
+        </text>
+
+        <line id="fadenkreuz" x1="0" y1="14" x2="0" y2="{{ diagramm.hoehe - 26 }}"
+              stroke="var(--ink-3)" stroke-width="1" stroke-dasharray="3 3"
+              style="display:none"/>
+        <circle id="marke" r="4.5" fill="var(--grund)" stroke="var(--akzent)"
+                stroke-width="2" style="display:none"/>
+        <rect id="feld" x="0" y="0" width="{{ diagramm.breite }}"
+              height="{{ diagramm.hoehe }}" fill="transparent"/>
+      </svg>
+      <div id="tooltip" role="status"
+           style="display:none;position:absolute;pointer-events:none;
+                  background:var(--grund);border:1px solid var(--rahmen);
+                  border-radius:6px;padding:.35rem .55rem;font-size:.85rem;
+                  box-shadow:0 2px 8px rgba(0,0,0,.12);white-space:nowrap"></div>
+    </div>
+    <p class="nebeninfo" style="margin-top:.5rem">
+      Höchststand {{ diagramm.hoechst.wert|euro }} ·
+      Tiefststand {{ diagramm.tiefst.wert|euro }}
+    </p>
+
+    <script id="mwdaten" type="application/json">
+      {{ diagramm.punkte_json | tojson }}
+    </script>
+    <script>
+      // Fadenkreuz mit Werteanzeige. Bewusst ohne Bibliothek: ein paar Zeilen
+      // reichen für eine einzelne Reihe.
+      (function () {
+        var daten = JSON.parse(document.getElementById("mwdaten").textContent);
+        var svg = document.getElementById("mwdiagramm");
+        var feld = document.getElementById("feld");
+        var kreuz = document.getElementById("fadenkreuz");
+        var marke = document.getElementById("marke");
+        var tooltip = document.getElementById("tooltip");
+        if (!daten.length) { return; }
+
+        function naechster(x) {
+          var beste = daten[0], abstand = Math.abs(daten[0].x - x);
+          for (var i = 1; i < daten.length; i++) {
+            var d = Math.abs(daten[i].x - x);
+            if (d < abstand) { abstand = d; beste = daten[i]; }
+          }
+          return beste;
+        }
+
+        function zeigen(ereignis) {
+          var kasten = svg.getBoundingClientRect();
+          var breite = {{ diagramm.breite }};
+          var x = (ereignis.clientX - kasten.left) / kasten.width * breite;
+          var punkt = naechster(x);
+          kreuz.setAttribute("x1", punkt.x);
+          kreuz.setAttribute("x2", punkt.x);
+          kreuz.style.display = "";
+          marke.setAttribute("cx", punkt.x);
+          marke.setAttribute("cy", punkt.y);
+          marke.style.display = "";
+          tooltip.textContent = punkt.beschriftung;
+          tooltip.style.display = "";
+          var links = punkt.x / breite * kasten.width;
+          tooltip.style.left = Math.min(kasten.width - tooltip.offsetWidth - 4,
+                                        Math.max(0, links - tooltip.offsetWidth / 2)) + "px";
+          tooltip.style.top = (punkt.y / {{ diagramm.hoehe }} * kasten.height - 38) + "px";
+        }
+
+        function verbergen() {
+          kreuz.style.display = "none";
+          marke.style.display = "none";
+          tooltip.style.display = "none";
+        }
+
+        feld.addEventListener("mousemove", zeigen);
+        feld.addEventListener("mouseleave", verbergen);
+        feld.addEventListener("touchmove", function (e) {
+          if (e.touches.length) { zeigen(e.touches[0]); }
+        }, { passive: true });
+        feld.addEventListener("touchend", verbergen);
+      })();
+    </script>
+  {% endif %}
+</div>
+
+<h2>Wie die Note zustande kommt</h2>
+<div class="tabellenrahmen">
+<table>
+  <thead>
+    <tr>
+      <th>Kennzahl</th>
+      <th>Wert</th>
+      <th class="zahl">Punkte</th>
+      <th class="zahl verbergen-klein">Gewicht</th>
+      <th>Begründung</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for k in bewertung.kennzahlen %}
+    <tr>
+      <td><strong>{{ k.name }}</strong></td>
+      <td>{{ k.anzeige }}</td>
+      <td class="zahl" style="color:{{ 'var(--gut)' if k.richtung == 'gut'
+                                       else ('var(--schlecht)' if k.richtung == 'schlecht'
+                                       else 'var(--ink-3)') }}">
+        {{ k.punkte|round(0)|int }}
+      </td>
+      <td class="zahl verbergen-klein">{{ "%.1f"|format(k.gewicht) }}</td>
+      <td class="nebeninfo" style="white-space:normal">{{ k.begruendung }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="nebeninfo">
+  Die Gesamtnote ist der mit den Gewichten gemittelte Durchschnitt dieser
+  Punktzahlen. Die Gewichte lassen sich in <code>config/kickbase.yaml</code>
+  ändern – siehe <a href="{{ url_for('hilfe') }}">Wie wird gerechnet?</a>
+</p>
+
+<h2>Letzte Spieltage</h2>
+{% if leistungen %}
+<div class="tabellenrahmen">
+<table>
+  <thead>
+    <tr>
+      <th class="zahl">Spieltag</th>
+      <th>Datum</th>
+      <th class="zahl">Punkte</th>
+      <th class="zahl">Minuten</th>
+      <th>Ort</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in leistungen %}
+    <tr>
+      <td class="zahl">{{ l.spieltag }}</td>
+      <td>{{ l.datum.strftime("%d.%m.%Y") if l.datum else "–" }}</td>
+      <td class="zahl"><strong>{{ l.punkte }}</strong></td>
+      <td class="zahl">{{ l.minuten }}</td>
+      <td>{{ "Heim" if l.heimspiel else "Auswärts" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+  <p class="nebeninfo">Keine Spieltagsdaten gespeichert.</p>
+{% endif %}
+{% endblock %}
