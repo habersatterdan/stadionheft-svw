@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# Testet den Kickbase-Berater bei jeder Aenderung.
+#
+# Bewusst nur `tests/kickbase`: die Tests des Stadionheft-Generators brauchen
+# WeasyPrint samt Pango/Cairo als Systembibliotheken. Die hier mitzuschleppen
+# wuerde den Lauf verlangsamen und bei jedem Bibliotheks-Update stoerungs-
+# anfaellig machen -- ohne dass es dem Berater etwas brachte. Er teilt sich
+# mit dem Stadionheft keine einzige Codezeile.
+#
+# Die Tests brauchen weder Netz noch Zugangsdaten: sie laufen mit den
+# eingebauten Demodaten in einem temporaeren Ordner.
+# ---------------------------------------------------------------------------
+name: Kickbase-Berater testen
+
+on:
+  push:
+    paths:
+      - "kickbase/**"
+      - "tests/kickbase/**"
+      - "config/kickbase.example.yaml"
+      - "requirements-kickbase.txt"
+      - ".github/workflows/kickbase-tests.yml"
+  pull_request:
+    paths:
+      - "kickbase/**"
+      - "tests/kickbase/**"
+      - "config/kickbase.example.yaml"
+      - "requirements-kickbase.txt"
+      - ".github/workflows/kickbase-tests.yml"
+  # Erlaubt das Ausloesen von Hand unter "Actions"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Laeuft schon ein Test fuer denselben Branch, wird er abgebrochen -- beim
+# schnellen Nachschieben von Commits zaehlt nur der letzte Stand.
+concurrency:
+  group: kickbase-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.10 ist die in pyproject.toml zugesagte Untergrenze, 3.12 die
+        # Version aus Dockerfile.kickbase. Beide muessen laufen.
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - name: Quellcode holen
+        uses: actions/checkout@v4
+
+      - name: Python ${{ matrix.python-version }} einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-kickbase.txt
+
+      - name: Abhaengigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-kickbase.txt
+          pip install pytest pyflakes
+
+      - name: Auf ungenutzte Namen und Tippfehler pruefen
+        run: python -m pyflakes kickbase/ tests/kickbase/
+
+      - name: Tests
+        run: python -m pytest tests/kickbase -q
+
+      - name: Beispiele in den Docstrings
+        run: python -m pytest --doctest-modules kickbase/quellen/openligadb.py -q
+
+      - name: Demolauf ueber die Kommandozeile
+        # Prueft, dass die Anwendung als Ganzes anlaeuft -- nicht nur die
+        # einzelnen Bausteine in den Tests. Ohne Zugangsdaten laeuft sie im
+        # Demomodus, ohne eigene Konfiguration mit den Standardwerten.
+        run: |
+          python -m kickbase.cli abruf
+          python -m kickbase.cli team
