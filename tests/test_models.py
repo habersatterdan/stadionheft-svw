@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from stadionheft.models import (Ausgabe, MannschaftsDaten, Spiel, SpielerZeile,
-                                TabellenZeile, TorjaegerZeile, spiele_einordnen)
+from stadionheft.models import (Ausgabe, GegnerDaten, MannschaftsDaten, Spiel,
+                                SpielerZeile, TabellenZeile, TorjaegerZeile,
+                                spiele_einordnen)
 
 
 def test_tabellenzeile_abgeleitete_werte():
@@ -66,20 +67,25 @@ def test_auswaertsspiel_gegner_ist_heimmannschaft():
 def test_ausgabe_json_hin_und_zurueck():
     original = Ausgabe(
         saison="2026/2027", spieltag="2. Spieltag",
-        titelspiel=Spiel(heim="SVW", gast="TSV", anstoss="2026-07-29T18:30:00"),
+        seitenfolge=["trenner", "vergleich", "tabelle"],
         mannschaften=[MannschaftsDaten(
             schluessel="herren1", anzeigename="Herren 1",
             tabelle=[TabellenZeile(platz=1, mannschaft="SVW", punkte=3)],
             torjaeger=[TorjaegerZeile(platz=1, spieler="F. Moll", tore=2)],
             spieler=[SpielerZeile(platz=1, spieler="F. Moll", tore=2)],
-            naechstes_spiel=Spiel(heim="SVW", gast="TSV"),
+            naechstes_spiel=Spiel(heim="SVW", gast="TSV",
+                                  anstoss="2026-07-29T18:30:00"),
+            gegner_daten=GegnerDaten(name="TSV", kennung="tsv-2026-27",
+                                     spieler=[SpielerZeile(spieler="A. Gast")]),
         )],
         erstellt_am="2026-08-03T10:00:00",
     )
     kopie = Ausgabe.from_dict(original.to_dict())
     assert kopie.to_dict() == original.to_dict()
     assert kopie.mannschaften[0].tabelle[0].mannschaft == "SVW"
-    assert kopie.titelspiel.datum == "29.07.2026"
+    assert kopie.mannschaften[0].naechstes_spiel.datum == "29.07.2026"
+    assert kopie.mannschaften[0].gegner_daten.spieler[0].spieler == "A. Gast"
+    assert kopie.seitenfolge == ["trenner", "vergleich", "tabelle"]
 
 
 # ---------------------------------------------------------------------------

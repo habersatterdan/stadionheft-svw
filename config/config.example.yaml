@@ -58,6 +58,16 @@ datenquelle:
     # Wie viele Seiten hoechstens je Mannschaft geholt werden. Sobald alle
     # vier Datenteile beisammen sind, hoert das Programm ohnehin auf.
     max_abrufe: 12
+
+    # Zu jeder Mannschaft auch die Zahlen des naechsten Gegners holen.
+    # Der Bezeichner des Gegners steht im Spielplan, der ohnehin gelesen wird.
+    gegner_abrufen: true
+
+    # Notnagel: Liefert FuPa im Spielplan keinen Bezeichner fuer einen Gegner,
+    # laesst sich seine Teamseite hier von Hand hinterlegen. Der Schluessel ist
+    # der Vereinsname genau so, wie er im Spielplan steht.
+    gegner: {}
+    #  "SG Alerheim": "https://www.fupa.net/team/sg-alerheim-2026-27"
     timeout_sekunden: 20
     wiederholungen: 2
     pause_zwischen_anfragen_sekunden: 1.5
@@ -74,9 +84,13 @@ datenquelle:
     ordner: "daten/03_eingaben"
 
   cache:
+    # Der Zwischenspeicher ist bewusst kurz eingestellt: Das Heft soll den
+    # Stand von jetzt zeigen, nicht den von heute Morgen. Er faengt nur ab,
+    # dass mehrere Mannschaften in einem Lauf dieselbe Seite doppelt holen -
+    # und dient als Rettungsanker, falls FuPa gerade ausfaellt.
     aktiv: true
     ordner: "daten/04_zwischenergebnisse/cache"
-    gueltigkeit_minuten: 120
+    gueltigkeit_minuten: 15
 
 
 # ---------------------------------------------------------------------------
@@ -96,10 +110,6 @@ mannschaften:
     liga: "Bezirksliga Schwaben Nord"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
     aktiv: true
-    # Welche Seiten werden fuer diese Mannschaft erzeugt? Reihenfolge zaehlt.
-    # Moeglich: trenner, spielbericht, gegner, tabelle, torjaeger,
-    #           spielerstatistik, naechstes_spiel
-    seiten: ["trenner", "gegner", "tabelle", "torjaeger", "spielerstatistik"]
 
   herren2:
     anzeigename: "Herren 2"
@@ -108,7 +118,6 @@ mannschaften:
     liga: "TODO: Liga eintragen"       # TODO
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m2-2026-27"
     aktiv: true
-    seiten: ["trenner", "tabelle", "torjaeger", "spielerstatistik"]
 
   herren3:
     anzeigename: "Herren 3"
@@ -117,7 +126,6 @@ mannschaften:
     liga: "TODO: Liga eintragen"       # TODO
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m3-2026-27"
     aktiv: true
-    seiten: ["trenner", "tabelle", "torjaeger"]
 
   damen1:
     anzeigename: "Damen 1"
@@ -126,7 +134,6 @@ mannschaften:
     liga: "TODO: Liga eintragen"       # TODO
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w1-2026-27"
     aktiv: true
-    seiten: ["trenner", "tabelle", "torjaeger", "spielerstatistik"]
 
   damen2:
     anzeigename: "Damen 2"
@@ -135,7 +142,6 @@ mannschaften:
     liga: "TODO: Liga eintragen"       # TODO
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w2-2026-27"
     aktiv: true
-    seiten: ["trenner", "tabelle", "torjaeger"]
 
 
 # ---------------------------------------------------------------------------
@@ -159,8 +165,15 @@ layout:
 # Ausgabe
 # ---------------------------------------------------------------------------
 ausgabe:
-  # Platzhalter: {datum} {datum_kompakt} {saison} {spieltag} {mannschaften}
-  dateiname: "{datum_kompakt}_WaB_Druck.pdf"
+  # Dateiname je Mannschaft. Platzhalter:
+  #   {datum}         Anstoss des naechsten Spiels, z. B. 2026-10-04 (sortierbar)
+  #   {datum_deutsch} 04.10.2026
+  #   {datum_kompakt} 20261004
+  #   {mannschaft}    Herren 1
+  #   {schluessel}    herren1
+  #   {gegner}        SG Alerheim
+  #   {saison} {spieltag}
+  dateiname: "{datum}_{mannschaft}_gegen_{gegner}.pdf"
   ordner: "daten/05_ausgaben"
   arbeitsordner: "daten/04_zwischenergebnisse"
   # Zusaetzlich zum PDF eine Snapshot-Datei mit allen verwendeten Daten

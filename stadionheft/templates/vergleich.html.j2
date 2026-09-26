@@ -1,0 +1,109 @@
+{# Das naechste Spiel: beide Mannschaften nebeneinander.
+
+   Die Seite lebt davon, dass links und rechts dieselben Kennzahlen stehen.
+   Fehlt ein Wert beim Gegner, bleibt die Zeile trotzdem stehen und zeigt
+   einen Strich -- eine Gegenueberstellung mit Luecken ist lesbarer als eine
+   Gegenueberstellung mit verschobenen Zeilen.
+#}
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  {% set spiel = daten.naechstes_spiel %}
+  {% set gegner = daten.gegner_daten %}
+
+  {% if not spiel %}
+    {{ m.leer("Für " ~ daten.anzeigename ~ " steht derzeit kein nächstes Spiel fest.") }}
+  {% else %}
+
+    <div class="anstosskarte">
+      <div class="paarung">{{ spiel.paarung }}</div>
+      <div class="termin">
+        {{ spiel.wochentag }}{% if spiel.datum %}, {{ spiel.datum }}{% endif %}
+        {%- if spiel.uhrzeit %} &middot; {{ spiel.uhrzeit }}{% endif %}
+      </div>
+      <div class="ort">
+        {{ 'Heimspiel' if spiel.heimspiel else 'Auswärtsspiel' }}
+        {%- if spiel.spielort %} &middot; {{ spiel.spielort }}{% endif %}
+        {%- if spiel.wettbewerb %} &middot; {{ spiel.wettbewerb }}{% endif %}
+        {%- if spiel.spieltag %} &middot; {{ spiel.spieltag }}{% endif %}
+      </div>
+    </div>
+
+    {% set eigen = daten.tabellenplatz %}
+    {% set fremd = gegner.tabellenplatz if gegner else none %}
+
+    <table class="vergleich">
+      <thead>
+        <tr>
+          <th class="wir">{{ daten.anzeigename }}</th>
+          <th class="mitte"></th>
+          <th class="sie">{{ daten.gegner or 'Gegner' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="wir gross">{{ eigen.platz ~ '.' if eigen else '—' }}</td>
+          <td class="mitte">Tabellenplatz</td>
+          <td class="sie gross">{{ fremd.platz ~ '.' if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir gross">{{ eigen.punkte if eigen else '—' }}</td>
+          <td class="mitte">Punkte</td>
+          <td class="sie gross">{{ fremd.punkte if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ eigen.spiele if eigen else '—' }}</td>
+          <td class="mitte">Spiele</td>
+          <td class="sie">{{ fremd.spiele if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ eigen.bilanz if eigen else '—' }}</td>
+          <td class="mitte">S-U-N</td>
+          <td class="sie">{{ fremd.bilanz if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ eigen.torverhaeltnis if eigen else '—' }}</td>
+          <td class="mitte">Tore</td>
+          <td class="sie">{{ fremd.torverhaeltnis if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ '%+d'|format(eigen.differenz) if eigen else '—' }}</td>
+          <td class="mitte">Tordifferenz</td>
+          <td class="sie">{{ '%+d'|format(fremd.differenz) if fremd else '—' }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ m.formkurve(daten.form) }}</td>
+          <td class="mitte">Form</td>
+          <td class="sie">{{ m.formkurve(gegner.form if gegner else []) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% if letzte_duelle %}
+      <p class="unterzeile">Die letzten Aufeinandertreffen</p>
+      <table class="daten schmal">
+        <tbody>
+          {% for d in letzte_duelle %}
+          <tr>
+            <td class="links">{{ d.datum }}</td>
+            <td class="links name">{{ d.paarung }}</td>
+            <td class="ergebnis">{{ d.ergebnis }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+    {% if daten.letztes_spiel %}
+      <p class="unterzeile">Zuletzt gespielt</p>
+      <p class="zeile">
+        {{ daten.letztes_spiel.paarung }}
+        <strong>{{ daten.letztes_spiel.ergebnis or 'ohne Ergebnis' }}</strong>
+        {%- if daten.letztes_spiel.datum %} &middot; {{ daten.letztes_spiel.datum }}{% endif %}
+      </p>
+    {% endif %}
+
+    {{ m.stand(daten) }}
+  {% endif %}
+{% endblock %}

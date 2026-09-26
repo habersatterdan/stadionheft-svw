@@ -46,4 +46,4 @@ def test_wsgi_startet_mit_gueltiger_konfiguration(konfiguration, monkeypatch):
     modul.app.config["TESTING"] = True
     antwort = modul.app.test_client().get("/")
     assert antwort.status_code == 200
-    assert "Stadionheft erstellen" in antwort.get_data(as_text=True)
+    assert "Aktuelle Seiten erzeugen" in antwort.get_data(as_text=True)

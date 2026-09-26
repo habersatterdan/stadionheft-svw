@@ -6,7 +6,8 @@ auf der NAS). Normale Benutzer verwenden die Weboberflaeche.
     python -m stadionheft.cli pruefen
     python -m stadionheft.cli mannschaften
     python -m stadionheft.cli erstellen --mannschaften herren1,damen1
-    python -m stadionheft.cli erstellen --snapshot daten/05_ausgaben/xy_snapshot.json
+    python -m stadionheft.cli erstellen --frisch
+    python -m stadionheft.cli erstellen --snapshot .../xy_snapshot.json
     python -m stadionheft.cli probe-fupa
     python -m stadionheft.cli beispieldaten
     python -m stadionheft.cli web
@@ -15,7 +16,6 @@ auf der NAS). Normale Benutzer verwenden die Weboberflaeche.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -57,7 +57,6 @@ def befehl_pruefen(args) -> int:
 
     print("Ordner:")
     for name, pfad in (("Eingaben", k.eingabe_ordner),
-                       ("Werbung", k.werbung_ordner),
                        ("Zwischenergebnisse", k.arbeits_ordner),
                        ("Ausgaben", k.ausgabe_ordner)):
         print(f"  {'OK ' if pfad.exists() else 'FEHLT'}  {name:<20} {pfad}")
@@ -87,14 +86,12 @@ def befehl_mannschaften(args) -> int:
 
 
 def befehl_erstellen(args) -> int:
-    from .build import heft_aus_snapshot, heft_erstellen
+    from .build import dateien_aus_snapshot, dateien_erstellen
 
     k = _konfiguration(args)
 
     if args.snapshot:
-        ergebnis = heft_aus_snapshot(k, Path(args.snapshot),
-                                     dateiname=args.dateiname or "",
-                                     nas_hochladen=args.nas)
+        ergebnis = dateien_aus_snapshot(k, Path(args.snapshot))
     else:
         if args.mannschaften:
             auswahl = [t.strip() for t in args.mannschaften.split(",") if t.strip()]
@@ -102,24 +99,31 @@ def befehl_erstellen(args) -> int:
             auswahl = [m.schluessel for m in k.aktive_mannschaften()]
         for name in auswahl:
             k.mannschaft(name)      # wirft bei unbekanntem Schluessel
-        ergebnis = heft_erstellen(
+        ergebnis = dateien_erstellen(
             k, auswahl,
             spieltag=args.spieltag or "",
             datenquelle=args.quelle,
-            dateiname=args.dateiname or "",
             erzeugt_von=args.benutzer or "Kommandozeile",
-            titelspiel_von=args.titelspiel or "",
-            nas_hochladen=args.nas,
+            frisch=bool(args.frisch),
         )
 
     print()
-    print(f"Stadionheft erstellt : {ergebnis.pdf}")
-    print(f"Seiten               : {ergebnis.seitenzahl}")
-    print(f"Datenquelle          : {ergebnis.verwendete_quelle}")
+    print(f"Ordner      : {ergebnis.ordner}")
+    print(f"Datenquelle : {ergebnis.verwendete_quelle}")
+    print(f"Stand       : {ergebnis.stand}")
+    print()
+    print("Dateien:")
+    for datei in ergebnis.dateien:
+        gegen = f" gegen {datei.gegner}" if datei.gegner else ""
+        wann = f" am {datei.anstoss}" if datei.anstoss else ""
+        print(f"  {datei.pdf.name}")
+        print(f"      {datei.anzeigename}{gegen}{wann} - {datei.seitenzahl} Seiten")
+    if ergebnis.archiv:
+        print(f"\nAlles zusammen: {ergebnis.archiv.name}")
     if ergebnis.snapshot:
-        print(f"Snapshot             : {ergebnis.snapshot}")
+        print(f"Snapshot      : {ergebnis.snapshot.name}")
     if ergebnis.nas_ziel:
-        print(f"Auf NAS              : {ergebnis.nas_ziel}")
+        print(f"Auf NAS       : {ergebnis.nas_ziel}")
     if ergebnis.warnungen:
         print("\nHinweise:")
         for warnung in ergebnis.warnungen:
@@ -148,67 +152,6 @@ def befehl_beispieldaten(args) -> int:
     print(f"{len(dateien)} Dateien geschrieben nach {k.eingabe_ordner}:")
     for datei in dateien:
         print(f"  {datei.name}")
-    return 0
-
-
-def befehl_uebernehmen(args) -> int:
-    """Seiten aus einem bestehenden Heft als feste PDF-Seiten uebernehmen."""
-    from .tools.seiten_uebernehmen import (VORSCHLAEGE, einzeln_zerlegen,
-                                           uebernehmen)
-
-    k = _konfiguration(args)
-
-    if args.einzeln:
-        if not args.seiten:
-            print("Bitte --seiten angeben, z. B. --seiten 4-11")
-            return 1
-        ordner = (Path(args.ordner) if args.ordner
-                  else k.werbung_ordner / (args.als or "block"))
-        dateien = einzeln_zerlegen(k, args.aus, args.seiten, ordner)
-        print(f"{len(dateien)} Einzelanzeigen geschrieben nach {ordner}:")
-        for datei in dateien:
-            print(f"  {datei.name}")
-        print("\nJetzt sinnvoll umbenennen, z. B.:")
-        print("  010_teamshop.pdf")
-        print("  020_jako-katalog-1.pdf")
-        print("\nBefristete Anzeigen bekommen das Enddatum in den Namen:")
-        print("  010_bayern-spiel__bis_2026-08-01.pdf")
-        print("  -> faellt ab dem 02.08.2026 automatisch aus dem Heft.")
-        print("\nIm Heftplan wird der Ordner so eingebunden:")
-        print("  - typ: werbeblock")
-        print(f"    ordner: \"02_werbung/{ordner.name}\"")
-        return 0
-
-    if args.alles:
-        auftraege = [(name, seiten, titel) for name, seiten, titel in VORSCHLAEGE]
-        print("Uebernehme die ueblichen Seiten aus dem alten Heft.")
-        print("(Seitenzahlen der Ausgabe vom 29.07.2026 - bei abweichendem")
-        print(" Heftaufbau bitte einzeln mit --seiten arbeiten.)\n")
-    else:
-        if not args.seiten or not args.als:
-            print("Bitte --seiten und --als angeben, oder --alles verwenden.\n")
-            print("Ueblich sind:")
-            for name, seiten, titel in VORSCHLAEGE:
-                print(f"  --seiten {seiten:<6} --als {name:<18} # {titel}")
-            return 1
-        auftraege = [(args.als, args.seiten, "")]
-
-    for name, seiten, titel in auftraege:
-        try:
-            ziel, angaben = uebernehmen(k, args.aus, seiten, name)
-        except StadionheftFehler as fehler:
-            print(f"  UEBERSPRUNGEN {name:<18} {fehler.benutzer_text}")
-            continue
-        breite, hoehe = angaben["endformat_mm"]
-        print(f"  OK {name:<18} Seite(n) {seiten:<6} -> {ziel.name} "
-              f"({angaben['seiten']} S., {breite} x {hoehe} mm)"
-              + (f"  # {titel}" if titel else ""))
-
-    print(f"\nAbgelegt in: {k.werbung_ordner}")
-    print("\nIm Heftplan (config/heftplan.yaml) werden diese Dateien mit")
-    print("  - typ: pdf")
-    print("    quelle: \"02_werbung/<dateiname>.pdf\"")
-    print("eingebunden. Die Beispieldatei heftplan.example.yaml zeigt es.")
     return 0
 
 
@@ -259,21 +202,17 @@ def parser_bauen() -> argparse.ArgumentParser:
     b = unter.add_parser("mannschaften", help="konfigurierte Mannschaften auflisten")
     b.set_defaults(funktion=befehl_mannschaften)
 
-    b = unter.add_parser("erstellen", help="Stadionheft erzeugen")
+    b = unter.add_parser("erstellen",
+                         help="je Mannschaft eine druckfertige PDF-Datei erzeugen")
     b.add_argument("--mannschaften",
                    help="Kommaliste, z. B. herren1,damen1 (Standard: alle aktiven)")
     b.add_argument("--spieltag", help="Freitext, z. B. '3. Spieltag'")
     b.add_argument("--quelle", choices=["api", "manuell", "demo"],
                    help="Datenquelle abweichend von der Konfiguration")
-    b.add_argument("--dateiname", help="Dateiname der Ausgabe")
-    b.add_argument("--benutzer", help="Name fuer das Protokoll/Impressum")
-    b.add_argument("--titelspiel", help="Mannschaft, deren Spiel auf den Titel kommt")
+    b.add_argument("--benutzer", help="Name fuer das Protokoll")
+    b.add_argument("--frisch", action="store_true",
+                   help="Zwischenspeicher uebergehen und wirklich neu abrufen")
     b.add_argument("--snapshot", help="fruehere Snapshot-Datei erneut bauen")
-    nas = b.add_mutually_exclusive_group()
-    nas.add_argument("--nas", dest="nas", action="store_true", default=None,
-                     help="auf die NAS hochladen")
-    nas.add_argument("--ohne-nas", dest="nas", action="store_false",
-                     help="NAS-Upload ueberspringen")
     b.set_defaults(funktion=befehl_erstellen)
 
     b = unter.add_parser("probe-fupa",
@@ -286,22 +225,6 @@ def parser_bauen() -> argparse.ArgumentParser:
     b.add_argument("--mit-daten", action="store_true",
                    help="mit ausgefuellten Beispielwerten statt nur Kopfzeilen")
     b.set_defaults(funktion=befehl_beispieldaten)
-
-    b = unter.add_parser(
-        "seiten-uebernehmen",
-        help="Seiten aus einem bestehenden Heft als feste PDF-Seiten uebernehmen")
-    b.add_argument("--aus", required=True,
-                   help="Pfad zum bestehenden Stadionheft (PDF)")
-    b.add_argument("--seiten", help="z. B. 24-25 oder 24,27")
-    b.add_argument("--als", help="Dateiname ohne Endung, z. B. kontaktlisten")
-    b.add_argument("--alles", action="store_true",
-                   help="alle ueblichen Seiten auf einmal (Kontakte, Impressum, "
-                        "Werbung, Ruecktitel)")
-    b.add_argument("--einzeln", action="store_true",
-                   help="Seitenbereich in einzelne Anzeigen-PDFs zerlegen "
-                        "(fuer typ: werbeblock)")
-    b.add_argument("--ordner", help="Zielordner fuer --einzeln")
-    b.set_defaults(funktion=befehl_uebernehmen)
 
     b = unter.add_parser("web", help="Weboberflaeche starten")
     b.add_argument("--host", default="0.0.0.0")

@@ -1,0 +1,79 @@
+{# Saisonbilanz in Zahlen -- alles gerechnet, nichts gepflegt.
+
+   Die Werte stammen aus dem Spielplan, nicht aus einer Statistikseite von
+   FuPa. Damit passen sie immer zu den Spielen, die auch sonst im Heft
+   stehen.
+#}
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% macro block(titel, b, form) %}
+  <div class="bilanzblock">
+    <h2>{{ titel }}</h2>
+    {% if b.vorhanden %}
+      <div class="kennzahlen">
+        <div class="kennzahl"><span class="wert">{{ b.gesamt.punkte }}</span>
+          <span class="was">Punkte</span></div>
+        <div class="kennzahl"><span class="wert">{{ b.punkteschnitt }}</span>
+          <span class="was">pro Spiel</span></div>
+        <div class="kennzahl"><span class="wert">{{ b.gesamt.torverhaeltnis }}</span>
+          <span class="was">Tore</span></div>
+        <div class="kennzahl"><span class="wert">{{ '%+d'|format(b.gesamt.differenz) }}</span>
+          <span class="was">Differenz</span></div>
+      </div>
+
+      <table class="daten schmal">
+        <thead>
+          <tr>
+            <th class="links"></th>
+            <th>Sp.</th><th>S-U-N</th><th>Tore</th><th>Pkt.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="links name">Heim</td>
+            <td>{{ b.heim.spiele }}</td><td>{{ b.heim.bilanz }}</td>
+            <td>{{ b.heim.torverhaeltnis }}</td><td>{{ b.heim.punkte }}</td>
+          </tr>
+          <tr>
+            <td class="links name">Auswärts</td>
+            <td>{{ b.auswaerts.spiele }}</td><td>{{ b.auswaerts.bilanz }}</td>
+            <td>{{ b.auswaerts.torverhaeltnis }}</td><td>{{ b.auswaerts.punkte }}</td>
+          </tr>
+          <tr class="eigene">
+            <td class="links name">Gesamt</td>
+            <td>{{ b.gesamt.spiele }}</td><td>{{ b.gesamt.bilanz }}</td>
+            <td>{{ b.gesamt.torverhaeltnis }}</td><td>{{ b.gesamt.punkte }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <dl class="merkmale">
+        <dt>Form</dt><dd>{{ m.formkurve(form) }}</dd>
+        <dt>Tore pro Spiel</dt><dd>{{ b.tore_pro_spiel }}</dd>
+        <dt>Gegentore pro Spiel</dt><dd>{{ b.gegentore_pro_spiel }}</dd>
+        <dt>Ohne Gegentor</dt><dd>{{ b.zu_null }}× zu null</dd>
+        <dt>Ohne eigenes Tor</dt><dd>{{ b.ohne_eigenes_tor }}×</dd>
+        {% if b.hoechster_sieg %}
+          <dt>Höchster Sieg</dt><dd>{{ b.hoechster_sieg }}</dd>
+        {% endif %}
+        {% if b.laengste_serie %}
+          <dt>Längste Serie</dt><dd>{{ b.laengste_serie }}</dd>
+        {% endif %}
+      </dl>
+    {% else %}
+      <p class="leer-hinweis">Noch kein gewertetes Spiel in dieser Saison.</p>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% block inhalt %}
+  {% set gegner = daten.gegner_daten %}
+  <div class="bilanzpaar">
+    {{ block(daten.anzeigename, daten.bilanz, daten.form) }}
+    {% if gegner and gegner.gefunden %}
+      {{ block(gegner.name, gegner.bilanz, gegner.form) }}
+    {% endif %}
+  </div>
+  {{ m.stand(daten) }}
+{% endblock %}

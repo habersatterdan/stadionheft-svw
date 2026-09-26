@@ -23,7 +23,7 @@ def test_demoquelle_liefert_echte_beispielzahlen(konfiguration: Konfiguration):
     assert daten.tabelle[1].mannschaft == "Wörnitzstein"
     assert daten.tabelle[1].eigene is True
     assert daten.naechstes_spiel.gast == "TSV Meitingen"
-    assert len(daten.gegner_spieler) == 20
+    assert len(daten.gegner_daten.spieler) == 20
 
 
 def test_demoquelle_erfindet_daten_fuer_unbekannte_mannschaft(
@@ -74,7 +74,6 @@ def test_manuelle_quelle_liest_dateien(konfiguration: Konfiguration):
          "1;Wörnitzstein;1;1;0;0;4;0;3\n2;TSV Meitingen;1;0;1;0;0;0;1\n")
     _csv(ordner / "herren1_naechstes_spiel.csv",
          "heim;gast;datum;uhrzeit;heimspiel\nSVW;TSV Meitingen;29.07.2026;18:30;ja\n")
-    (ordner / "herren1_spielbericht.md").write_text("Titel\n\nAbsatz.", encoding="utf-8")
 
     daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
     assert len(daten.tabelle) == 2
@@ -82,7 +81,6 @@ def test_manuelle_quelle_liest_dateien(konfiguration: Konfiguration):
     assert daten.naechstes_spiel.gegner == "TSV Meitingen"
     # Liga wird aus der Konfiguration ergaenzt, wenn die CSV keine enthaelt
     assert daten.naechstes_spiel.wettbewerb == "Bezirksliga Schwaben Nord"
-    assert "Absatz." in daten.spielbericht
     # Fehlende Dateien -> Warnung, kein Abbruch
     assert any("torjaeger" in w for w in daten.warnungen)
 
@@ -214,7 +212,7 @@ def test_gegnerkader_je_gegner_wird_bevorzugt(konfiguration: Konfiguration):
         "platz;spieler\n1;Richtiger Kader\n", encoding="utf-8")
 
     daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
-    assert daten.gegner_spieler[0].spieler == "Richtiger Kader"
+    assert daten.gegner_daten.spieler[0].spieler == "Richtiger Kader"
     assert not any("allgemeinen Datei" in w for w in daten.warnungen)
 
 
@@ -227,7 +225,7 @@ def test_allgemeiner_gegnerkader_wird_beanstandet(konfiguration: Konfiguration):
         "platz;spieler\n1;Irgendwer\n", encoding="utf-8")
 
     daten = ManuelleQuelle(konfiguration).hole(konfiguration.mannschaft("herren1"))
-    assert daten.gegner_spieler[0].spieler == "Irgendwer"
+    assert daten.gegner_daten.spieler[0].spieler == "Irgendwer"
     assert any("SG Alerheim" in w and "prüfen" in w for w in daten.warnungen)
 
 

@@ -20,7 +20,7 @@ from pathlib import Path
 from flask import (Flask, abort, jsonify, redirect, render_template, request,
                    send_file, url_for)
 
-from ..build import heft_erstellen
+from ..build import dateien_erstellen
 from ..config import Konfiguration
 from ..errors import StadionheftFehler
 from ..logging_setup import LaufProtokoll, einrichten, logger
@@ -28,7 +28,7 @@ from ..logging_setup import LaufProtokoll, einrichten, logger
 
 @dataclass
 class Lauf:
-    """Zustand eines Hefterstellungs-Vorgangs (fuer die Fortschrittsanzeige)."""
+    """Zustand eines Laufs (fuer die Fortschrittsanzeige)."""
 
     id: str
     gestartet: datetime = field(default_factory=datetime.now)
@@ -85,7 +85,8 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             "start.html",
             konfiguration=k,
             mannschaften=k.aktive_mannschaften(),
-            modus=k.get("datenquelle.modus", "demo"),
+            modus=k.get("datenquelle.modus", "api"),
+            cache_minuten=k.get("datenquelle.cache.gueltigkeit_minuten", 15),
             nas_aktiv=bool(k.get("nas.aktiv", False)),
             nas_ok=nas_ok,
             nas_meldung=nas_meldung,
@@ -112,8 +113,7 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             "spieltag": request.form.get("spieltag", "").strip(),
             "datenquelle": request.form.get("quelle") or None,
             "erzeugt_von": lauf.benutzer or "Weboberfläche",
-            "titelspiel_von": request.form.get("titelspiel", "").strip(),
-            "nas_hochladen": request.form.get("nas") == "ja",
+            "frisch": request.form.get("frisch") == "ja",
         }
 
         threading.Thread(target=_lauf_ausfuehren, args=(k, lauf, argumente),
@@ -136,10 +136,25 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
     @app.get("/lauf/<lauf_id>/download")
     def download(lauf_id: str):
+        """Alle Dateien als ZIP -- ein Klick statt fuenf."""
         lauf = laeufe.get(lauf_id)
         if not lauf or not lauf.ergebnis:
             abort(404)
-        pfad = Path(lauf.ergebnis["pdf"])
+        pfad = Path(lauf.ergebnis.get("archiv") or "")
+        if not str(pfad) or not pfad.exists():
+            abort(404)
+        return send_file(pfad, as_attachment=True, download_name=pfad.name)
+
+    @app.get("/lauf/<lauf_id>/datei/<int:nummer>")
+    def datei(lauf_id: str, nummer: int):
+        """Eine einzelne Mannschaftsdatei."""
+        lauf = laeufe.get(lauf_id)
+        if not lauf or not lauf.ergebnis:
+            abort(404)
+        dateien = lauf.ergebnis.get("dateien") or []
+        if not 0 <= nummer < len(dateien):
+            abort(404)
+        pfad = Path(dateien[nummer]["pfad"])
         if not pfad.exists():
             abort(404)
         return send_file(pfad, as_attachment=True, download_name=pfad.name)
@@ -221,14 +236,14 @@ def _lauf_ausfuehren(k: Konfiguration, lauf: Lauf, argumente: dict) -> None:
     with LaufProtokoll() as protokoll:
         lauf.protokoll = protokoll.zeilen
         try:
-            ergebnis = heft_erstellen(k, **argumente)
+            ergebnis = dateien_erstellen(k, **argumente)
             lauf.ergebnis = ergebnis.als_dict()
             lauf.erfolgreich = True
         except StadionheftFehler as fehler:
-            logger().error("Hefterstellung abgebrochen: %s", fehler.technisch)
+            logger().error("Lauf abgebrochen: %s", fehler.technisch)
             lauf.fehler = fehler.as_dict()
         except Exception as fehler:  # noqa: BLE001
-            logger().exception("Unerwarteter Fehler bei der Hefterstellung")
+            logger().exception("Unerwarteter Fehler beim Erzeugen der Dateien")
             lauf.fehler = {
                 "typ": type(fehler).__name__,
                 "meldung": "Im Programm ist ein unerwarteter Fehler aufgetreten.",

@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ..config import Konfiguration, Mannschaft
-from ..models import MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile, TorjaegerZeile
+from ..models import (GegnerDaten, MannschaftsDaten, Spiel, SpielerZeile,
+                      TabellenZeile, TorjaegerZeile)
 from .base import basis_daten
 
 DATEN_DATEI = Path(__file__).with_name("demo_daten.json")
@@ -66,16 +67,52 @@ class DemoQuelle:
             for z in eintrag.get("torjaeger", [])
         ]
         daten.spieler = [self._spieler_zeile(z) for z in eintrag.get("spieler", [])]
-        daten.gegner_spieler = [self._spieler_zeile(z)
-                                for z in eintrag.get("gegner_spieler", [])]
         if eintrag.get("naechstes_spiel"):
             daten.naechstes_spiel = Spiel.from_dict(eintrag["naechstes_spiel"])
         if eintrag.get("letztes_spiel"):
             daten.letztes_spiel = Spiel.from_dict(eintrag["letztes_spiel"])
-        daten.spielbericht = eintrag.get("spielbericht", "")
+
+        daten.spiele = self._spielplan_erfinden(daten)
+        daten.gegner_daten = GegnerDaten(
+            name=daten.gegner,
+            liga=mannschaft.liga,
+            tabelle=daten.tabelle,
+            torjaeger=daten.torjaeger,
+            spieler=[self._spieler_zeile(z)
+                     for z in eintrag.get("gegner_spieler", [])],
+            spiele=self._spielplan_erfinden(daten, versatz=1),
+        )
+        daten.abgerufen_am = datetime.now().isoformat(timespec="seconds")
         daten.warnungen.append(
             "Beispieldaten (Demo-Modus) - diese Zahlen sind nicht aktuell.")
         return daten
+
+    def _spielplan_erfinden(self, daten: MannschaftsDaten,
+                            versatz: int = 0) -> list[Spiel]:
+        """Ein paar gespielte Partien, damit Formkurve und Bilanz etwas zeigen.
+
+        Bewusst erfunden und nicht aus den echten Beispieldaten: Die Ausgabe
+        vom 29.07.2026 enthielt nur eine einzige gespielte Partie.
+        """
+        eigen = daten.anzeigename
+        ergebnisse = ["3:0", "1:1", "0:2", "4:1", "2:1"]
+        spiele: list[Spiel] = []
+        for nr, ergebnis in enumerate(ergebnisse):
+            wann = datetime.now() - timedelta(days=7 * (len(ergebnisse) - nr))
+            heim = (nr + versatz) % 2 == 0
+            gegner = _PLATZHALTER_GEGNER[(nr + versatz) % len(_PLATZHALTER_GEGNER)]
+            spiele.append(Spiel(
+                heim=eigen if heim else gegner,
+                gast=gegner if heim else eigen,
+                wettbewerb=daten.liga,
+                anstoss=wann.replace(hour=15, minute=0, second=0,
+                                     microsecond=0).isoformat(),
+                heimspiel=heim,
+                ergebnis=ergebnis,
+            ))
+        if daten.naechstes_spiel:
+            spiele.append(daten.naechstes_spiel)
+        return spiele
 
     @staticmethod
     def _spieler_zeile(z: list) -> SpielerZeile:
@@ -136,6 +173,14 @@ class DemoQuelle:
             spielort="Sportgelände Wörnitzstein",
             heimspiel=True,
         )
+        daten.spiele = self._spielplan_erfinden(daten)
+        daten.gegner_daten = GegnerDaten(
+            name=daten.gegner, liga=mannschaft.liga,
+            tabelle=daten.tabelle, torjaeger=daten.torjaeger,
+            spieler=daten.spieler[:14],
+            spiele=self._spielplan_erfinden(daten, versatz=1),
+        )
+        daten.abgerufen_am = datetime.now().isoformat(timespec="seconds")
         daten.warnungen.append(
             f"Fuer {mannschaft.anzeigename} liegen nur erfundene Beispieldaten vor.")
         return daten

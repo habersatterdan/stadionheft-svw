@@ -1,10 +1,11 @@
 {% extends "_layout.html" %}
-{% block titel %}Stadionheft wird erstellt{% endblock %}
+{% block titel %}Seiten werden erzeugt{% endblock %}
 
 {% block inhalt %}
-<h1 id="ueberschrift"><span class="spinner"></span> Stadionheft wird erstellt …</h1>
+<h1 id="ueberschrift"><span class="spinner"></span> Seiten werden erzeugt …</h1>
 <p style="color:#666" id="untertitel">
-  Das dauert normalerweise wenige Sekunden. Diese Seite aktualisiert sich von selbst.
+  Die Daten werden gerade von FuPa geholt. Das dauert je Mannschaft ein paar
+  Sekunden. Diese Seite aktualisiert sich von selbst.
 </p>
 
 <div class="karte" id="ergebnis" style="display:none"></div>
@@ -14,12 +15,18 @@
   <pre class="protokoll" id="protokoll">wird geladen …</pre>
 </div>
 
-<p><a class="knopf-zweit" href="{{ url_for('start') }}">Neues Heft erstellen</a></p>
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Von vorne</a></p>
 
 <script>
-const laufId = {{ lauf.id|tojson }};
 const statusUrl = {{ url_for('status', lauf_id=lauf.id)|tojson }};
 const downloadUrl = {{ url_for('download', lauf_id=lauf.id)|tojson }};
+// Die Adresse einer einzelnen Datei wird von Flask gebaut, damit sie auch
+// stimmt, wenn die Anwendung unter einem Unterpfad laeuft. Die 999999 ist
+// nur ein Platzhalter, der gegen die laufende Nummer getauscht wird.
+const dateiVorlage = {{ url_for('datei', lauf_id=lauf.id, nummer=999999)|tojson }};
+function dateiUrlFuer(nummer) {
+  return dateiVorlage.replace('999999', String(nummer));
+}
 
 function escape(text) {
   const d = document.createElement('div');
@@ -35,16 +42,40 @@ function zeigeErgebnis(daten) {
 
   if (daten.erfolgreich && daten.ergebnis) {
     const e = daten.ergebnis;
-    ueberschrift.innerHTML = '&#10003; Stadionheft ist fertig';
+    const anzahl = (e.dateien || []).length;
+    ueberschrift.innerHTML = '&#10003; Fertig';
     untertitel.textContent = '';
-    let html = '<div class="erfolg"><strong>' + escape(e.dateiname) + '</strong><br>'
-             + escape(e.seitenzahl) + ' Seiten &middot; ' + escape(e.dauer_sekunden)
-             + ' Sekunden &middot; Datenquelle: ' + escape(e.quelle) + '</div>'
-             + '<p><a class="knopf-zweit" href="' + downloadUrl
-             + '" style="background:#E52421;color:#fff;border-color:#E52421">'
-             + 'PDF herunterladen</a></p>'
-             + '<table class="info">'
-             + '<tr><td>Gespeichert unter</td><td>' + escape(e.pdf) + '</td></tr>';
+
+    let html = '<div class="erfolg"><strong>'
+             + escape(anzahl) + (anzahl === 1 ? ' Datei' : ' Dateien')
+             + ' erzeugt</strong><br>'
+             + 'Stand der Daten: ' + escape(e.stand)
+             + ' &middot; Quelle: ' + escape(e.quelle)
+             + ' &middot; ' + escape(e.dauer_sekunden) + ' Sekunden</div>';
+
+    if (e.archiv) {
+      html += '<p><a class="knopf-zweit" href="' + downloadUrl
+            + '" style="background:#E52421;color:#fff;border-color:#E52421">'
+            + 'Alle Dateien herunterladen (ZIP)</a></p>';
+    }
+
+    html += '<h2>Die einzelnen Dateien</h2>';
+    (e.dateien || []).forEach(function (d, i) {
+      html += '<div class="hinweis" style="background:#fff;border-color:#ddd">'
+            + '<a href="' + dateiUrlFuer(i) + '"><strong>'
+            + escape(d.dateiname) + '</strong></a><br>'
+            + escape(d.mannschaft)
+            + (d.gegner ? ' gegen ' + escape(d.gegner) : '')
+            + (d.anstoss ? ' am ' + escape(d.anstoss) : '')
+            + ' &middot; ' + escape(d.seitenzahl) + ' Seiten';
+      (d.warnungen || []).forEach(function (w) {
+        html += '<br><span style="color:#E52421">' + escape(w) + '</span>';
+      });
+      html += '</div>';
+    });
+
+    html += '<table class="info">'
+          + '<tr><td>Ordner</td><td>' + escape(e.ordner) + '</td></tr>';
     if (e.nas_ziel) {
       html += '<tr><td>Auf der NAS</td><td>' + escape(e.nas_ziel) + '</td></tr>';
     }
@@ -63,7 +94,7 @@ function zeigeErgebnis(daten) {
     kasten.innerHTML = html;
   } else {
     const f = daten.fehler || {};
-    ueberschrift.innerHTML = '&#10007; Das Heft konnte nicht erstellt werden';
+    ueberschrift.innerHTML = '&#10007; Es hat nicht geklappt';
     untertitel.textContent = '';
     let html = '<div class="fehlerkasten"><strong>' + escape(f.meldung) + '</strong>';
     if (f.hinweis) {

@@ -1,20 +1,39 @@
+{# Der naechste Gegner mit seinem Kader.
+
+   Die Zahlen kommen von der Teamseite des Gegners, die aus dem Spielplan
+   ermittelt wurde -- es muss also nichts von Hand gepflegt werden. Klappt
+   das nicht, sagt die Seite genau das, statt leer zu bleiben.
+#}
 {% extends "_inhaltsseite.html.j2" %}
 {% import "_makros.html.j2" as m %}
 
 {% block inhalt %}
+  {% set gegner = daten.gegner_daten %}
   {% set spiel = daten.naechstes_spiel %}
 
-  {% if spiel and spiel.gegner %}
-    <p class="unterzeile">{{ spiel.gegner }}</p>
-  {% endif %}
-
-  {% if daten.gegner_spieler %}
-    {{ m.spielertabelle(daten.gegner_spieler) }}
-    {{ m.stand(daten, ausgabe) }}
-  {% elif spiel and spiel.gegner %}
-    {{ m.leer("Für " ~ spiel.gegner ~ " liegen keine Spielerdaten vor. "
-              ~ "Datei " ~ daten.schluessel ~ "_gegner_spieler.csv im Eingabeordner ergänzen.") }}
-  {% else %}
+  {% if not spiel or not daten.gegner %}
     {{ m.leer("Der nächste Gegner steht noch nicht fest.") }}
+  {% else %}
+    <p class="unterzeile">
+      {{ daten.gegner }}{% if gegner and gegner.liga %} &middot; {{ gegner.liga }}{% endif %}
+    </p>
+
+    {% if gegner and gegner.tabellenplatz %}
+      {% set z = gegner.tabellenplatz %}
+      <p class="zeile">
+        Aktuell <strong>{{ z.platz }}.</strong> mit {{ z.punkte }} Punkten aus
+        {{ z.spiele }} Spielen ({{ z.bilanz }}), Tore {{ z.torverhaeltnis }}.
+        Form: {{ m.formkurve(gegner.form) }}
+      </p>
+    {% endif %}
+
+    {% if gegner and gegner.spieler %}
+      {{ m.spielertabelle(gegner.spieler) }}
+      {{ m.stand(daten) }}
+    {% else %}
+      {{ m.leer("Zu " ~ daten.gegner ~ " konnten keine Spielerdaten geholt werden. "
+                ~ "Abhilfe: den FuPa-Link des Gegners in config.yaml unter "
+                ~ "datenquelle.fupa.gegner eintragen.") }}
+    {% endif %}
   {% endif %}
 {% endblock %}

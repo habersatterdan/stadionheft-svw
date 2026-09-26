@@ -195,14 +195,8 @@ def zusammenfuegen(eintraege: list[Heftseite], ziel: Path) -> MontageErgebnis:
         ) from fehler
 
     ergebnis.seitenzahl = len(schreiber.pages)
-    logger().info("Stadionheft zusammengefuegt: %d Seiten -> %s",
-                  ergebnis.seitenzahl, ziel)
-
-    if ergebnis.seitenzahl % 4 != 0:
-        hinweis = (f"Das Heft hat {ergebnis.seitenzahl} Seiten. Für Rückendrahtheftung "
-                   f"sind Seitenzahlen in Vierer-Schritten üblich – bitte mit der "
-                   f"Druckerei abstimmen.")
-        logger().warning(hinweis)
-        ergebnis.warnungen.append(hinweis)
-
+    logger().info("Zusammengefuegt: %d Seiten -> %s", ergebnis.seitenzahl, ziel)
+    # Bewusst kein Hinweis auf Seitenzahlen in Vierer-Schritten: Diese Datei
+    # ist ein Baustein, kein fertiges Heft. Ueber die Gesamtseitenzahl
+    # entscheidet, wer das Heft zusammenbaut.
     return ergebnis

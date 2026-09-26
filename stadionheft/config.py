@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,17 +19,6 @@ from .errors import KonfigurationsFehler
 PROJEKT_WURZEL = Path(__file__).resolve().parent.parent
 STANDARD_CONFIG = PROJEKT_WURZEL / "config" / "config.yaml"
 BEISPIEL_CONFIG = PROJEKT_WURZEL / "config" / "config.example.yaml"
-STANDARD_HEFTPLAN = PROJEKT_WURZEL / "config" / "heftplan.yaml"
-BEISPIEL_HEFTPLAN = PROJEKT_WURZEL / "config" / "heftplan.example.yaml"
-
-ERLAUBTE_SEITENTYPEN = {
-    "trenner", "spielbericht", "gegner", "tabelle",
-    "torjaeger", "spielerstatistik", "naechstes_spiel",
-}
-ERLAUBTE_HEFTPLAN_TYPEN = {
-    "titelseite", "trennseite", "freitext", "kontakte",
-    "impressum", "mannschaftsbloecke", "pdf", "werbeblock",
-}
 GUELTIGE_MODI = {"api", "manuell", "demo"}
 
 _SLUG_MUSTER = re.compile(r"/team/([^/?#]+)")
@@ -46,8 +35,6 @@ class Mannschaft:
     liga: str = ""
     fupa_team_url: str = ""
     aktiv: bool = True
-    seiten: list[str] = field(default_factory=lambda: [
-        "trenner", "tabelle", "torjaeger", "spielerstatistik"])
 
     @property
     def fupa_slug(self) -> str:
@@ -138,8 +125,6 @@ class Konfiguration:
             )
         for schluessel, eintrag in roh.items():
             eintrag = eintrag or {}
-            seiten = eintrag.get("seiten") or ["trenner", "tabelle", "torjaeger",
-                                               "spielerstatistik"]
             self.mannschaften[schluessel] = Mannschaft(
                 schluessel=schluessel,
                 anzeigename=eintrag.get("anzeigename", schluessel),
@@ -148,7 +133,6 @@ class Konfiguration:
                 liga=eintrag.get("liga", ""),
                 fupa_team_url=eintrag.get("fupa_team_url", ""),
                 aktiv=bool(eintrag.get("aktiv", True)),
-                seiten=list(seiten),
             )
 
     def aktive_mannschaften(self) -> list[Mannschaft]:
@@ -187,12 +171,6 @@ class Konfiguration:
                 f"{', '.join(sorted(GUELTIGE_MODI))} oder leer.")
 
         for m in self.mannschaften.values():
-            unbekannt = set(m.seiten) - ERLAUBTE_SEITENTYPEN
-            if unbekannt:
-                fehler.append(
-                    f"Mannschaft '{m.schluessel}': unbekannte Seitentypen "
-                    f"{sorted(unbekannt)}. Erlaubt: "
-                    f"{', '.join(sorted(ERLAUBTE_SEITENTYPEN))}.")
             if modus == "api" and not m.fupa_slug and m.aktiv:
                 fehler.append(
                     f"Mannschaft '{m.schluessel}': aus der FuPa-URL laesst sich "
@@ -260,51 +238,5 @@ class Konfiguration:
         return self.pfad(self.get("datenquelle.manuell.ordner"), "daten/03_eingaben")
 
     @property
-    def werbung_ordner(self) -> Path:
-        return self.pfad(self.get("daten.werbung"), "daten/02_werbung")
-
-    @property
     def daten_wurzel(self) -> Path:
         return self.pfad(self.get("daten.wurzel"), "daten")
-
-
-# ---------------------------------------------------------------------------
-# Heftplan
-# ---------------------------------------------------------------------------
-
-def heftplan_laden(pfad: str | Path | None = None) -> list[dict]:
-    """Laedt config/heftplan.yaml, faellt sonst auf die Beispieldatei zurueck."""
-    ziel = Path(pfad) if pfad else STANDARD_HEFTPLAN
-    if not ziel.exists():
-        ziel = BEISPIEL_HEFTPLAN
-    if not ziel.exists():
-        raise KonfigurationsFehler(
-            "Kein Heftplan gefunden.",
-            benutzer_text="Die Datei config/heftplan.yaml fehlt.",
-            hinweis="Bitte config/heftplan.example.yaml nach config/heftplan.yaml kopieren.",
-        )
-    try:
-        daten = yaml.safe_load(ziel.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as fehler:
-        raise KonfigurationsFehler(
-            str(fehler),
-            benutzer_text=f"Die Datei {ziel.name} ist fehlerhaft aufgebaut.",
-        ) from fehler
-
-    seiten = daten.get("seiten") if isinstance(daten, dict) else None
-    if not isinstance(seiten, list) or not seiten:
-        raise KonfigurationsFehler(
-            "Heftplan enthaelt keine Liste 'seiten'.",
-            benutzer_text=f"Im Heftplan ({ziel.name}) fehlt die Liste 'seiten'.",
-        )
-
-    unbekannt = {str(e.get("typ")) for e in seiten if isinstance(e, dict)} \
-        - ERLAUBTE_HEFTPLAN_TYPEN
-    if unbekannt:
-        raise KonfigurationsFehler(
-            f"Unbekannte Seitentypen im Heftplan: {sorted(unbekannt)}",
-            benutzer_text=("Der Heftplan enthaelt unbekannte Seitentypen: "
-                           + ", ".join(sorted(unbekannt))),
-            hinweis="Erlaubt: " + ", ".join(sorted(ERLAUBTE_HEFTPLAN_TYPEN)),
-        )
-    return seiten

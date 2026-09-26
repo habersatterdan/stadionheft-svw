@@ -18,7 +18,6 @@ Datei                            Inhalt
 ``<schluessel>_spielplan.csv``     alle Spiele der Saison, eine Zeile je Partie:
                                    heim;gast;wettbewerb;datum;uhrzeit;spielort;
                                    heimspiel;spieltag;ergebnis
-``<schluessel>_spielbericht.md``   Freitext (Markdown oder einfacher Text)
 ===============================  ==========================================
 
 Der **Spielplan** ist der Schluessel zu wenig Pflegeaufwand: einmal im Sommer
@@ -46,8 +45,8 @@ from pathlib import Path
 from ..config import Konfiguration, Mannschaft
 from ..errors import ManuelleDatenFehlenFehler
 from ..logging_setup import logger
-from ..models import (MannschaftsDaten, Spiel, SpielerZeile, TabellenZeile,
-                      TorjaegerZeile, spiele_einordnen)
+from ..models import (GegnerDaten, MannschaftsDaten, Spiel, SpielerZeile,
+                      TabellenZeile, TorjaegerZeile, spiele_einordnen)
 from .base import basis_daten
 
 KODIERUNGEN = ("utf-8-sig", "utf-8", "cp1252")
@@ -129,10 +128,6 @@ class ManuelleQuelle:
 
         self._gegnerkader(mannschaft, daten)
 
-        bericht = self._textdatei(mannschaft, "spielbericht")
-        if bericht:
-            daten.spielbericht = bericht
-
         if gefunden == 0:
             raise ManuelleDatenFehlenFehler(
                 f"Keine Eingabedateien fuer {mannschaft.schluessel} in {self.ordner}.",
@@ -169,10 +164,14 @@ class ManuelleQuelle:
                 if not spiel.wettbewerb:
                     spiel.wettbewerb = mannschaft.liga
 
+            # Der komplette Spielplan bleibt erhalten: aus ihm rechnet das
+            # Programm Formkurve und Saisonbilanz.
+            daten.spiele = spiele
+
             if art == "naechstes_spiel":
                 # Der Benutzer sagt hier ausdruecklich "das ist die naechste
                 # Partie" -- das wird uebernommen, auch wenn das Datum schon
-                # vorbei ist (z. B. Heft am Abend des Spieltags nachdrucken).
+                # vorbei ist (z. B. Seiten am Abend des Spieltags nachdrucken).
                 daten.naechstes_spiel = spiele[0]
             else:
                 # Im Spielplan entscheidet immer das Datum -- auch dann, wenn
@@ -217,26 +216,27 @@ class ManuelleQuelle:
         gehoeren. Deshalb wird dann ausdruecklich darauf hingewiesen.
         """
         gegner = daten.naechstes_spiel.gegner if daten.naechstes_spiel else ""
+        if not gegner:
+            return
+        daten.gegner_daten = GegnerDaten(name=gegner, liga=mannschaft.liga)
 
-        if gegner:
-            datei = self.ordner / f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv"
-            if datei.exists():
-                daten.gegner_spieler = [SpielerZeile.aus_csv(z)
-                                        for z in csv_lesen(datei)]
-                logger().info("Gegnerkader aus %s (%d Spieler).",
-                              datei.name, len(daten.gegner_spieler))
-                return
+        datei = self.ordner / f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv"
+        if datei.exists():
+            daten.gegner_daten.spieler = [SpielerZeile.aus_csv(z)
+                                          for z in csv_lesen(datei)]
+            logger().info("Gegnerkader aus %s (%d Spieler).",
+                          datei.name, len(daten.gegner_daten.spieler))
+            return
 
         zeilen = self._lesen(mannschaft, "gegner_spieler", daten, still=True)
         if not zeilen:
-            if gegner:
-                daten.warnungen.append(
-                    f"Kein Kader für {gegner} hinterlegt – die Seite "
-                    f"„Vorstellung Gegner“ bleibt leer. Erwartet wird "
-                    f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv")
+            daten.warnungen.append(
+                f"Kein Kader für {gegner} hinterlegt – die Gegnerseite "
+                f"bleibt leer. Erwartet wird "
+                f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv")
             return
 
-        daten.gegner_spieler = [SpielerZeile.aus_csv(z) for z in zeilen]
+        daten.gegner_daten.spieler = [SpielerZeile.aus_csv(z) for z in zeilen]
         if gegner:
             daten.warnungen.append(
                 f"Der Gegnerkader stammt aus der allgemeinen Datei "
@@ -265,17 +265,6 @@ class ManuelleQuelle:
         zeilen = csv_lesen(datei)
         logger().info("%s: %d Zeilen gelesen.", datei.name, len(zeilen))
         return zeilen
-
-    def _textdatei(self, mannschaft: Mannschaft, art: str) -> str:
-        for endung in (".md", ".txt"):
-            datei = self.ordner / f"{mannschaft.schluessel}_{art}{endung}"
-            if datei.exists():
-                for kodierung in KODIERUNGEN:
-                    try:
-                        return datei.read_text(encoding=kodierung).strip()
-                    except UnicodeDecodeError:
-                        continue
-        return ""
 
     @staticmethod
     def _dateiname_gegner(gegner: str) -> str:

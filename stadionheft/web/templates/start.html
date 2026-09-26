@@ -1,10 +1,12 @@
 {% extends "_layout.html" %}
-{% block titel %}Stadionheft erstellen{% endblock %}
+{% block titel %}Aktuelle Seiten erzeugen{% endblock %}
 
 {% block inhalt %}
-<h1>Stadionheft erstellen</h1>
+<h1>Aktuelle Seiten erzeugen</h1>
 <p style="color:#666; margin-top:0">
-  Mannschaften auswählen, auf „Stadionheft erstellen“ klicken – fertig.
+  Mannschaften anhaken, auf den Knopf klicken. Es entsteht pro Mannschaft
+  eine druckfertige PDF-Datei mit den <strong>heutigen</strong> Zahlen –
+  eigene Mannschaft und nächster Gegner.
 </p>
 
 {% for warnung in warnungen %}
@@ -22,17 +24,15 @@
 <form method="post" action="{{ url_for('erstellen') }}">
   <div class="karte">
     <fieldset>
-      <legend>1. Welche Mannschaften sollen ins Heft?</legend>
+      <legend>Welche Mannschaften?</legend>
       {% for m in mannschaften %}
         <label class="zeile">
-          <input type="checkbox" name="mannschaften" value="{{ m.schluessel }}"
-                 {% if loop.first %}checked{% endif %}>
+          <input type="checkbox" name="mannschaften" value="{{ m.schluessel }}" checked>
           <span>
             <span class="name">{{ m.anzeigename }}</span><br>
             <span class="liga">
               {%- if m.liga_fehlt %}Liga noch nicht eingetragen
               {%- else %}{{ m.liga }}{% endif -%}
-              &nbsp;&middot;&nbsp; Seiten: {{ m.seiten|join(', ') }}
             </span>
           </span>
         </label>
@@ -42,23 +42,15 @@
     </fieldset>
   </div>
 
-  <div class="karte">
-    <fieldset>
-      <legend>2. Angaben zur Ausgabe <span style="font-weight:400;color:#666">(optional)</span></legend>
+  <p><button type="submit">Seiten jetzt erzeugen</button></p>
 
-      <div class="feld">
+  <div class="karte">
+    <details>
+      <summary>Weitere Einstellungen <span style="font-weight:400;color:#666">(im Normalfall nicht nötig)</span></summary>
+
+      <div class="feld" style="margin-top:1rem">
         <label for="spieltag">Spieltag</label>
         <input type="text" id="spieltag" name="spieltag" placeholder="z. B. 3. Spieltag">
-      </div>
-
-      <div class="feld">
-        <label for="titelspiel">Welches Spiel kommt auf die Titelseite?</label>
-        <select id="titelspiel" name="titelspiel">
-          <option value="">Automatisch (nächstes Heimspiel)</option>
-          {% for m in mannschaften %}
-            <option value="{{ m.schluessel }}">{{ m.anzeigename }}</option>
-          {% endfor %}
-        </select>
       </div>
 
       <div class="feld">
@@ -66,44 +58,41 @@
         <input type="text" id="benutzer" name="benutzer"
                placeholder="wird nur im Protokoll vermerkt">
       </div>
-    </fieldset>
-  </div>
 
-  <div class="karte">
-    <fieldset>
-      <legend>3. Woher kommen die Daten?</legend>
       <div class="feld">
-        <select name="quelle">
+        <label for="quelle">Woher kommen die Daten?</label>
+        <select id="quelle" name="quelle">
           <option value="">Wie eingestellt: {{ modus }}</option>
           <option value="api">Automatisch von FuPa abrufen</option>
           <option value="manuell">Aus den CSV-Dateien im Eingabeordner</option>
           <option value="demo">Beispieldaten (nur zum Ausprobieren)</option>
         </select>
-        <p class="hilfe">
-          Im Normalfall hier nichts ändern.
-        </p>
       </div>
 
       <label class="zeile">
-        <input type="checkbox" name="nas" value="ja"
-               {% if nas_aktiv and nas_ok %}checked{% endif %}
-               {% if not nas_aktiv %}disabled{% endif %}>
+        <input type="checkbox" name="frisch" value="ja">
         <span>
-          <span class="name">Fertiges Heft auf der Synology NAS ablegen</span><br>
+          <span class="name">Zwischenspeicher übergehen</span><br>
           <span class="liga">
-            {% if not nas_aktiv %}
-              <span class="status aus">ausgeschaltet</span> – in der Konfiguration aktivierbar
-            {% elif nas_ok %}
-              <span class="status ok">erreichbar</span> {{ nas_meldung }}
-            {% else %}
-              <span class="status warn">Problem</span> {{ nas_meldung }}
-            {% endif %}
+            Holt jede Seite wirklich neu. Normalerweise unnötig – der
+            Zwischenspeicher hält nur {{ cache_minuten }} Minuten. Dauert
+            etwas länger.
           </span>
         </span>
       </label>
-    </fieldset>
-  </div>
 
-  <p><button type="submit">Stadionheft erstellen</button></p>
+      {% if nas_aktiv %}
+        <p class="hilfe" style="margin-top:1rem">
+          Die fertigen Dateien werden zusätzlich auf der NAS abgelegt:
+          {% if nas_ok %}
+            <span class="status ok">erreichbar</span>
+          {% else %}
+            <span class="status warn">Problem</span>
+          {% endif %}
+          {{ nas_meldung }}
+        </p>
+      {% endif %}
+    </details>
+  </div>
 </form>
 {% endblock %}

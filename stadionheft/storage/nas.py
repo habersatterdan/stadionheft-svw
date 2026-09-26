@@ -43,9 +43,42 @@ class NasAblage:
         self.modus = str(konfiguration.get("nas.modus", "mount"))
         self.ueberschreiben = bool(konfiguration.get("nas.ueberschreiben", False))
 
+    def ablegen_mehrere(self, dateien: list[Path]) -> AblageErgebnis:
+        """Legt mehrere Dateien ab und meldet das Ergebnis in einem Satz.
+
+        Ein Fehlschlag bei einer Datei bricht den Rest nicht ab: Vier von
+        fuenf Mannschaftsdateien auf der NAS sind besser als keine.
+        """
+        if not self.aktiv:
+            return AblageErgebnis(True, meldung="NAS-Ablage ist ausgeschaltet.")
+
+        geschafft: list[str] = []
+        letzter_fehler: NasFehler | None = None
+        for datei in dateien:
+            try:
+                ergebnis = self.ablegen(datei)
+                if ergebnis.erfolgreich and ergebnis.ziel:
+                    geschafft.append(ergebnis.ziel)
+            except NasFehler as fehler:
+                letzter_fehler = fehler
+
+        if letzter_fehler is not None and not geschafft:
+            raise letzter_fehler
+        if letzter_fehler is not None:
+            return AblageErgebnis(
+                False, str(Path(geschafft[0]).parent),
+                f"{len(geschafft)} von {len(dateien)} Dateien auf der NAS "
+                f"abgelegt. {letzter_fehler.benutzer_text}")
+        if not geschafft:
+            return AblageErgebnis(False, meldung="Keine Datei zum Ablegen.")
+        return AblageErgebnis(
+            True, str(Path(geschafft[0]).parent),
+            f"{len(geschafft)} Dateien auf der NAS abgelegt: "
+            f"{Path(geschafft[0]).parent}")
+
     def ablegen(self, datei: Path) -> AblageErgebnis:
         if not self.aktiv:
-            return AblageErgebnis(True, meldung="NAS-Upload ist ausgeschaltet.")
+            return AblageErgebnis(True, meldung="NAS-Ablage ist ausgeschaltet.")
         if not datei.exists():
             return AblageErgebnis(False, meldung=f"Datei {datei} existiert nicht.")
 
@@ -58,8 +91,8 @@ class NasAblage:
         except Exception as fehler:  # noqa: BLE001
             raise NasFehler(
                 str(fehler),
-                benutzer_text="Das Heft konnte nicht auf der NAS abgelegt werden.",
-                hinweis=(f"Das fertige Heft liegt lokal unter:\n{datei}\n"
+                benutzer_text="Die Datei konnte nicht auf der NAS abgelegt werden.",
+                hinweis=(f"Die fertige Datei liegt lokal unter:\n{datei}\n"
                          f"Es kann von dort von Hand hochgeladen werden."),
             ) from fehler
 
@@ -81,7 +114,7 @@ class NasAblage:
                     f"{zielordner}: {fehler}",
                     benutzer_text=f"Der NAS-Ordner '{zielordner}' ist nicht erreichbar.",
                     hinweis=("Bitte pruefen, ob das Netzlaufwerk verbunden ist. "
-                             f"Das Heft liegt lokal unter:\n{datei}"),
+                             f"Die Datei liegt lokal unter:\n{datei}"),
                 ) from fehler
 
         ziel = zielordner / datei.name
@@ -93,10 +126,10 @@ class NasAblage:
         except OSError as fehler:
             raise NasFehler(
                 f"{ziel}: {fehler}",
-                benutzer_text=f"Das Heft konnte nicht nach '{zielordner}' kopiert werden.",
+                benutzer_text=f"Die Datei konnte nicht nach '{zielordner}' kopiert werden.",
                 hinweis=("Moeglicherweise fehlen Schreibrechte oder die "
                          "Verbindung ist abgebrochen. "
-                         f"Das Heft liegt lokal unter:\n{datei}"),
+                         f"Die Datei liegt lokal unter:\n{datei}"),
             ) from fehler
 
         logger().info("Auf NAS abgelegt: %s", ziel)
@@ -162,7 +195,7 @@ class NasAblage:
                 benutzer_text=f"Die NAS '{host}' ist nicht erreichbar oder die "
                               f"Anmeldung wurde abgelehnt.",
                 hinweis=("Bitte Netzwerk, Benutzername und Passwort pruefen. "
-                         f"Das Heft liegt lokal unter:\n{datei}"),
+                         f"Die Datei liegt lokal unter:\n{datei}"),
             ) from fehler
 
         logger().info("Per SMB hochgeladen: %s", ziel)

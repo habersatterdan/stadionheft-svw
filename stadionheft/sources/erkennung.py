@@ -100,6 +100,45 @@ def _text_aus(wert: Any) -> str:
     return ""
 
 
+#: Felder, unter denen eine Datenquelle den technischen Bezeichner einer
+#: Mannschaft fuehrt. Reihenfolge = Vorrang: Ein sprechender Bezeichner ist
+#: brauchbarer als eine blosse Nummer, weil sich daraus eine Seitenadresse
+#: bauen laesst.
+KENNUNG_FELDER: tuple[str, ...] = (
+    "slug", "seoname", "seourl", "permalink", "urlname", "shortname",
+    "url", "link", "href", "path", "id", "teamid", "clubid",
+)
+
+
+def _kennung_aus(wert: Any, tiefe: int = 0) -> str:
+    """Der technische Bezeichner einer Mannschaft, falls einer mitgeliefert wird.
+
+    Mal steht dort ein Kuerzel, mal eine volle Adresse, mal nur eine Nummer.
+    Aus einer Adresse wird das letzte Wegstueck genommen -- genau das ist bei
+    FuPa der Team-Bezeichner.
+    """
+    if tiefe > 2 or wert is None or isinstance(wert, bool):
+        return ""
+    if isinstance(wert, int):
+        return str(wert)
+    if isinstance(wert, str):
+        text = wert.strip().strip("/")
+        if not text:
+            return ""
+        if "://" in text or text.startswith("/"):
+            text = text.rsplit("/", 1)[-1]
+        # Ein Bezeichner enthaelt keine Leerzeichen -- sonst ist es ein Name.
+        return text if text and " " not in text else ""
+    if isinstance(wert, dict):
+        for schluessel in KENNUNG_FELDER:
+            for name, inhalt in wert.items():
+                if _normal(name) == schluessel:
+                    gefunden = _kennung_aus(inhalt, tiefe + 1)
+                    if gefunden:
+                        return gefunden
+    return ""
+
+
 def _zahl_aus(wert: Any) -> int | None:
     if isinstance(wert, bool):
         return None
@@ -166,6 +205,27 @@ class Zeile:
                 if gefunden is not None:
                     return gefunden
         return None
+
+    def kennung(self, feld: str) -> str:
+        """Der technische Bezeichner hinter einem Feld, z. B. der Team-Slug.
+
+        Erst wird im Unterobjekt gesucht (``homeTeam.slug``), dann unter den
+        zusammengesetzten Namen, die beim Flachklopfen entstanden sind
+        (``hometeamslug``). Sprechende Bezeichner haben Vorrang vor Nummern.
+        """
+        nummer = ""
+        for name in FELDER.get(feld, ()):
+            kandidaten = [self.flach[name]] if name in self.flach else []
+            kandidaten += [self.flach[f"{name}{k}"] for k in KENNUNG_FELDER
+                           if f"{name}{k}" in self.flach]
+            for kandidat in kandidaten:
+                gefunden = _kennung_aus(kandidat)
+                if not gefunden:
+                    continue
+                if not gefunden.isdigit():
+                    return gefunden
+                nummer = nummer or gefunden
+        return nummer
 
 
 # ---------------------------------------------------------------------------
@@ -351,6 +411,8 @@ def spiele_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Spiel]:
             heimspiel=bool(kern) and kern in heim.lower(),
             spieltag=z.text("spieltag"),
             ergebnis=_ergebnis(z),
+            heim_kennung=z.kennung("heim"),
+            gast_kennung=z.kennung("gast"),
         ))
     return ergebnis
 

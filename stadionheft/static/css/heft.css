@@ -201,13 +201,214 @@ table.daten tbody tr.eigene {
     font-weight: 700;
 }
 
+table.daten tbody tr.gegner {
+    background: rgba(26, 26, 26, 0.07);
+    font-weight: 600;
+}
+
+table.daten.schmal { width: auto; min-width: 60mm; }
+
 td.platz { width: 7mm; color: var(--grau); text-align: left; }
 td.name  { max-width: 45mm; overflow: hidden; text-overflow: ellipsis; }
+td.ergebnis { font-weight: 700; }
 td.verein {
     font-size: 5.6pt;
     color: var(--grau);
     display: block;
     line-height: 1.1;
+}
+
+.legende {
+    font-size: 6.2pt;
+    color: var(--grau);
+    margin: 1.5mm 0 0 0;
+}
+
+.zeile { font-size: 8pt; margin: 0 0 2.5mm 0; }
+
+/* --------------------------------------------------------------------------
+   Formkurve -- die letzten Spiele als Kette S/U/N
+   -------------------------------------------------------------------------- */
+
+.form { white-space: nowrap; }
+
+.form-zeichen {
+    display: inline-block;
+    width: 4.2mm;
+    height: 4.2mm;
+    line-height: 4.2mm;
+    margin-right: 0.6mm;
+    border-radius: 0.7mm;
+    text-align: center;
+    font-size: 6.5pt;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.form-s { background: #2E7D32; }   /* Sieg */
+.form-u { background: #9E9E9E; }   /* Unentschieden */
+.form-n { background: var(--rot); }
+
+.form-leer { font-size: 7pt; color: var(--grau); }
+
+/* --------------------------------------------------------------------------
+   Das naechste Spiel: Anstosskarte und Gegenueberstellung
+   -------------------------------------------------------------------------- */
+
+.anstosskarte {
+    border-top: 0.6mm solid var(--rot);
+    border-bottom: 0.3mm solid var(--linie);
+    padding: 3mm 0 3mm 0;
+    margin-bottom: 4mm;
+    text-align: center;
+}
+
+.anstosskarte .paarung {
+    font-size: 13pt;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.anstosskarte .termin {
+    font-size: 9.5pt;
+    font-weight: 600;
+    margin-top: 1.5mm;
+}
+
+.anstosskarte .ort {
+    font-size: 7pt;
+    color: var(--grau);
+    margin-top: 1mm;
+}
+
+table.vergleich {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8pt;
+}
+
+table.vergleich thead th {
+    font-size: 8pt;
+    font-weight: 700;
+    padding: 0 1mm 1.5mm 1mm;
+    border-bottom: 0.3mm solid var(--linie);
+}
+
+table.vergleich th.wir,
+table.vergleich td.wir  { text-align: left;  width: 38%; }
+table.vergleich th.sie,
+table.vergleich td.sie  { text-align: right; width: 38%; }
+table.vergleich th.wir  { color: var(--rot); }
+
+table.vergleich td.mitte,
+table.vergleich th.mitte {
+    text-align: center;
+    width: 24%;
+    font-size: 6.2pt;
+    color: var(--grau);
+    text-transform: uppercase;
+    letter-spacing: 0.15mm;
+}
+
+table.vergleich tbody td {
+    padding: 1.6mm 1mm;
+    border-bottom: 0.2mm solid var(--linie);
+    vertical-align: middle;
+}
+
+table.vergleich td.gross { font-size: 12pt; font-weight: 700; }
+
+/* --------------------------------------------------------------------------
+   Saisonbilanz
+   -------------------------------------------------------------------------- */
+
+/* Zwei Spalten: eigene Mannschaft links, Gegner rechts. Nebeneinander, weil
+   die Seite als Vergleich gelesen wird -- und weil untereinander auf A5
+   nicht beides auf ein Blatt passt. */
+.bilanzpaar {
+    display: flex;
+    gap: 4mm;
+    align-items: flex-start;
+}
+
+.bilanzblock { flex: 1; min-width: 0; }
+
+.bilanzblock h2 {
+    font-size: 8.5pt;
+    font-weight: 700;
+    margin: 0 0 1.8mm 0;
+    padding-bottom: 0.8mm;
+    border-bottom: 0.4mm solid var(--rot);
+}
+
+/* Zwei Kacheln je Zeile. Bewusst inline-block und nicht flex-wrap:
+   WeasyPrint bricht Flex-Zeilen nicht zuverlaessig um. */
+.kennzahlen {
+    margin-bottom: 2mm;
+    font-size: 0;            /* frisst den Leerraum zwischen den Kacheln */
+}
+
+.kennzahl {
+    display: inline-block;
+    vertical-align: top;
+    width: 48.5%;
+    margin: 0 3% 1.2mm 0;
+    text-align: center;
+    padding: 1.2mm 0.8mm;
+    background: var(--zebra);
+    border-radius: 0.8mm;
+}
+
+.kennzahl:nth-child(even) { margin-right: 0; }
+
+.kennzahl .wert {
+    display: block;
+    font-size: 10pt;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.kennzahl .was {
+    display: block;
+    font-size: 5.2pt;
+    color: var(--grau);
+    text-transform: uppercase;
+    letter-spacing: 0.05mm;
+}
+
+.bilanzblock table.daten { font-size: 6.2pt; }
+.bilanzblock table.daten.schmal { width: 100%; min-width: 0; }
+.bilanzblock table.daten tbody td { padding: 0.8mm 0.5mm; }
+
+dl.merkmale {
+    margin: 1.8mm 0 0 0;
+    font-size: 6.4pt;
+}
+
+dl.merkmale dt {
+    float: left;
+    clear: left;
+    width: 24mm;
+    color: var(--grau);
+}
+
+dl.merkmale dd {
+    margin: 0 0 0.9mm 24mm;
+    font-weight: 600;
+}
+
+dl.merkmale .form-zeichen {
+    width: 3.2mm;
+    height: 3.2mm;
+    line-height: 3.2mm;
+    font-size: 5.2pt;
+}
+
+.stand-alt {
+    color: var(--rot);
+    border: 0.3mm solid var(--rot);
+    padding: 1.2mm 1.5mm;
+    border-radius: 0.8mm;
 }
 
 /* --------------------------------------------------------------------------

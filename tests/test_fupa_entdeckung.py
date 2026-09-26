@@ -8,7 +8,7 @@ Der HTTP-Teil wird ersetzt: Die Tests duerfen nie ins Netz gehen.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -44,18 +44,26 @@ KADER = [
      "yellowCards": 0, "subIn": 0, "subOut": 0},
 ]
 
+def _wann(tage: int) -> str:
+    """Ein Anstoss relativ zu heute -- sonst rostet der Test mit dem Kalender."""
+    return (datetime.now() + timedelta(days=tage)).replace(
+        hour=15, minute=0, second=0, microsecond=0).isoformat()
+
+
+#: Zwei gespielte Partien, eine kommende. Das naechste Spiel ist damit immer
+#: SG Alerheim, egal wann der Test laeuft.
 SPIELPLAN = [
-    {"homeTeam": {"name": "Türk Gücü Lauingen"},
-     "awayTeam": {"name": "SV Wörnitzstein-Berg"},
-     "kickoff": "2026-07-26T15:00:00", "homeGoals": 0, "awayGoals": 4,
+    {"homeTeam": {"name": "Türk Gücü Lauingen", "slug": "tuerk-guecue-lauingen"},
+     "awayTeam": {"name": "SV Wörnitzstein-Berg", "slug": "svw"},
+     "kickoff": _wann(-21), "homeGoals": 0, "awayGoals": 4,
      "competition": {"name": "Bezirksliga Schwaben Nord"}},
-    {"homeTeam": {"name": "SV Wörnitzstein-Berg"},
-     "awayTeam": {"name": "TSV Meitingen"},
-     "kickoff": "2026-07-29T18:30:00", "homeGoals": 2, "awayGoals": 1,
+    {"homeTeam": {"name": "SV Wörnitzstein-Berg", "slug": "svw"},
+     "awayTeam": {"name": "TSV Meitingen", "slug": "tsv-meitingen"},
+     "kickoff": _wann(-7), "homeGoals": 2, "awayGoals": 1,
      "competition": {"name": "Bezirksliga Schwaben Nord"}},
-    {"homeTeam": {"name": "SV Wörnitzstein-Berg"},
-     "awayTeam": {"name": "SG Alerheim"},
-     "kickoff": "2026-08-09T15:00:00",
+    {"homeTeam": {"name": "SV Wörnitzstein-Berg", "slug": "svw"},
+     "awayTeam": {"name": "SG Alerheim", "slug": "sg-alerheim"},
+     "kickoff": _wann(8),
      "competition": {"name": "Bezirksliga Schwaben Nord"},
      "venue": {"name": "Sportgelände Wörnitzstein"}},
 ]
@@ -152,30 +160,39 @@ def test_teamseite_liefert_alles_auf_einmal(konfiguration: Konfiguration, herren
     assert daten.tabelle[1].eigene is True
     assert daten.torjaeger[0].spieler == "C. Hollinger"
     assert [s.spieler for s in daten.spieler] == ["Dominik Marks", "Julian Schmidbaur"]
-    assert daten.warnungen == []
-    # Nach der Teamseite ist alles beisammen -- danach darf nichts mehr geholt
-    # werden. Sonst belastet jedes Heft FuPa ohne Grund.
-    assert protokoll[-1] == herren1.fupa_team_url
+    # Nach der Teamseite ist fuer die eigene Mannschaft alles beisammen --
+    # danach wird nur noch der Gegner geholt. Sonst belastet jedes Heft FuPa
+    # ohne Grund.
+    bis_eigene = protokoll[:protokoll.index(herren1.fupa_team_url) + 1]
+    assert len(bis_eigene) <= len(KANDIDATEN) + 1
 
 
 def test_naechstes_spiel_richtet_sich_nach_dem_datum(konfiguration: Konfiguration,
-                                                     herren1, monkeypatch):
-    """Am 05.08. ist Alerheim das naechste Spiel -- nicht Meitingen."""
-    import stadionheft.models as models
+                                                     herren1):
+    """Massgeblich ist das Datum, nicht die Reihenfolge in der Liste.
 
-    class Festes(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return datetime(2026, 8, 5, 12, 0)
-
-    monkeypatch.setattr(models, "datetime", Festes)
+    Meitingen steht im Spielplan vor Alerheim und hat ein Ergebnis; Alerheim
+    liegt in der Zukunft. Also ist Alerheim das naechste Spiel.
+    """
     quelle = _quelle(konfiguration, {herren1.fupa_team_url: Antwort(_teamseite())})
     daten = quelle.hole(herren1)
 
     assert daten.naechstes_spiel.gast == "SG Alerheim"
-    assert daten.naechstes_spiel.datum == "09.08.2026"
+    assert daten.naechstes_spiel.anstoss_dt > datetime.now()
     assert daten.letztes_spiel.gast == "TSV Meitingen"
     assert daten.letztes_spiel.ergebnis == "2:1"
+
+
+def test_formkurve_und_bilanz_aus_dem_spielplan(konfiguration: Konfiguration,
+                                                herren1):
+    """Beides wird gerechnet, nicht geholt -- und passt damit zum Spielplan."""
+    quelle = _quelle(konfiguration, {herren1.fupa_team_url: Antwort(_teamseite())})
+    daten = quelle.hole(herren1)
+
+    assert "".join(f.ausgang for f in daten.form) == "SS"
+    assert daten.bilanz.gesamt.bilanz == "2-0-0"
+    assert daten.bilanz.gesamt.torverhaeltnis == "6:1"
+    assert daten.bilanz.gesamt.punkte == 6
 
 
 def test_json_schnittstelle_wird_ebenso_verwertet(konfiguration: Konfiguration,
@@ -208,7 +225,11 @@ def test_teile_von_mehreren_adressen_werden_zusammengesetzt(
     assert len(daten.torjaeger) == 3
     assert len(daten.spieler) == 2
     assert daten.naechstes_spiel is not None
-    assert daten.warnungen == []
+    # Zum Gegner gibt es in dieser Probe keine Seite -- das muss gesagt werden,
+    # darf aber den Rest nicht beschaedigen.
+    assert daten.warnungen == [
+        "Zu SG Alerheim kamen keine Zahlen an - die Gegnerseiten bleiben leer. "
+        "Der Rest des Hefts ist davon nicht betroffen."]
 
 
 def test_laengere_liste_setzt_sich_durch(konfiguration: Konfiguration, herren1):

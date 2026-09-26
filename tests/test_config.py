@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 import yaml
 
-from stadionheft.config import BEISPIEL_CONFIG, Konfiguration, heftplan_laden
+from stadionheft.config import BEISPIEL_CONFIG, Konfiguration
 from stadionheft.errors import KonfigurationsFehler
 
 
@@ -36,14 +36,6 @@ def test_api_modus_verlangt_gueltigen_link():
     assert "Team-Bezeichner" in fehler.value.benutzer_text
 
 
-def test_unbekannter_seitentyp_wird_erkannt():
-    daten = yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8"))
-    daten["mannschaften"]["herren1"]["seiten"] = ["tabelle", "gibtsnicht"]
-    with pytest.raises(KonfigurationsFehler) as fehler:
-        Konfiguration(daten)
-    assert "gibtsnicht" in fehler.value.technisch
-
-
 def test_unbekannter_datenquellen_modus():
     daten = yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8"))
     daten["datenquelle"]["modus"] = "zauberei"
@@ -66,8 +58,3 @@ def test_unbekannte_mannschaft_meldet_bekannte(konfiguration: Konfiguration):
 def test_verschachtelter_zugriff(konfiguration: Konfiguration):
     assert konfiguration.get("layout.primaerfarbe") == "#E52421"
     assert konfiguration.get("gibt.es.nicht", "standard") == "standard"
-
-
-def test_heftplan_beispiel_laedt():
-    seiten = heftplan_laden()
-    assert any(e.get("typ") == "mannschaftsbloecke" for e in seiten)

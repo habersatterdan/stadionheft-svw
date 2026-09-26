@@ -44,7 +44,7 @@ def test_richtige_anmeldung_kommt_durch(konfiguration: Konfiguration, monkeypatc
     client = _mit_schutz(konfiguration, monkeypatch)
     antwort = client.get("/", headers=_kopf("svw", "geheim"))
     assert antwort.status_code == 200
-    assert "Stadionheft erstellen" in antwort.get_data(as_text=True)
+    assert "Aktuelle Seiten erzeugen" in antwort.get_data(as_text=True)
 
 
 @pytest.mark.parametrize("benutzer,passwort", [

@@ -6,7 +6,7 @@
 
   {% if daten.spieler %}
     {{ m.spielertabelle(daten.spieler) }}
-    {{ m.stand(daten, ausgabe) }}
+    {{ m.stand(daten) }}
   {% else %}
     {{ m.leer("Für " ~ daten.anzeigename ~ " liegt derzeit keine Spielerstatistik vor.") }}
   {% endif %}

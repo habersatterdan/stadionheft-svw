@@ -5,14 +5,97 @@
 {% endmacro %}
 
 
-{% macro stand(daten, ausgabe) %}
-  <p class="stand">
-    Stand: {{ ausgabe.erstellt_am_lesbar }}
-    {%- if daten.quelle == 'demo' %} &middot; <strong>Beispieldaten</strong>
-    {%- elif daten.quelle == 'manuell' %} &middot; manuelle Eingabe
-    {%- elif daten.quelle == 'api' %} &middot; Quelle: fupa.net
+{# Der Stand der Daten. Steht auf jeder Datenseite -- ohne ihn laesst sich im
+   Nachhinein nicht mehr sagen, welchem Spieltag ein Blatt entspricht. #}
+{% macro stand(daten) %}
+  <p class="stand {{ 'stand-alt' if daten.veraltet }}">
+    {%- if daten.veraltet %}
+      <strong>Achtung – möglicherweise veraltet.</strong>
+      FuPa war nicht erreichbar, verwendet wurde der Stand vom
+      {{ daten.abgerufen_lesbar or 'letzten erfolgreichen Abruf' }}.
+    {%- else %}
+      Stand: {{ daten.abgerufen_lesbar or '—' }}
+      {%- if daten.quelle == 'demo' %} &middot; <strong>Beispieldaten</strong>
+      {%- elif daten.quelle == 'manuell' %} &middot; manuelle Eingabe
+      {%- elif daten.quelle == 'api' %} &middot; Quelle: fupa.net
+      {%- endif %}
     {%- endif %}
   </p>
+{% endmacro %}
+
+
+{# Formkurve: die letzten Spiele als Kette von S/U/N.
+   Aelteste links, juengstes rechts -- so wird eine Formkurve gelesen. #}
+{% macro formkurve(eintraege) %}
+  {% if eintraege %}
+    <span class="form">
+      {% for e in eintraege %}
+        <span class="form-zeichen form-{{ e.ausgang|lower }}"
+              title="{{ e.beschriftung }}">{{ e.ausgang }}</span>
+      {% endfor %}
+    </span>
+  {% else %}
+    <span class="form-leer">noch kein Spiel</span>
+  {% endif %}
+{% endmacro %}
+
+
+{# Liga-Tabelle. ``hervorheben`` ist eine Liste von Vereinsnamen, die
+   markiert werden -- die eigene Mannschaft und der naechste Gegner. #}
+{% macro ligatabelle(zeilen, hervorheben) %}
+  <table class="daten">
+    <thead>
+      <tr>
+        <th class="links">Pl.</th>
+        <th class="links">Team</th>
+        <th>Sp.</th><th>S-U-N</th><th>Tore</th><th>Diff.</th><th>Pkt.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for z in zeilen %}
+      {% set markiert = z.eigene or (z.mannschaft in hervorheben) %}
+      <tr class="{{ 'eigene' if z.eigene }}{{ ' gegner' if markiert and not z.eigene }}">
+        <td class="platz">{{ z.platz }}.</td>
+        <td class="links name">
+          {{ z.mannschaft }}{% if z.zusatz %} <span class="verein">{{ z.zusatz }}</span>{% endif %}
+        </td>
+        <td>{{ z.spiele }}</td>
+        <td>{{ z.bilanz }}</td>
+        <td>{{ z.torverhaeltnis }}</td>
+        <td>{{ '%+d'|format(z.differenz) if z.differenz else 0 }}</td>
+        <td>{{ z.punkte }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+
+{% macro torjaegertabelle(zeilen, hervorheben) %}
+  <table class="daten">
+    <thead>
+      <tr>
+        <th class="links">Pl.</th>
+        <th class="links">Spieler</th>
+        <th>Tore</th><th>Assists</th><th>Sp.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for z in zeilen %}
+      {% set markiert = z.eigene or (z.mannschaft in hervorheben) %}
+      <tr class="{{ 'eigene' if z.eigene }}{{ ' gegner' if markiert and not z.eigene }}">
+        <td class="platz">{{ z.platz }}.</td>
+        <td class="links name">
+          {{ z.spieler }}
+          {% if z.mannschaft %}<span class="verein">{{ z.mannschaft }}</span>{% endif %}
+        </td>
+        <td>{{ z.tore }}</td>
+        <td>{{ z.vorlagen }}</td>
+        <td>{{ z.spiele }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 {% endmacro %}
 
 

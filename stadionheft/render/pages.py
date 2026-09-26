@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
@@ -25,7 +26,7 @@ from markupsafe import Markup
 from ..config import Konfiguration
 from ..errors import RenderFehler
 from ..logging_setup import logger
-from ..models import Ausgabe, MannschaftsDaten, Spiel
+from ..models import MannschaftsDaten, Spiel
 
 TEMPLATE_ORDNER = Path(__file__).resolve().parent.parent / "templates"
 STATIC_ORDNER = Path(__file__).resolve().parent.parent / "static"
@@ -33,13 +34,25 @@ STATIC_ORDNER = Path(__file__).resolve().parent.parent / "static"
 #: Mannschaftsseite -> (Vorlage, Ueberschrift im roten Balken)
 SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
     "trenner":          ("trenner.html.j2", ""),
-    "tabelle":          ("tabelle.html.j2", "Tabellen"),
-    "torjaeger":        ("torjaeger.html.j2", "Torschützenlisten"),
+    "vergleich":        ("vergleich.html.j2", "Das nächste Spiel"),
+    "tabelle":          ("tabelle.html.j2", "Tabelle"),
+    "torjaeger":        ("torjaeger.html.j2", "Torschützenliste"),
     "spielerstatistik": ("spielerstatistik.html.j2", "Spielerstatistik"),
-    "gegner":           ("gegner.html.j2", "Vorstellung Gegner"),
-    "naechstes_spiel":  ("naechstes_spiel.html.j2", "Nächstes Spiel"),
-    "spielbericht":     ("spielbericht.html.j2", "Spielbericht"),
+    "gegner":           ("gegner.html.j2", "Der Gegner"),
+    "bilanz":           ("bilanz.html.j2", "Saisonbilanz"),
+    # Nur noetig, wenn der Gegner in einer anderen Liga spielt (Pokal).
+    "tabelle_gegner":   ("tabelle.html.j2", "Tabelle des Gegners"),
+    "torjaeger_gegner": ("torjaeger.html.j2", "Torschützen des Gegners"),
 }
+
+#: Reihenfolge der Seiten in der Datei einer Mannschaft. Bewusst im Code und
+#: nicht in der Konfiguration: Die Datei soll bei allen Mannschaften gleich
+#: aufgebaut sein, damit die Person, die das Heft zusammenbaut, sich darauf
+#: verlassen kann.
+STANDARD_SEITEN: tuple[str, ...] = (
+    "trenner", "vergleich", "tabelle", "torjaeger",
+    "spielerstatistik", "gegner", "bilanz",
+)
 
 
 def _css_sauber(wert: str) -> str:
@@ -193,87 +206,61 @@ class SeitenRenderer:
         logger().debug("Seite erzeugt: %s", ziel.name)
         return ziel
 
-    # -- Einzelne Seitentypen ----------------------------------------------
-
-    def titelseite(self, ausgabe: Ausgabe, titelbild: Path | None) -> Path:
-        spiel = ausgabe.titelspiel or Spiel()
-        html = self._html(
-            "titelseite.html.j2",
-            seitentitel=self.heft["hefttitel"],
-            spiel=spiel,
-            ausgabe=_ausgabe_kontext(ausgabe),
-            titelbild_url=titelbild.as_uri() if titelbild and titelbild.exists() else "",
-            titelbild_erwartet="daten/03_eingaben/titelbild.jpg",
-        )
-        return self._pdf(html, "01_titelseite")
+    # -- Seiten einer Mannschaft -------------------------------------------
 
     def mannschaftsseite(self, art: str, daten: MannschaftsDaten,
-                         ausgabe: Ausgabe, nummer: int) -> Path:
+                         nummer: int) -> Path:
+        """Erzeugt eine einzelne Seite der Mannschaftsdatei."""
         vorlage, ueberschrift = SEITEN_VORLAGEN[art]
-        kontext: dict = {
-            "seitentitel": ueberschrift,
-            "daten": daten,
-            "ausgabe": _ausgabe_kontext(ausgabe),
-            "fliessend": art == "spielbericht",
-        }
-        if art == "spielbericht":
-            kontext["absaetze"] = text_zu_absaetzen(daten.spielbericht)
-        html = self._html(vorlage, **kontext)
+        html = self._html(vorlage, seitentitel=ueberschrift, fliessend=False,
+                          daten=daten, **_seiten_kontext(art, daten))
         return self._pdf(html, f"{nummer:02d}_{daten.schluessel}_{art}")
 
-    def freitextseite(self, titel: str, text: str, ausgabe: Ausgabe,
-                      nummer: int, quelle: str = "") -> Path:
-        html = self._html(
-            "freitext.html.j2",
-            seitentitel=titel,
-            absaetze=text_zu_absaetzen(text),
-            quelle=quelle,
-            ausgabe=_ausgabe_kontext(ausgabe),
-            fliessend=True,
-        )
-        return self._pdf(html, f"{nummer:02d}_{_dateiname(titel)}")
 
-    def kontaktseite(self, abschnitte: list[dict], ausgabe: Ausgabe,
-                     nummer: int) -> Path:
-        html = self._html(
-            "kontakte.html.j2",
-            seitentitel="Kontaktlisten",
-            abschnitte=abschnitte,
-            ausgabe=_ausgabe_kontext(ausgabe),
-            fliessend=True,
-        )
-        return self._pdf(html, f"{nummer:02d}_kontakte")
+def _seiten_kontext(art: str, daten: MannschaftsDaten) -> dict:
+    """Was die jeweilige Vorlage ausser ``daten`` noch braucht.
 
-    def impressumsseite(self, felder: list[dict], ausgabe: Ausgabe,
-                        nummer: int) -> Path:
-        html = self._html(
-            "impressum.html.j2",
-            seitentitel="Impressum",
-            felder=felder,
-            ausgabe=_ausgabe_kontext(ausgabe),
-        )
-        return self._pdf(html, f"{nummer:02d}_impressum")
+    Tabelle und Torschuetzenliste kommen zweimal vor: einmal fuer die eigene
+    Liga, einmal -- nur bei einem Gegner aus einer anderen Liga -- fuer
+    dessen Liga. Beide Faelle benutzen dieselbe Vorlage, nur mit anderen
+    Zeilen.
+    """
+    gegner = daten.gegner_daten
+    markieren = [daten.gegner] if daten.gegner else []
 
-    def trennseite(self, daten: MannschaftsDaten, nummer: int) -> Path:
-        html = self._html("trenner.html.j2", seitentitel="", daten=daten)
-        return self._pdf(html, f"{nummer:02d}_trenner")
+    if art == "tabelle":
+        return {"zeilen": daten.tabelle, "liga": daten.liga,
+                "hervorheben": markieren}
+    if art == "torjaeger":
+        return {"zeilen": daten.torjaeger, "liga": daten.liga,
+                "hervorheben": markieren}
+    if art == "tabelle_gegner":
+        return {"zeilen": gegner.tabelle if gegner else [],
+                "liga": (gegner.liga if gegner else "") or daten.gegner,
+                "hervorheben": markieren}
+    if art == "torjaeger_gegner":
+        return {"zeilen": gegner.torjaeger if gegner else [],
+                "liga": (gegner.liga if gegner else "") or daten.gegner,
+                "hervorheben": markieren}
+    if art == "vergleich":
+        return {"letzte_duelle": letzte_duelle(daten)}
+    return {}
 
 
-def _ausgabe_kontext(ausgabe: Ausgabe) -> dict:
-    """Vorbereitete Anzeigewerte fuer die Vorlagen."""
-    lesbar = ausgabe.erstellt_am
-    try:
-        from datetime import datetime
-        lesbar = f"{datetime.fromisoformat(ausgabe.erstellt_am):%d.%m.%Y, %H:%M} Uhr"
-    except (ValueError, TypeError):
-        pass
-    return {
-        "saison": ausgabe.saison,
-        "spieltag": ausgabe.spieltag,
-        "erstellt_am": ausgabe.erstellt_am,
-        "erstellt_am_lesbar": lesbar,
-        "erzeugt_von": ausgabe.erzeugt_von,
-    }
+def letzte_duelle(daten: MannschaftsDaten, anzahl: int = 3) -> list[Spiel]:
+    """Die letzten gespielten Partien gegen denselben Gegner.
+
+    Gesucht wird im eigenen Spielplan; der reicht nur ueber die laufende
+    Saison. Das Hinspiel ist damit erfasst, aeltere Duelle nicht -- und
+    lieber nichts anzeigen als etwas Halbes behaupten.
+    """
+    name = (daten.gegner or "").strip().lower()
+    if not name:
+        return []
+    treffer = [s for s in daten.spiele
+               if s.gespielt and name in (s.heim + " " + s.gast).lower()]
+    treffer.sort(key=lambda s: s.anstoss_dt or datetime.min)
+    return treffer[-anzahl:]
 
 
 def _dateiname(text: str) -> str:

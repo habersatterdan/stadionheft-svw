@@ -17,7 +17,7 @@ def test_startseite_zeigt_mannschaften(konfiguration: Konfiguration):
     assert antwort.status_code == 200
     text = antwort.get_data(as_text=True)
     assert "Herren 1" in text and "Damen 1" in text
-    assert "Stadionheft erstellen" in text
+    assert "Aktuelle Seiten erzeugen" in text
 
 
 def test_hilfeseite(konfiguration: Konfiguration):
@@ -38,10 +38,7 @@ def test_unbekannter_lauf_ergibt_404(konfiguration: Konfiguration):
     assert "Seite nicht gefunden" in antwort.get_data(as_text=True)
 
 
-def test_kompletter_durchlauf_ueber_die_oberflaeche(konfiguration: Konfiguration,
-                                                    monkeypatch, heftplan_minimal):
-    monkeypatch.setattr("stadionheft.build.heftplan_laden",
-                        lambda *a, **k: heftplan_minimal)
+def test_kompletter_durchlauf_ueber_die_oberflaeche(konfiguration: Konfiguration):
     client = _client(konfiguration)
 
     antwort = client.post("/erstellen",
@@ -58,12 +55,23 @@ def test_kompletter_durchlauf_ueber_die_oberflaeche(konfiguration: Konfiguration
         raise AssertionError("Lauf wurde nicht fertig")
 
     assert zustand["erfolgreich"] is True, zustand.get("fehler")
-    assert zustand["ergebnis"]["seitenzahl"] == 7
+    dateien = zustand["ergebnis"]["dateien"]
+    assert len(dateien) == 1
+    assert dateien[0]["mannschaft"] == "Herren 1"
+    assert dateien[0]["seitenzahl"] == 7
+    assert zustand["ergebnis"]["stand"]
     assert any("Herren 1" in z["text"] for z in zustand["protokoll"])
 
-    download = client.get(f"/lauf/{lauf_id}/download")
-    assert download.status_code == 200
-    assert download.data[:4] == b"%PDF"
+    # Das ZIP enthaelt alles, die Einzeldatei ist trotzdem direkt erreichbar
+    archiv = client.get(f"/lauf/{lauf_id}/download")
+    assert archiv.status_code == 200
+    assert archiv.data[:2] == b"PK"
+
+    einzeln = client.get(f"/lauf/{lauf_id}/datei/0")
+    assert einzeln.status_code == 200
+    assert einzeln.data[:4] == b"%PDF"
+
+    assert client.get(f"/lauf/{lauf_id}/datei/7").status_code == 404
 
 
 # ---------------------------------------------------------------------------

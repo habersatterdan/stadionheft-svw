@@ -39,6 +39,8 @@ from __future__ import annotations
 import json
 import time
 import urllib.robotparser
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -46,7 +48,8 @@ from urllib.parse import urljoin, urlparse
 from ..config import Konfiguration, Mannschaft
 from ..errors import DatenNichtLesbarFehler, DatenquelleNichtErreichbarFehler
 from ..logging_setup import logger
-from ..models import MannschaftsDaten, Spiel, spiele_einordnen
+from ..models import (GegnerDaten, MannschaftsDaten, Spiel, SpielerZeile,
+                      TabellenZeile, TorjaegerZeile, spiele_einordnen)
 from .base import basis_daten
 from .cache import DateiCache
 from .erkennung import (spiele_erkennen, spieler_erkennen, tabelle_erkennen,
@@ -146,10 +149,13 @@ class FupaClient:
         self.cache = DateiCache(
             k.pfad(k.get("datenquelle.cache.ordner"),
                    "daten/04_zwischenergebnisse/cache"),
-            int(k.get("datenquelle.cache.gueltigkeit_minuten", 120)),
+            int(k.get("datenquelle.cache.gueltigkeit_minuten", 15)),
             bool(k.get("datenquelle.cache.aktiv", True)),
         )
         self._letzte_anfrage = 0.0
+        #: Wurde unterwegs auf abgelaufene Daten aus dem Zwischenspeicher
+        #: zurueckgegriffen? Das muss im Heft stehen.
+        self.veraltet_genutzt = False
         # Je Host eine eigene robots.txt: api.fupa.net und www.fupa.net sind
         # verschiedene Server und duerfen verschiedene Regeln haben.
         self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
@@ -341,7 +347,20 @@ class FupaClient:
             logger().debug("Aus Cache: %s", url)
             return zwischengespeichert
 
-        antwort = self.abrufen(url)
+        try:
+            antwort = self.abrufen(url)
+        except DatenquelleNichtErreichbarFehler:
+            # Letzter Rettungsanker: Was beim letzten Mal ankam. Lieber ein
+            # Heft mit ausgewiesen aelterem Stand als gar keines -- aber der
+            # Stand wird auf jeder Seite genannt und oben gemeldet.
+            veraltet = self.cache.lesen(schluessel, auch_veraltet=True)
+            if isinstance(veraltet, list):
+                self.veraltet_genutzt = True
+                logger().warning(
+                    "FuPa nicht erreichbar - verwende aeltere Daten fuer %s.", url)
+                return veraltet
+            raise
+
         if antwort.status_code in (403, 429):
             raise DatenquelleNichtErreichbarFehler(
                 f"HTTP {antwort.status_code} fuer {url}",
@@ -406,30 +425,30 @@ KANDIDATEN: tuple[str, ...] = (
 )
 
 
-def adressen_fuer(client: FupaClient, mannschaft: Mannschaft) -> list[str]:
-    """Alle Adressen, die fuer eine Mannschaft in Frage kommen.
+def adressen_fuer_kennung(client: FupaClient, kennung: str,
+                          team_url: str = "") -> list[str]:
+    """Alle Adressen, die fuer einen Team-Bezeichner in Frage kommen.
 
-    Reihenfolge: konfigurierte Endpunkte, dann die konfigurierte Teamseite,
-    dann frei ergaenzbare Zusatzadressen, zuletzt die Standardkandidaten.
-    Doppelte Eintraege fallen heraus.
+    Reihenfolge: konfigurierte Endpunkte, dann die ausdruecklich bekannte
+    Teamseite, dann frei ergaenzbare Zusatzadressen, zuletzt die
+    Standardkandidaten. Doppelte Eintraege fallen heraus.
     """
-    slug = mannschaft.fupa_slug
     adressen: list[str] = []
 
     for name in client.endpunkte:
         try:
-            adressen.append(client.url_fuer(name, team_slug=slug))
+            adressen.append(client.url_fuer(name, team_slug=kennung))
         except DatenNichtLesbarFehler:
             continue
 
-    # Die konfigurierte Teamseite ist die zuverlaessigste Adresse ueberhaupt:
-    # Sie hat der Verein selbst eingetragen, sie muss nicht geraten werden.
-    if mannschaft.fupa_team_url:
-        adressen.append(mannschaft.fupa_team_url.rstrip("/"))
+    # Eine ausdruecklich bekannte Teamseite ist die zuverlaessigste Adresse
+    # ueberhaupt: Sie muss nicht geraten werden.
+    if team_url:
+        adressen.append(team_url.rstrip("/"))
 
     for muster in (*client.zusatz_adressen, *KANDIDATEN):
         try:
-            adressen.append(muster.format(slug=slug, team_slug=slug))
+            adressen.append(muster.format(slug=kennung, team_slug=kennung))
         except (KeyError, IndexError):
             adressen.append(muster)
 
@@ -442,9 +461,42 @@ def adressen_fuer(client: FupaClient, mannschaft: Mannschaft) -> list[str]:
     return eindeutig
 
 
+def adressen_fuer(client: FupaClient, mannschaft: Mannschaft) -> list[str]:
+    """Alle Adressen, die fuer eine konfigurierte Mannschaft in Frage kommen."""
+    return adressen_fuer_kennung(client, mannschaft.fupa_slug,
+                                 mannschaft.fupa_team_url)
+
+
 def _kurz(adresse: str) -> str:
     """Adresse gekuerzt fuers Protokoll."""
     return adresse.replace("https://", "").replace("www.", "")
+
+
+@dataclass
+class Fund:
+    """Was beim Abklappern einer Adressliste zusammengekommen ist."""
+
+    tabelle: list[TabellenZeile] = field(default_factory=list)
+    torjaeger: list[TorjaegerZeile] = field(default_factory=list)
+    spieler: list[SpielerZeile] = field(default_factory=list)
+    spiele: list[Spiel] = field(default_factory=list)
+    abrufe: int = 0
+    netzfehler: Exception | None = None
+
+    @property
+    def vollstaendig(self) -> bool:
+        return bool(self.tabelle and self.torjaeger and self.spieler and self.spiele)
+
+    @property
+    def leer(self) -> bool:
+        return not (self.tabelle or self.torjaeger or self.spieler or self.spiele)
+
+    @property
+    def liga(self) -> str:
+        for spiel in self.spiele:
+            if spiel.wettbewerb:
+                return spiel.wettbewerb
+        return ""
 
 
 class FupaApiQuelle:
@@ -463,9 +515,9 @@ class FupaApiQuelle:
     4. Sobald alle vier Teile beisammen sind, wird abgebrochen. Es werden
        also nur so viele Seiten geholt wie noetig.
 
-    Dadurch spielt es keine Rolle, ob FuPa seine Felder ``points`` oder
-    ``punkte`` nennt und ob die Daten aus einer Schnittstelle oder aus dem
-    HTML der oeffentlichen Seite kommen.
+    Dasselbe Verfahren laeuft danach ein zweites Mal -- fuer den **naechsten
+    Gegner**. Dessen Bezeichner steht im Spielplan, den Schritt 3 gerade
+    erkannt hat. Er muss also weder erraten noch von Hand gepflegt werden.
     """
 
     name = "api"
@@ -475,6 +527,21 @@ class FupaApiQuelle:
         self.client = FupaClient(konfiguration)
         self.vereinsname = konfiguration.vereinsname
         self.max_abrufe = int(konfiguration.get("datenquelle.fupa.max_abrufe", 12))
+        self.gegner_abrufen = bool(
+            konfiguration.get("datenquelle.fupa.gegner_abrufen", True))
+        #: Von Hand hinterlegte Gegneradressen, falls der Spielplan keinen
+        #: Bezeichner mitliefert. Schluessel = Vereinsname (klein geschrieben).
+        self.gegner_adressen = {
+            str(k).strip().lower(): str(v)
+            for k, v in (konfiguration.get("datenquelle.fupa.gegner", {}) or {}).items()
+        }
+        #: Adressmuster, die in diesem Lauf schon nichts geliefert haben. Beim
+        #: naechsten Team werden sie uebersprungen. Ohne das holt ein Heft mit
+        #: fuenf Mannschaften dieselben Fehlschlaege zehnmal -- unnoetige Last
+        #: fuer FuPa und unnoetige Wartezeit fuer uns.
+        self._tote_muster: set[str] = set()
+        #: Muster, die etwas geliefert haben, werden zuerst probiert.
+        self._gute_muster: list[str] = []
 
     # -- Schnittstelle ------------------------------------------------------
 
@@ -490,100 +557,169 @@ class FupaApiQuelle:
 
         logger().info("Hole FuPa-Daten fuer %s (%s) ...",
                       mannschaft.anzeigename, mannschaft.fupa_slug)
-        self._einsammeln(mannschaft, daten)
+
+        fund = self._sammeln(adressen_fuer(self.client, mannschaft),
+                             self.vereinsname, self.max_abrufe,
+                             mannschaft.fupa_slug)
+        if fund.abrufe == 0:
+            raise fund.netzfehler or DatenquelleNichtErreichbarFehler(
+                "Keine Adresse lieferte eine Antwort.",
+                benutzer_text="Von FuPa kam keine verwertbare Antwort.",
+                hinweis=("Bitte in der Oberflaeche auf 'FuPa-Verbindung pruefen' "
+                         "klicken - dort steht, was genau zurueckkam."))
+
+        daten.tabelle = fund.tabelle
+        daten.torjaeger = fund.torjaeger
+        daten.spieler = fund.spieler
+        daten.spiele = fund.spiele
+        daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(fund.spiele)
+        daten.liga = daten.liga or fund.liga
+        daten.abgerufen_am = datetime.now().isoformat(timespec="seconds")
+        daten.veraltet = self.client.veraltet_genutzt
+
+        if self.gegner_abrufen:
+            daten.gegner_daten = self._gegner_holen(daten)
+
         self._melden(daten)
         return daten
 
     # -- Suchen und erkennen ------------------------------------------------
 
-    def _einsammeln(self, mannschaft: Mannschaft, daten: MannschaftsDaten) -> None:
+    def _muster(self, adresse: str, kennung: str) -> str:
+        """Die Adresse mit dem Team-Bezeichner wieder als Platzhalter.
+
+        So laesst sich eine Erfahrung von einer Mannschaft auf die naechste
+        uebertragen: Nicht *diese* Adresse war tot, sondern diese *Art* von
+        Adresse.
+        """
+        return adresse.replace(kennung, "{slug}") if kennung else adresse
+
+    def _sortieren(self, adressen: list[str], kennung: str) -> list[str]:
+        """Bewaehrte Adressen zuerst, in diesem Lauf tote gar nicht."""
+        gut, offen = [], []
+        for adresse in adressen:
+            muster = self._muster(adresse, kennung)
+            if muster in self._tote_muster:
+                continue
+            (gut if muster in self._gute_muster else offen).append(adresse)
+        return gut + offen
+
+    def _sammeln(self, adressen: list[str], vereinsname: str,
+                 hoechstens: int, kennung: str = "") -> Fund:
         """Adressen der Reihe nach abklappern und alles Erkannte sammeln."""
-        adressen = adressen_fuer(self.client, mannschaft)
-        partien: list[Spiel] = []
-        abrufe = 0
-        netzfehler: Exception | None = None
+        fund = Fund()
         fehlschlaege = 0
 
-        for adresse in adressen:
-            if abrufe >= self.max_abrufe or self._vollstaendig(daten, partien):
+        for adresse in self._sortieren(adressen, kennung):
+            if fund.abrufe >= hoechstens or fund.vollstaendig:
                 break
             try:
                 bloecke = self.client.hole_nutzlasten(adresse)
             except DatenquelleNichtErreichbarFehler as fehler:
-                netzfehler = fehler
+                fund.netzfehler = fehler
                 fehlschlaege += 1
                 # Scheitern mehrere Adressen hintereinander am Netz, ist nicht
                 # die Adresse das Problem, sondern die Verbindung. Dann bringt
                 # Weiterprobieren nur Wartezeit.
-                if fehlschlaege >= 3 and abrufe == 0:
+                if fehlschlaege >= 3 and fund.abrufe == 0:
                     break
                 continue
             except Exception as fehler:                       # noqa: BLE001
                 logger().debug("%s nicht verwertbar: %s", adresse, fehler)
                 continue
 
-            abrufe += 1
+            fund.abrufe += 1
+            muster = self._muster(adresse, kennung)
             if bloecke:
-                partien = self._auswerten(bloecke, daten, partien, adresse)
+                self._auswerten(bloecke, fund, vereinsname, adresse)
+                if muster not in self._gute_muster:
+                    self._gute_muster.append(muster)
+            else:
+                self._tote_muster.add(muster)
+        return fund
 
-        if abrufe == 0:
-            if netzfehler is not None:
-                raise netzfehler
-            raise DatenquelleNichtErreichbarFehler(
-                f"Keine der {len(adressen)} Adressen lieferte eine Antwort.",
-                benutzer_text="Von FuPa kam keine verwertbare Antwort.",
-                hinweis=("Bitte in der Oberflaeche auf 'FuPa-Verbindung pruefen' "
-                         "klicken - dort steht, was genau zurueckkam."))
-
-        if partien:
-            daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(partien)
-        if not daten.liga:
-            daten.liga = self._liga_aus(partien, daten)
-
-    def _auswerten(self, bloecke: list[Any], daten: MannschaftsDaten,
-                   partien: list[Spiel], adresse: str) -> list[Spiel]:
+    def _auswerten(self, bloecke: list[Any], fund: Fund, vereinsname: str,
+                   adresse: str) -> None:
         """Nimmt aus jedem Block das Beste. Die laengere Liste gewinnt.
 
         Kommt dieselbe Tabelle auf mehreren Seiten vor, ist das kein Problem:
         Es bleibt die vollstaendigste Fassung stehen.
         """
         for block in bloecke:
-            gefunden = tabelle_erkennen(block, self.vereinsname)
-            if len(gefunden) > len(daten.tabelle):
-                daten.tabelle = gefunden
+            gefunden = tabelle_erkennen(block, vereinsname)
+            if len(gefunden) > len(fund.tabelle):
+                fund.tabelle = gefunden
                 logger().info("Tabelle erkannt (%d Zeilen) auf %s",
                               len(gefunden), _kurz(adresse))
 
-            schuetzen = torjaeger_erkennen(block, self.vereinsname)
-            if len(schuetzen) > len(daten.torjaeger):
-                daten.torjaeger = schuetzen
+            schuetzen = torjaeger_erkennen(block, vereinsname)
+            if len(schuetzen) > len(fund.torjaeger):
+                fund.torjaeger = schuetzen
                 logger().info("Torschuetzenliste erkannt (%d Zeilen) auf %s",
                               len(schuetzen), _kurz(adresse))
 
             kader = spieler_erkennen(block)
-            if len(kader) > len(daten.spieler):
-                daten.spieler = kader
+            if len(kader) > len(fund.spieler):
+                fund.spieler = kader
                 logger().info("Spielerstatistik erkannt (%d Zeilen) auf %s",
                               len(kader), _kurz(adresse))
 
-            spielplan = spiele_erkennen(block, self.vereinsname)
-            if len(spielplan) > len(partien):
-                partien = spielplan
+            spielplan = spiele_erkennen(block, vereinsname)
+            if len(spielplan) > len(fund.spiele):
+                fund.spiele = spielplan
                 logger().info("Spielplan erkannt (%d Partien) auf %s",
                               len(spielplan), _kurz(adresse))
-        return partien
 
-    @staticmethod
-    def _vollstaendig(daten: MannschaftsDaten, partien: list[Spiel]) -> bool:
-        return bool(daten.tabelle and daten.torjaeger and daten.spieler and partien)
+    # -- Der naechste Gegner ------------------------------------------------
 
-    @staticmethod
-    def _liga_aus(partien: list[Spiel], daten: MannschaftsDaten) -> str:
-        """Ligabezeichnung aus dem Spielplan uebernehmen, wenn sie fehlt."""
-        for spiel in partien:
-            if spiel.wettbewerb:
-                return spiel.wettbewerb
-        return daten.liga
+    def _gegner_holen(self, daten: MannschaftsDaten) -> GegnerDaten | None:
+        """Holt die Zahlen des naechsten Gegners.
+
+        Der Bezeichner steht im gerade erkannten Spielplan. Liefert die Quelle
+        dort keinen, hilft nur noch eine von Hand hinterlegte Adresse -- dann
+        wird das auch so gesagt, statt still eine leere Seite zu bauen.
+        """
+        spiel = daten.naechstes_spiel
+        if spiel is None or not spiel.gegner:
+            return None
+
+        gegner = GegnerDaten(name=spiel.gegner, kennung=spiel.gegner_kennung)
+        hinterlegt = self.gegner_adressen.get(gegner.name.strip().lower(), "")
+        if hinterlegt:
+            gegner.fupa_team_url = hinterlegt
+            if not gegner.kennung:
+                gegner.kennung = hinterlegt.rstrip("/").rsplit("/", 1)[-1]
+
+        if not gegner.kennung and not gegner.fupa_team_url:
+            daten.warnungen.append(
+                f"Zu {gegner.name} liefert FuPa im Spielplan keinen "
+                f"Team-Bezeichner. Die Gegnerseiten bleiben leer. Abhilfe: den "
+                f"FuPa-Link des Gegners in config.yaml unter "
+                f"datenquelle.fupa.gegner eintragen.")
+            return gegner
+
+        logger().info("Hole Gegnerdaten: %s (%s)", gegner.name,
+                      gegner.kennung or gegner.fupa_team_url)
+        fund = self._sammeln(
+            adressen_fuer_kennung(self.client, gegner.kennung,
+                                  gegner.fupa_team_url),
+            gegner.name, self.max_abrufe, gegner.kennung)
+
+        gegner.tabelle = fund.tabelle
+        gegner.torjaeger = fund.torjaeger
+        gegner.spieler = fund.spieler
+        gegner.spiele = fund.spiele
+        gegner.liga = fund.liga
+        if not gegner.fupa_team_url and gegner.kennung:
+            gegner.fupa_team_url = f"https://www.fupa.net/team/{gegner.kennung}"
+
+        if fund.leer:
+            daten.warnungen.append(
+                f"Zu {gegner.name} kamen keine Zahlen an - die Gegnerseiten "
+                f"bleiben leer. Der Rest des Hefts ist davon nicht betroffen.")
+        return gegner
+
+    # -- Rueckmeldung -------------------------------------------------------
 
     def _melden(self, daten: MannschaftsDaten) -> None:
         """Was nicht gefunden wurde, muss der Benutzer erfahren.
@@ -606,6 +742,11 @@ class FupaApiQuelle:
                 "Von FuPa konnte " + ", ".join(fehlend) + " nicht gelesen werden. "
                 "Die betreffenden Seiten bleiben leer. Über den Knopf "
                 "'FuPa-Verbindung prüfen' lässt sich nachsehen, was zurückkam.")
+        if daten.veraltet:
+            daten.warnungen.append(
+                "FuPa war nicht erreichbar. Es wurden ältere Daten aus dem "
+                "Zwischenspeicher verwendet – bitte den Stand auf den Seiten "
+                "prüfen, bevor das Heft in den Druck geht.")
         if daten.naechstes_spiel:
             logger().info("Nächstes Spiel: %s am %s",
                           daten.naechstes_spiel.paarung or "?",
