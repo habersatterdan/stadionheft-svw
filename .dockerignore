@@ -1,0 +1,21 @@
+# Was nicht ins Image gehoert -- kleineres Image, schnellerer Bau.
+.git
+.github
+.gitignore
+docs
+site
+tests
+*.md
+!README.md
+mkdocs.yml
+docker-compose.yml
+.dockerignore
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.venv
+venv
+daten
+logs
+config/config.yaml

@@ -1,11 +1,13 @@
 # ---------------------------------------------------------------------------
-# Fertige Compose-Datei fuer die SVWNAS (DS720+)
+# Stadionheft-Generator auf der SVWNAS (DS720+)
 #
-# Zugeschnitten auf die vorhandene Ablage:
-#     /volume1/SVW/Stadionheft/
+# Es wird nichts mehr selbst gebaut: Das fertige Image kommt von GitHub.
+# Verwendung im Container Manager:
+#     Projekt -> Erstellen -> Ordner mit dieser Datei waehlen
 #
-# Verwendung: Container Manager -> Projekt -> Erstellen -> als Pfad den
-# Ordner waehlen, in dem diese Datei liegt.
+# Aktualisieren (Container Manager -> Projekt -> Aktion):
+#     Zuerst "Erstellen" mit angehaktem "Images neu aufbauen" oder auf der
+#     Kommandozeile:  docker compose pull && docker compose up -d
 #
 # Vollstaendige Anleitung: docs/ERSTE_EINRICHTUNG.md
 #
@@ -15,8 +17,11 @@
 # ---------------------------------------------------------------------------
 services:
   stadionheft:
-    build: .
-    image: stadionheft-svw:latest
+    image: ghcr.io/habersatterdan/stadionheft-svw:latest
+    # Nur noetig, wenn ausnahmsweise selbst gebaut werden soll (z. B. um eine
+    # Aenderung zu testen, bevor sie auf GitHub liegt). Dann die Zeile
+    # "image:" oben auskommentieren und diese hier aktivieren:
+    # build: .
     container_name: stadionheft
     restart: unless-stopped
 
@@ -36,22 +41,17 @@ services:
       # --- Konfiguration -------------------------------------------------
       - /volume1/SVW/Stadionheft/_Programm/00_Konfiguration:/app/config
 
-      # --- Vorlagen und Werbung (nur lesen) ------------------------------
+      # --- Vereinswappen und andere Vorlagen (nur lesen) -----------------
       - /volume1/SVW/Stadionheft/_Programm/01_Vorlagen:/app/daten/01_vorlagen:ro
-      - /volume1/SVW/Stadionheft/_Programm/02_Werbung:/app/daten/02_werbung:ro
 
-      # --- Eingaben der Redaktion ----------------------------------------
+      # --- CSV-Dateien, falls FuPa einmal ausfaellt ----------------------
       - /volume1/SVW/Stadionheft/_Programm/03_Eingaben:/app/daten/03_eingaben
 
       # --- Arbeitsordner und Protokolle ----------------------------------
       - /volume1/SVW/Stadionheft/_Programm/04_Zwischenergebnisse:/app/daten/04_zwischenergebnisse
       - /volume1/SVW/Stadionheft/_Programm/99_Logs:/app/logs
 
-      # --- Fertige Hefte: in den Saisonordner, wie bisher -----------------
+      # --- Die fertigen Dateien: in den Saisonordner ---------------------
+      # Hier holt sich die Person, die das Heft zusammenbaut, die PDFs ab.
       # Beim Saisonwechsel diese Zeile auf den neuen Ordner umstellen.
       - /volume1/SVW/Stadionheft/Saison 26-27/05_Ausgaben:/app/daten/05_ausgaben
-
-      # --- Vorhandener FuPa-Export ---------------------------------------
-      # Falls dort bereits Exportdateien liegen, sind sie im Container unter
-      # /app/daten/fupa_export erreichbar.
-      - /volume1/SVW/Stadionheft/Fupa-Export:/app/daten/fupa_export:ro

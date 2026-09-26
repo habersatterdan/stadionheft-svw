@@ -39,7 +39,7 @@ COPY config/ ./config/
 COPY pyproject.toml README.md ./
 
 # Arbeitsordner; auf der NAS werden hier Volumes eingehaengt.
-RUN mkdir -p /app/daten/01_vorlagen /app/daten/02_werbung /app/daten/03_eingaben \
+RUN mkdir -p /app/daten/01_vorlagen /app/daten/03_eingaben \
              /app/daten/04_zwischenergebnisse /app/daten/05_ausgaben /app/logs
 
 EXPOSE 8080
@@ -48,8 +48,8 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=15s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/gesundheit').read()" || exit 1
 
 # Ein Arbeitsprozess mit mehreren Threads reicht voellig -- im Verein
-# erstellt praktisch nie mehr als eine Person gleichzeitig ein Heft.
-# Das Timeout ist grosszuegig, weil ein Lauf mit vielen Mannschaften und
-# langsamer FuPa-Antwort durchaus eine Minute dauern kann.
+# arbeitet praktisch nie mehr als eine Person gleichzeitig damit.
+# Das Timeout ist grosszuegig: Ein Lauf holt je Mannschaft auch noch die
+# Daten des Gegners, das kann bei langsamer Antwort eine Weile dauern.
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", \
      "--timeout", "300", "stadionheft.web.wsgi:app"]

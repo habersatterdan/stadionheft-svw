@@ -1,0 +1,126 @@
+# ---------------------------------------------------------------------------
+# Baut ein fertiges Docker-Image und legt es in der GitHub Container Registry
+# ab. Damit muss auf der NAS und im Homelab nichts mehr selbst gebaut werden:
+#
+#     docker pull ghcr.io/habersatterdan/stadionheft-svw:latest
+#
+# Gebaut wird fuer zwei Prozessorarten:
+#   linux/amd64  -- Synology DS720+ (Intel Celeron) und die meisten PCs
+#   linux/arm64  -- Raspberry Pi 4/5 und ARM-Server im Homelab
+#
+# EINMALIG NOETIG, damit die NAS das Image ohne Anmeldung ziehen kann:
+#   GitHub -> Profil -> Packages -> stadionheft-svw -> Package settings
+#   -> Change visibility -> Public
+# Das Image enthaelt nur Programmcode, keine Vereinsdaten und keine
+# Zugangsdaten -- die liegen ausschliesslich auf der NAS.
+# ---------------------------------------------------------------------------
+name: Docker-Image veröffentlichen
+
+on:
+  push:
+    # Entwicklungszweige bauen mit, damit ein Stand vor dem Zusammenfuehren
+    # ausprobiert werden kann. "latest" bekommt aber nur main -- siehe unten.
+    branches: [main, "claude/**"]
+    tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  # Erst pruefen, dann ausliefern. Ein Image, dessen Tests rot sind, hat auf
+  # der NAS nichts verloren.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Systembibliotheken für WeasyPrint
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+            libjpeg62-turbo shared-mime-info fonts-dejavu-core
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Tests
+        run: python -m pytest -q
+
+  image:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # QEMU wird gebraucht, um auf einem Intel-Läufer auch für ARM zu bauen.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: An der Registry anmelden
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Erzeugt sprechende Tags:
+      #   latest            -> immer der letzte Stand von main
+      #   2026-09-26        -> Datum des Baus, zum Zurückgehen
+      #   sha-abc1234       -> genau dieser Commit
+      #   v1.2.3            -> wenn ein Git-Tag gesetzt wurde
+      - name: Tags und Beschriftung festlegen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value={{date 'YYYY-MM-DD'}},enable={{is_default_branch}}
+            type=ref,event=branch,enable=${{ github.ref_name != 'main' }}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+          labels: |
+            org.opencontainers.image.title=Stadionheft-Generator
+            org.opencontainers.image.description=Erzeugt je Mannschaft eine druckfertige PDF mit aktuellen FuPa-Zahlen
+            org.opencontainers.image.vendor=SV Wörnitzstein-Berg
+
+      - name: Bauen und hochladen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Was jetzt zu tun ist
+        run: |
+          echo "### Image veröffentlicht" >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
+          echo 'Auf der NAS bzw. im Homelab:' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo 'docker pull ${{ env.REGISTRY }}/${{ env.IMAGE }}:latest' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo '' >> $GITHUB_STEP_SUMMARY
+          echo 'Gebaute Tags:' >> $GITHUB_STEP_SUMMARY
+          echo '${{ steps.meta.outputs.tags }}' >> $GITHUB_STEP_SUMMARY
