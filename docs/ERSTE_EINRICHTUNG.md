@@ -1,323 +1,183 @@
-# Erste Einrichtung – Schritt für Schritt
+# Erste Einrichtung
 
-Diese Anleitung führt dich einmal komplett durch. **Kein SSH, keine
-Kommandozeile** – alles über die DSM-Oberfläche im Browser, auch von
-unterwegs.
+Diese Anleitung richtet das Programm einmalig ein. Danach genügt der Knopf in
+der Weboberfläche.
 
-Dauer: etwa 30 Minuten, davon 15 Minuten Warten auf den Container-Build.
+Es wird **nichts mehr selbst gebaut** – das fertige Image liegt auf GitHub und
+wird nur noch geladen.
 
-!!! info "Passt genau auf eure NAS"
-    Geschrieben für die **SVWNAS (DS720+)** und die vorhandene Ablage
-    `SVW/Stadionheft`. Andere Pfade nur, wenn ausdrücklich erwähnt.
+!!! info "Voraussetzungen"
+    Eine Synology NAS mit **DSM 7.2 oder neuer** (dort heißt das Werkzeug
+    *Container Manager*; unter DSM 7.0/7.1 heißt es *Docker* und funktioniert
+    genauso). Dazu ein Administrator-Konto auf der NAS.
 
----
-
-## Vorab: Brauche ich SSH?
-
-**Nein.** Alles hier geht über den Browser.
-
-SSH über das Internet wäre auch keine gute Idee: Dafür müsstest du Port 22
-im Router freigeben, und dieser Port wird im Internet permanent von
-automatisierten Angriffen abgeklopft. Wenn du später doch einmal eine
-Kommandozeile brauchst, dann bitte **nur über VPN**, nicht offen freigegeben.
+    Kein SSH nötig, kein Terminal, keine Programmierkenntnisse.
 
 ---
 
-## Schritt 1: Prüfen, ob das DSM-Update durch ist
+## Schritt 1 – Ordner anlegen
 
-DSM öffnen (über QuickConnect oder im Heimnetz) →
-**Systemsteuerung → Info-Center**
-
-Bei **DSM-Version** muss **7.2** oder höher stehen.
-
-??? question "Steht dort noch 7.1?"
-    Dann läuft das Update noch oder wurde noch nicht gestartet:
-    **Systemsteuerung → Aktualisieren und Wiederherstellen → DSM-Aktualisierung**
-
-    Vor dem Update: Datensicherung prüfen. Das Update dauert 10–20 Minuten,
-    die NAS startet dabei neu.
-
----
-
-## Schritt 2: Container Manager installieren
-
-**Paket-Zentrum** öffnen → oben nach `Container Manager` suchen →
-**Installieren**
-
-Dauert ein bis zwei Minuten. Danach erscheint „Container Manager" im
-Hauptmenü.
-
----
-
-## Schritt 3: Startpaket hochladen und entpacken
-
-Du hast von mir die Datei **`SVWNAS_Startpaket.zip`** bekommen. Darin sind
-schon fertig enthalten:
-
-* die komplette Ordnerstruktur
-* die Konfiguration, passend zu euren Pfaden
-* alle 14 Werbeanzeigen aus dem alten Heft, einzeln und benannt
-* Kontaktlisten, Impressum und Rücktitel als Seiten
-* das Vereinswappen
-* die Beispieldaten für Herren 1
-
-So kommt es auf die NAS:
-
-1. **File Station** öffnen
-2. Links zu **SVW → Stadionheft** navigieren
-3. Oben auf **Upload → Upload – Überspringen** klicken
-4. Die Datei `SVWNAS_Startpaket.zip` auswählen und hochladen (12 MB)
-5. Nach dem Upload: **Rechtsklick auf die ZIP-Datei → Extrahieren →
-   Hierher extrahieren**
-6. Die ZIP-Datei danach löschen
-
-Danach liegt in `SVW/Stadionheft` ein neuer Ordner **`_Programm`**.
-
-!!! warning "Wo genau landet `_Programm`?"
-    Es muss direkt in `SVW/Stadionheft` liegen, also
-    `SVW/Stadionheft/_Programm`. Landet es versehentlich eine Ebene tiefer
-    (z. B. `SVW/Stadionheft/app/_Programm`), dann entweder den Ordner
-    `_Programm` eine Ebene nach oben ziehen – oder in `docker-compose.yml`
-    alle Pfade entsprechend anpassen.
-
-!!! success "Was dabei nicht passiert"
-    Deine bestehenden Ordner – `Saison 22 23` bis `Saison 26-27`,
-    `Fupa-Export`, `Beregnungseinbau` – werden **nicht angefasst**. Es kommt
-    nur ein Ordner dazu.
-
----
-
-## Schritt 4: Ausgabeordner anlegen
-
-Die fertigen Hefte sollen dort landen, wo sie bisher lagen.
-
-**File Station** → **SVW → Stadionheft → Saison 26-27** →
-oben **Create → Ordner erstellen** → Name: `05_Ausgaben`
-
----
-
-## Schritt 5: Programm auf die NAS bringen
-
-Euer Repository ist privat – die NAS kann es also nicht selbst
-herunterladen. Deshalb der Umweg über eine ZIP-Datei. Das ist einmalig
-und dauert zwei Minuten.
-
-1. Im Browser https://github.com/habersatterdan/stadionheft-svw öffnen
-2. Oben rechts der grüne Knopf **Code** → **Download ZIP**
-3. In der **File Station** links auf **docker** klicken
-   (die Freigabe gibt es bereits)
-4. **Create → Ordner erstellen** → Name: `stadionheft`
-5. In diesen Ordner wechseln und die heruntergeladene ZIP hochladen
-6. **Rechtsklick → Extrahieren → Hierher extrahieren**
-
-Nach dem Entpacken liegt dort ein Unterordner mit einem langen Namen wie
-`stadionheft-svw-main` oder `stadionheft-svw-claude-...`. **Das ist in
-Ordnung** – du musst nichts verschieben. Merk dir nur den Namen; im
-nächsten Schritt wählst du genau diesen Ordner aus.
-
-Darin müssen `Dockerfile`, `docker-compose.yml` und der Ordner
-`stadionheft` liegen.
-
-7. Die ZIP-Datei löschen (wird nicht mehr gebraucht)
-
----
-
-## Schritt 6: Projekt im Container Manager anlegen
-
-**Container Manager** öffnen → links **Projekt** → **Erstellen**
-
-| Feld | Eingabe |
-|---|---|
-| Projektname | `stadionheft` |
-| Pfad | **Festlegen** → den entpackten Ordner auswählen (der mit dem langen Namen) |
-| Quelle | Container Manager erkennt die vorhandene `docker-compose.yml` und schlägt sie vor – bestätigen |
-
-Dann **Weiter → Weiter → Fertig**.
-
-Jetzt baut die NAS das Programm. **Das dauert beim ersten Mal 10–15
-Minuten** – im Fenster laufen viele Meldungen durch, das ist normal.
-Warten, bis unten **„Läuft"** bzw. **„running"** steht.
-
-??? warning "Fehlermeldung „port is already allocated""
-    Port 8080 ist auf der NAS schon belegt. In `docker-compose.yml` die
-    **linke** Zahl ändern, z. B. `"8095:8080"`. Die rechte Zahl bleibt 8080.
-    Die App ist dann unter Port 8095 erreichbar.
-
-??? warning "Der Build bricht ab"
-    Meist zu wenig Arbeitsspeicher oder Plattenplatz. Andere Container
-    vorübergehend stoppen und erneut versuchen. Die DS720+ hat 2 GB RAM –
-    das reicht, aber nicht mit vielen Containern gleichzeitig.
-
-??? tip "Später: Updates einspielen"
-    Bei einer neuen Version: neue ZIP herunterladen, Inhalt von
-    `docker/stadionheft` ersetzen, dann im Container Manager beim Projekt
-    auf **Erstellen** (Build) klicken. Konfiguration und Daten bleiben
-    erhalten – die liegen außerhalb in `_Programm`.
-
----
-
-## Schritt 7: Aufrufen
-
-Im Browser:
+In der **File Station** unter `SVW/Stadionheft/` diese Struktur anlegen:
 
 ```
-http://svwnas:8080
+SVW/Stadionheft/
+├── _Programm/
+│   ├── 00_Konfiguration/      ← config.yaml
+│   ├── 01_Vorlagen/           ← Vereinswappen (optional)
+│   ├── 03_Eingaben/           ← CSV-Dateien als Notfall-Reserve
+│   ├── 04_Zwischenergebnisse/ ← Arbeitsordner, legt das Programm selbst an
+│   ├── 99_Logs/               ← Protokolle
+│   └── docker/                ← hier kommt die docker-compose.yml hinein
+└── Saison 26-27/
+    └── 05_Ausgaben/           ← hier landen die fertigen PDFs
 ```
 
-Klappt das nicht, die IP verwenden – zu finden unter
-**Systemsteuerung → Netzwerk → Netzwerkschnittstelle**, z. B.
-`http://192.168.178.42:8080`
-
-**Du solltest jetzt sehen:** „Stadionheft erstellen" mit den fünf
-Mannschaften zur Auswahl.
-
-### Sofort ausprobieren
-
-Haken bei **Herren 1** → **Stadionheft erstellen** → warten →
-**PDF herunterladen**
-
-Es sollte ein Heft mit 24 Seiten entstehen, Gegner **SG Alerheim**.
+Ordner anlegen: File Station → rechte Maustaste → **Ordner erstellen**.
 
 ---
 
-## Schritt 8: Feste IP vergeben
+## Schritt 2 – Konfiguration hinterlegen
 
-Damit sich die Adresse nie ändert und Lesezeichen dauerhaft funktionieren:
+1. Im Repository die Datei [`config/config.example.yaml`][beispiel] öffnen und
+   den Inhalt kopieren.
+2. In der File Station nach `_Programm/00_Konfiguration/` gehen.
+3. Über **Erstellen → Datei erstellen** eine Datei `config.yaml` anlegen und
+   den Inhalt einfügen.
+4. Die mit `TODO` markierten Stellen anpassen – vor allem die **Ligen** der
+   Mannschaften und die **FuPa-Links**.
 
-Im **Router** (FRITZ!Box: Heimnetz → Netzwerk → SVWNAS bearbeiten) den Haken
-setzen bei *„Diesem Netzwerkgerät immer die gleiche IPv4-Adresse zuweisen"*.
+[beispiel]: https://github.com/habersatterdan/stadionheft-svw/blob/main/config/config.example.yaml
 
----
-
-## Schritt 9: Zugriff für die anderen
-
-### Im Vereins-WLAN
-
-Nichts weiter nötig. Adresse weitergeben, fertig. Am Handy lohnt sich
-*„Zum Home-Bildschirm hinzufügen"*.
-
-### Von unterwegs – der sichere Weg
-
-Über einen VPN-Tunnel. Eigene Anleitung:
-**[Zugriff von unterwegs](VPN_EINRICHTEN.md)**
-
-Welcher Weg passt, hängt an einer Frage:
-
-* **Kein Zugriff auf den Router?** → Tailscale. Braucht keine Portfreigabe.
-* **Router-Zugriff vorhanden?** → OpenVPN aus dem Paket „VPN Server", dazu
-  DynDNS und eine Freigabe von UDP 1194.
-
-Wer verbunden ist, erreicht die App wie zu Hause – und alles andere auf der
-NAS gleich mit.
-
-!!! danger "Nicht einfach den Port im Router freigeben"
-    Die App hat im Auslieferungszustand keine Anmeldung. Wer die Adresse
-    kennt, könnte Hefte erzeugen und eure Daten sehen.
-
-    Soll es ohne VPN gehen, brauchst du **beides**:
-
-    1. **Reverse Proxy mit HTTPS** – DSM → Anmeldeportal → Reverse Proxy,
-       dazu ein Let's-Encrypt-Zertifikat
-    2. **Passwortschutz einschalten** – in `config.yaml`:
-       ```yaml
-       zugang:
-         passwortschutz: true
-         benutzername: "svw"
-         passwort_umgebungsvariable: "STADIONHEFT_PASSWORT"
-       ```
-       Das Passwort selbst im Container Manager unter **Umgebung** setzen,
-       nicht in die Datei schreiben.
-
-    QuickConnect hilft hier übrigens nicht – es leitet nur DSM-eigene
-    Dienste weiter, keine Container-Ports.
+!!! warning "Die config.yaml gehört auf die NAS, nicht ins Image"
+    Sie wird in den Container eingehängt. Dadurch bleibt sie bei jeder
+    Aktualisierung erhalten, und Vereinsdaten landen nie auf GitHub.
 
 ---
 
-## App ohne Weboberflaeche testen
+## Schritt 3 – Compose-Datei hinterlegen
 
-Solange du nicht im Vereinsnetz bist und noch kein Tunnel steht, kommst du
-nicht an Port 8080. **Prüfen kannst du die App trotzdem** – über den
-Aufgabenplaner. Der läuft auf der NAS und ist über DSM erreichbar, also auch
-aus dem Internet.
+Aus dem Repository die Datei [`docker-compose.yml`][compose] kopieren und in
+`_Programm/docker/` ablegen.
 
-Damit siehst du, ob Konfiguration, Werbung, Daten und PDF-Erzeugung
-zusammenspielen – ohne einen einzigen Port zu öffnen.
+[compose]: https://github.com/habersatterdan/stadionheft-svw/blob/main/docker-compose.yml
 
-### Schritt 1: Aufgabe anlegen
+Dann **die Pfade darin prüfen**. Sie müssen genau zu eurer Ablage passen. Wenn
+der Ordner `_Programm` nicht direkt unter `SVW/Stadionheft/` liegt, alle Pfade
+entsprechend anpassen.
 
-**Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
-Benutzerdefiniertes Skript**
+---
 
-| Reiter | Einstellung |
-|---|---|
-| Allgemein → Aufgabenname | `Stadionheft Test` |
-| Allgemein → Benutzer | `root` |
-| Zeitplan | Häkchen bei „Aktiviert" **entfernen** – die Aufgabe soll nur von Hand laufen |
-| Aufgabeneinstellungen → Benutzerdefiniertes Skript | siehe unten |
+## Schritt 4 – Image freischalten
 
-Als Skript:
+Das Image liegt in der GitHub Container Registry. Weil das Repository privat
+ist, ist auch das Image zunächst privat – die NAS käme ohne Anmeldung nicht
+heran.
+
+**Einmalig auf GitHub:**
+
+1. Profilbild oben rechts → **Your packages**
+2. Paket `stadionheft-svw` anklicken
+3. Rechts **Package settings**
+4. Ganz unten: **Change visibility → Public** → bestätigen
+
+Das Image enthält nur Programmcode. Keine Vereinsdaten, keine Zugangsdaten,
+keine Konfiguration – die liegen alle auf der NAS.
+
+??? question "Lieber privat lassen?"
+    Dann braucht die NAS eine Anmeldung. Auf GitHub ein *Personal Access Token*
+    mit dem Recht `read:packages` erzeugen und im Container Manager unter
+    **Registrierung → Einstellungen → Hinzufügen** eintragen:
+    Registry `ghcr.io`, Benutzer = GitHub-Name, Passwort = das Token.
+
+---
+
+## Schritt 5 – Projekt anlegen
+
+1. **Container Manager** öffnen
+2. Links **Projekt** → **Erstellen**
+3. Projektname: `stadionheft`
+4. Pfad: den Ordner `_Programm/docker` auswählen
+5. Quelle: **Vorhandene docker-compose.yml verwenden**
+6. **Weiter** → **Fertig**
+
+Die NAS lädt jetzt das Image (etwa 300 MB, dauert ein paar Minuten) und startet
+den Container.
+
+---
+
+## Schritt 6 – Aufrufen
+
+Im Browser: **http://svwnas:8080**
+
+Wenn das nicht geht, statt `svwnas` die IP-Adresse der NAS verwenden – sie
+steht in der DSM-Systemsteuerung unter *Netzwerk*.
+
+---
+
+## Schritt 7 – FuPa-Verbindung prüfen
+
+Unten auf der Seite: **„FuPa-Verbindung prüfen"** → Mannschaft wählen → Knopf.
+
+Nach etwa einer halben Minute steht dort, ob Tabelle, Torschützenliste,
+Spielerstatistik und Spielplan gefunden wurden. Sind alle vier da, ist alles
+fertig eingerichtet.
+
+[→ Was tun, wenn etwas fehlt](fupa.md#wenn-etwas-nicht-gefunden-wird)
+
+---
+
+## Schritt 8 – Probelauf
+
+Zurück auf die Startseite, eine Mannschaft anhaken, **„Seiten jetzt erzeugen"**.
+
+Die PDF sollte danach in `Saison 26-27/05_Ausgaben/<Datum>_Spieltag/` liegen
+und sich in der File Station herunterladen lassen.
+
+---
+
+## Aktualisieren
+
+Wenn es eine neue Fassung gibt:
+
+**Container Manager** → Projekt `stadionheft` → **Aktion** → **Erstellen**
+(dabei „Images neu aufbauen" anhaken). Die NAS holt dann das aktuelle Image.
+
+Die `config.yaml` und alle Daten bleiben erhalten – sie liegen außerhalb des
+Containers.
+
+---
+
+## Ohne Weboberfläche arbeiten
+
+Falls die Oberfläche einmal nicht erreichbar ist, geht alles auch über den
+**Aufgabenplaner** der NAS (Systemsteuerung → Aufgabenplaner → Erstellen →
+Geplante Aufgabe → Benutzerdefiniertes Skript, Benutzer `root`, Zeitplan
+deaktivieren, dann „Ausführen" von Hand):
 
 ```bash
-docker exec stadionheft python -m stadionheft.cli erstellen --mannschaften herren1
-```
-
-Zusätzlich bei **Aufgabeneinstellungen** den Haken setzen bei
-**„Ausführungsdetails per E-Mail senden"** und deine Adresse eintragen –
-dann bekommst du die komplette Ausgabe zugeschickt.
-
-### Schritt 2: Ausführen
-
-Aufgabe markieren → oben **Ausführen** → bestätigen.
-
-### Schritt 3: Ergebnis ansehen
-
-**In der Dateistation:** In `SVW/Stadionheft/Saison 26-27/05_Ausgaben` sollte
-jetzt eine PDF-Datei liegen, z. B. `20260809_WaB_Druck.pdf`. Die kannst du
-direkt herunterladen und ansehen.
-
-**Im Protokoll:** Aufgabenplaner → Aufgabe markieren → **Aktion → Ergebnis
-anzeigen**. Dort steht dieselbe Ausgabe wie auf einer Kommandozeile:
-
-```
-Herren 1: nächstes Spiel SV Wörnitzstein-Berg - SG Alerheim am 09.08.2026
-Anzeige „bayern-fcn-freundschaftsspiel" ist seit dem 01.08.2026 abgelaufen ...
-Stadionheft erstellt : /app/daten/05_ausgaben/20260809_WaB_Druck.pdf
-Seiten               : 24
-```
-
-### Weitere nützliche Befehle
-
-Dasselbe Verfahren, nur anderes Skript:
-
-```bash
-# Prueft Konfiguration, Ordner und Wappen -- erzeugt nichts
+# Konfiguration und Ordner prüfen, erzeugt nichts
 docker exec stadionheft python -m stadionheft.cli pruefen
 ```
 
 ```bash
-# Testet die FuPa-Verbindung und legt die Rohantworten ab
+# FuPa-Verbindung testen
 docker exec stadionheft python -m stadionheft.cli probe-fupa
 ```
 
-Der FuPa-Test schreibt sein Ergebnis auch als Datei. Sie liegt danach in
+Das Ergebnis des FuPa-Tests liegt danach lesbar in
 
 ```
 _Programm/04_Zwischenergebnisse/fupa_probe/_bericht.txt
 ```
 
-und lässt sich in der File Station anklicken und lesen -- praktisch, wenn du
-die Bildschirmausgabe des Aufgabenplaners nicht siehst. Ganz oben steht, ob
-Tabelle, Torschützenliste, Spielerstatistik und Spielplan gefunden wurden.
-
 ```bash
-# Alle aktiven Mannschaften auf einmal
+# Seiten für alle aktiven Mannschaften erzeugen
 docker exec stadionheft python -m stadionheft.cli erstellen
 ```
 
 !!! tip "Die Aufgabe darf stehen bleiben"
     Sie ist deaktiviert und läuft nie von selbst. Als Notfallknopf ist sie
-    praktisch: Sollte die Weboberfläche einmal klemmen, lässt sich ein Heft
-    darüber trotzdem erzeugen.
+    praktisch.
 
 ---
 
@@ -326,10 +186,9 @@ docker exec stadionheft python -m stadionheft.cli erstellen
 | Was | Wo |
 |---|---|
 | Ligen von Herren 2/3 und Damen 1/2 | `_Programm/00_Konfiguration/config.yaml`, mit `TODO` markiert |
-| Vorwort | `_Programm/03_Eingaben/vorwort.md` |
-| Titelbild | `_Programm/03_Eingaben/titelbild.jpg` |
-| Spielpläne der anderen Mannschaften | `_Programm/03_Eingaben/<mannschaft>_spielplan.csv` |
-| FuPa-Abruf prüfen | in der App unten auf **„FuPa-Verbindung prüfen"** – oder per Aufgabenplaner, siehe oben |
+| FuPa-Links prüfen | dieselbe Datei, Feld `fupa_team_url` je Mannschaft |
+| Zugriff von unterwegs | [Zugriff von unterwegs](VPN_EINRICHTEN.md) |
+| Passwortschutz | `zugang.passwortschutz: true` in der config.yaml |
 
 ---
 
@@ -338,9 +197,7 @@ docker exec stadionheft python -m stadionheft.cli erstellen
 | Problem | Was tun |
 |---|---|
 | Seite lädt nicht | Container Manager → Container → läuft `stadionheft`? |
-| „Einrichtung nicht abgeschlossen" | `config.yaml` liegt nicht in `_Programm/00_Konfiguration` |
-| Container startet und stoppt sofort | Container Manager → Protokoll ansehen |
-| Heft wird erzeugt, ist aber nicht in `05_Ausgaben` | Ordner aus Schritt 4 fehlt |
-| Werbung fehlt im Heft | Liegen die PDFs in `02_Werbung/vorne` bzw. `hinten`? |
-
-Protokolle liegen auf der NAS unter `_Programm/99_Logs/`.
+| „manifest unknown" beim Laden | Das Image ist noch privat – siehe Schritt 4 |
+| „no such file or directory" | Ein Pfad in der docker-compose.yml stimmt nicht |
+| Container startet und stoppt sofort | Container Manager → Container → `stadionheft` → **Protokoll**. Meist ein Tippfehler in der config.yaml |
+| Leere Seiten im PDF | [FuPa-Verbindung prüfen](fupa.md) |

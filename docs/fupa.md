@@ -1,7 +1,8 @@
 # FuPa-Anbindung
 
 Tabelle, Torschützenliste, Spielerstatistik und Spielplan werden automatisch
-von fupa.net geholt – dann entfällt die Pflege der CSV-Dateien.
+von fupa.net geholt – für die eigene Mannschaft **und für den nächsten
+Gegner**. Damit entfällt die Pflege der CSV-Dateien.
 
 Das ist seit der aktuellen Fassung die **Voreinstellung**. Es muss dafür nichts
 eingestellt werden.
@@ -44,6 +45,11 @@ Reihenfolge:
 Sobald alle vier Datenteile beisammen sind, hört das Programm auf. In der Regel
 genügt **eine einzige** Seite.
 
+Adressmuster, die in einem Lauf schon einmal nichts geliefert haben, werden bei
+den folgenden Mannschaften übersprungen. Ein Heft mit fünf Mannschaften holt
+sonst dieselben Fehlschläge zehnmal – unnötige Last für FuPa und unnötige
+Wartezeit.
+
 ### 2. Die Daten aus der Seite holen
 
 Antwortet eine Adresse mit JSON, wird das direkt verwendet. Antwortet sie mit
@@ -75,6 +81,21 @@ Kandidaten in Frage, gewinnt die vollständigste Liste.
     Weil er hält. Eine feste Feldzuordnung müsste nach jeder Umstellung bei FuPa
     von Hand nachgezogen werden – und bis das jemand merkt, steht im Heft nichts
     oder Falsches.
+
+### 4. Dasselbe noch einmal für den Gegner
+
+Im Spielplan, den Schritt 3 gerade erkannt hat, steht nicht nur, **gegen wen**
+als nächstes gespielt wird, sondern meist auch der technische Bezeichner des
+Gegners – als Kürzel, als volle Adresse oder als Nummer. Das Programm nimmt
+ihn mit und läuft damit dieselbe Suche ein zweites Mal.
+
+Ergebnis: Tabelle, Torschützenliste, Spielerstatistik und Spielplan des
+Gegners, ohne dass irgendwo ein Gegnername gepflegt werden müsste.
+
+Spielt der Gegner in **derselben Liga**, sind Tabelle und Torschützenliste für
+beide dieselben – dann stehen sie nur einmal im Heft, mit beiden Vereinen
+hervorgehoben. Nur bei einem Gegner aus einer anderen Liga (Pokal) kommen
+zusätzliche Seiten dazu.
 
 ---
 
@@ -134,6 +155,30 @@ datenquelle:
 
 Danach den Test noch einmal laufen lassen.
 
+### Wenn nur die Gegnerseiten leer bleiben
+
+Dann liefert FuPa im Spielplan keinen Bezeichner für diesen Gegner. Seine
+Teamseite lässt sich von Hand hinterlegen – der Schlüssel ist der Vereinsname
+genau so, wie er im Spielplan steht:
+
+```yaml
+datenquelle:
+  fupa:
+    gegner:
+      "SG Alerheim": "https://www.fupa.net/team/sg-alerheim-2026-27"
+      "TSV Meitingen": "https://www.fupa.net/team/tsv-meitingen-2026-27"
+```
+
+Einmal pro Ligagegner eingetragen, gilt das für die ganze Saison.
+
+Ganz abschalten lässt sich der Gegnerabruf auch:
+
+```yaml
+datenquelle:
+  fupa:
+    gegner_abrufen: false
+```
+
 ---
 
 ## Einstellungen
@@ -146,6 +191,12 @@ datenquelle:
   fupa:
     zusatz_adressen: []     # eigene Adressen, siehe oben
     max_abrufe: 12          # Obergrenze je Mannschaft
+    gegner_abrufen: true    # auch die Zahlen des Gegners holen
+    gegner: {}              # Notnagel: Teamseiten von Hand hinterlegen
+
+  cache:
+    gueltigkeit_minuten: 15 # bewusst kurz - das Heft soll den Stand von
+                            # jetzt zeigen, nicht den von heute Morgen
 ```
 
 `fallback_modus` greift in **zwei** Fällen: wenn FuPa gar nicht erreichbar ist,

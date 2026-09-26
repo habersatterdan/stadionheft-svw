@@ -1,570 +1,269 @@
 # Stadionheft-Generator – SV Wörnitzstein-Berg
 
-Erstellt das Stadionheft **„Wörnitzstein am Ball"** weitgehend automatisch:
-Mannschaften anhaken, Knopf drücken, druckfertiges PDF im A5-Format erhalten.
+Erzeugt pro Mannschaft eine **druckfertige PDF-Datei** mit den aktuellen
+Zahlen aus [fupa.net](https://www.fupa.net) – Tabelle, Torschützenliste,
+Spielerstatistik und die Daten des nächsten Gegners. Diese Dateien gehen an
+die Person, die das Stadionheft „Wörnitzstein am Ball" zusammenbaut.
 
-Die Statistikseiten (Tabelle, Torschützen, Spielerstatistik, Gegnerkader)
-werden aus Daten **gesetzt** statt als Bildschirmfoto eingefügt. Die
-Werbeanzeigen bleiben unverändert und werden als fertige PDF-Seiten dazwischen
-montiert. Endformat (148 × 210 mm), Anschnitt (3 mm) und Hausfarbe (#E52421)
-entsprechen exakt der bisherigen InDesign-Vorlage.
+Ein Klick. Die Zahlen sind die von jetzt.
+
+```
+Mannschaften anhaken  →  Knopf  →  ZIP mit einer PDF je Mannschaft
+```
 
 ---
 
-## Inhalt
+## Was es macht — und was nicht
 
-* [Schnellstart](#schnellstart)
-* [Bedienung über den Browser](#bedienung-über-den-browser)
-* [Bedienung über die Kommandozeile](#bedienung-über-die-kommandozeile)
-* [Konfiguration](#konfiguration)
-* [Daten bereitstellen](#daten-bereitstellen)
-* [Betrieb auf der Synology NAS](#betrieb-auf-der-synology-nas)
-* [Fehlermeldungen verstehen](#fehlermeldungen-verstehen)
-* [Aufbau des Projekts](#aufbau-des-projekts)
-* [Weiterführende Dokumente](#weiterführende-dokumente)
+**Es liefert:** die Statistikseiten, druckfertig gesetzt (A5, 3 mm Anschnitt,
+Schnittmarken), mit korrekt ermitteltem nächsten Gegner.
+
+**Es liefert nicht:** Titelseite, Vorwort, Werbung, Kontaktlisten, Impressum.
+Die kommen weiterhin von Hand – sie ändern sich kaum und stecken nicht in
+FuPa.
+
+Je Mannschaft entstehen sieben Seiten:
+
+| # | Seite |
+|---|---|
+| 1 | Trennseite mit Mannschaftsname und Liga |
+| 2 | Das nächste Spiel – Gegenüberstellung beider Mannschaften mit Form |
+| 3 | Liga-Tabelle, eigene Mannschaft und Gegner hervorgehoben |
+| 4 | Liga-Torschützenliste |
+| 5 | Spielerstatistik der eigenen Mannschaft |
+| 6 | Der Gegner mit seinem Kader |
+| 7 | Saisonbilanz beider Mannschaften in Zahlen |
+
+Bei einem Pokalgegner aus einer anderen Liga kommen dessen Tabelle und
+Torschützenliste dazu.
 
 ---
 
 ## Schnellstart
 
-### Voraussetzungen
+### Auf der Synology NAS
 
-* Python 3.10 oder neuer
-* Unter Linux zusätzlich die Systembibliotheken für WeasyPrint:
-  ```bash
-  sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
-                   libffi8 libjpeg62-turbo fonts-dejavu-core fonts-open-sans
-  ```
-  Unter Windows und macOS bringt WeasyPrint alles Nötige mit
-  (siehe [WeasyPrint-Installation](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html)).
+Das Image ist fertig gebaut – es muss nichts kompiliert werden.
 
-> **Nutzt ihr verschiedene Systeme (Linux, Windows, iOS, Android) und habt alle
-> Zugriff auf die Synology NAS?** Dann überspring diesen Abschnitt und geh
-> direkt zu [Betrieb auf der Synology NAS](#betrieb-auf-der-synology-nas). Das
-> Programm läuft dann **einmal** im Container, und alle anderen Geräte brauchen
-> nur einen Browser – keine Installation, keine Systemunterschiede. Der
-> Abschnitt hier ist für den Einzelplatz zum Ausprobieren.
+1. Ordner anlegen, `config.yaml` und `docker-compose.yml` hinterlegen
+2. Container Manager → Projekt → Erstellen
+3. `http://svwnas:8080` aufrufen
 
-### Der einfache Weg: Startskript
+→ **[Schritt-für-Schritt-Anleitung](docs/ERSTE_EINRICHTUNG.md)**
 
-Nach dem Herunterladen des Projekts genügt ein Doppelklick:
-
-| System | Datei |
-|---|---|
-| Windows | `start.bat` |
-| macOS / Linux | `start.sh` |
-
-Das Skript richtet beim ersten Start alles selbst ein (Arbeitsumgebung,
-Pakete, Konfiguration), startet die Weboberfläche und öffnet den Browser.
-Der erste Start dauert ein paar Minuten, jeder weitere wenige Sekunden.
-
-### Der manuelle Weg
+### Im Homelab
 
 ```bash
-git clone <repository-url>
-cd stadionheft-svw
+docker run -d --name stadionheft -p 8080:8080 \
+  -v ./config:/app/config \
+  -v ./ausgaben:/app/daten/05_ausgaben \
+  ghcr.io/habersatterdan/stadionheft-svw:latest
+```
 
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+Gebaut für `linux/amd64` und `linux/arm64`.
+→ **[Im Homelab betreiben](docs/homelab.md)**
+
+### Lokal zum Entwickeln
+
+```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-python -m stadionheft.cli init     # legt config/config.yaml + heftplan.yaml an
-```
-
-### Sofort ausprobieren
-
-```bash
-python -m stadionheft.cli erstellen --mannschaften herren1
-```
-
-Das erzeugt mit eingebauten Beispieldaten – **ohne Internet, ohne FuPa** – ein
-vollständiges PDF unter `daten/05_ausgaben/`. Für die Herren 1 sind es die
-echten Zahlen der Ausgabe vom 29.07.2026; das Ergebnis lässt sich also direkt
-mit dem bisherigen Heft vergleichen.
-
-### Weboberfläche starten
-
-```bash
+cp config/config.example.yaml config/config.yaml
 python -m stadionheft.cli web
 ```
 
-Dann `http://localhost:8080` im Browser öffnen.
+WeasyPrint braucht Pango und Cairo als Systembibliotheken. Unter Debian/Ubuntu:
+
+```bash
+sudo apt install libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+                 libjpeg-turbo8 shared-mime-info
+```
 
 ---
 
-## Bedienung über den Browser
+## Kommandozeile
 
-Für alle, die ein Heft erstellen – kein technisches Vorwissen nötig.
+```bash
+# Konfiguration, Ordner und NAS prüfen – erzeugt nichts
+stadionheft pruefen
 
-1. Seite öffnen (Lesezeichen setzen!).
-2. **Mannschaften anhaken**, die ins Heft sollen.
-3. Optional: Spieltag und eigenen Namen eintragen.
-4. **„Stadionheft erstellen"** klicken.
-5. Der Fortschritt läuft live mit. Am Ende: **„PDF herunterladen"**.
+# Je Mannschaft eine PDF (alle aktiven Mannschaften)
+stadionheft erstellen
 
-Fehlt etwas – eine Werbedatei, das Vorwort, Daten einer Mannschaft – bricht
-nichts ab. Das Heft wird erzeugt, und unter dem Ergebnis steht in Klartext,
-was fehlt und wo es hingehört.
+# Nur bestimmte Mannschaften, Zwischenspeicher übergehen
+stadionheft erstellen --mannschaften herren1,damen1 --frisch
 
-Unter **Hilfe** steht eine Tabelle „Was tun, wenn …".
+# Testen, was FuPa tatsächlich liefert
+stadionheft probe-fupa
+
+# Einen früheren Lauf exakt wiederholen (ohne FuPa-Zugriff)
+stadionheft erstellen --snapshot daten/05_ausgaben/.../snapshot.json
+
+# CSV-Vorlagen für den Notfall anlegen
+stadionheft beispieldaten
+```
+
+Im Container: `docker exec stadionheft python -m stadionheft.cli <befehl>`
 
 ---
 
-## Bedienung über die Kommandozeile
+## Der FuPa-Abruf
 
-Für Administratoren und automatische Abläufe.
+FuPa hat keine dokumentierte Schnittstelle. Das Programm setzt deshalb nicht
+auf feste Adressen mit festen Feldnamen, sondern **sucht**:
 
-| Befehl | Zweck |
-|---|---|
-| `stadionheft init` | `config.yaml` und `heftplan.yaml` aus den Beispielen anlegen |
-| `stadionheft pruefen` | Konfiguration, Ordner, Wappen und NAS prüfen – ohne etwas zu erzeugen |
-| `stadionheft mannschaften` | konfigurierte Mannschaften auflisten |
-| `stadionheft erstellen` | Heft erzeugen |
-| `stadionheft probe-fupa` | FuPa-Endpunkte testen und Rohantworten speichern |
-| `stadionheft seiten-uebernehmen` | feste Seiten (Werbung, Kontakte, Impressum) aus einem bestehenden Heft übernehmen |
-| `stadionheft beispieldaten` | CSV-Vorlagen mit den richtigen Spalten anlegen |
-| `stadionheft web` | Weboberfläche starten |
+1. **Mehrere Adressen durchprobieren** – konfigurierte Endpunkte, die
+   Teamseite aus `fupa_team_url`, weitere Kandidaten. Es hört auf, sobald
+   alles beisammen ist; meist genügt eine Seite.
+2. **JSON aus der Seite holen** – kommt HTML statt JSON zurück, werden die
+   eingebetteten JSON-Blöcke herausgelöst (`__NEXT_DATA__`, `window.__NUXT__`
+   und Ähnliches).
+3. **An der Struktur erkennen**, was Tabelle, Torschützenliste,
+   Spielerstatistik und Spielplan ist – unabhängig davon, ob ein Feld
+   `points` oder `punkte` heißt.
+4. **Dasselbe für den Gegner.** Sein Bezeichner steht im Spielplan, der
+   ohnehin gelesen wird. Es muss also nichts gepflegt werden.
 
-Aufruf wahlweise als `python -m stadionheft.cli <befehl>` oder – nach
-`pip install -e .` – als `stadionheft <befehl>`.
+Formkurve und Saisonbilanz werden aus dem Spielplan **gerechnet**, nicht
+geholt – so passen sie immer zu den Spielen, die auch sonst im Heft stehen.
 
-**Beispiele:**
+Was tatsächlich ankommt, zeigt der Knopf **„FuPa-Verbindung prüfen"** bzw.
+`stadionheft probe-fupa`.
+→ **[Details zur FuPa-Anbindung](docs/fupa.md)**
 
-```bash
-# Alle aktiven Mannschaften, Daten von FuPa, ohne NAS-Upload
-stadionheft erstellen --quelle api --ohne-nas
+### Immer aktuell
 
-# Nur Herren 1 und Damen 1, Titelbild-Spiel von Damen 1
-stadionheft erstellen --mannschaften herren1,damen1 --titelspiel damen1
+- Zwischenspeicher: **15 Minuten** – er fängt nur ab, dass mehrere
+  Mannschaften dieselbe Seite doppelt holen
+- Auf **jeder Seite** steht der Abrufzeitpunkt
+- Wurde auf ältere Daten zurückgegriffen, steht das rot im PDF und als Warnung
+  in der Oberfläche
+- Der nächste Gegner ergibt sich **aus dem Datum**, nicht aus der Reihenfolge
+  im Spielplan
 
-# Ein früheres Heft exakt neu bauen (kein FuPa-Zugriff nötig)
-stadionheft erstellen --snapshot daten/05_ausgaben/20260729_WaB_Druck_snapshot.json
-```
+### Fair gegenüber FuPa
 
-### Feste Seiten aus dem alten Heft übernehmen
+Sprechender User-Agent mit Kontaktadresse, `robots.txt` wird je Host
+ausgewertet und respektiert, Pause zwischen Anfragen, Abbruch sobald alles da
+ist, Adressmuster die einmal nichts lieferten werden im Lauf übersprungen.
+Größenordnung: eine Handvoll Abrufe alle zwei Wochen.
 
-Werbung, Kontaktlisten und Impressum sollen sich nicht ändern – sie werden
-deshalb nicht neu gesetzt, sondern als Seiten aus dem bestehenden Heft
-übernommen:
-
-```bash
-stadionheft seiten-uebernehmen --aus "20260728_WaB_Druck.pdf" --alles
-```
-
-Das legt `werbung_vorne.pdf`, `werbung_hinten.pdf`, `kontaktlisten.pdf`,
-`impressum.pdf` und `ruecktitel.pdf` in `daten/02_werbung/` ab. Der
-mitgelieferte Heftplan bindet sie bereits ein.
-
-So sehen diese Seiten **exakt aus wie bisher**, und die Telefonnummern der
-Kontaktliste müssen nirgends abgetippt werden – ein Vorteil auch beim
-Datenschutz, weil keine personenbezogenen Daten in eine Konfigurationsdatei
-wandern.
-
-Einzelne Seiten gehen genauso:
-
-```bash
-stadionheft seiten-uebernehmen --aus alt.pdf --seiten 24-25 --als kontaktlisten
-```
-
-### Werbung: ein Ordner statt einer Sammel-PDF
-
-Jede Anzeige liegt als eigene Datei in einem Ordner. Das Heft wird bei jedem
-Lauf daraus neu zusammengebaut:
-
-```
-daten/02_werbung/vorne/
-├── 010_bayern-fcn-freundschaftsspiel__bis_2026-08-01.pdf
-├── 020_teamshop-jako.pdf
-├── 030_jako-katalog-1.pdf
-├── 031_jako-katalog-2.pdf
-├── 040_ullmann-universa.pdf
-└── _pausiert/            ← hier abgelegte Anzeigen bleiben draußen
-```
-
-| Was | Wie |
-|---|---|
-| Anzeige aufnehmen | PDF in den Ordner legen |
-| Anzeige entfernen | Datei löschen oder nach `_pausiert/` schieben |
-| Reihenfolge ändern | Zahl am Dateianfang ändern (Zehnerschritte lassen Platz) |
-| Anzeige befristen | `__bis_JJJJ-MM-TT` in den Dateinamen |
-| Anzeige später starten | `__ab_JJJJ-MM-TT` in den Dateinamen |
-
-**Befristete Anzeigen verschwinden von selbst.** Die Ankündigung eines Spiels
-am 01.08. heißt `…__bis_2026-08-01.pdf` und fällt ab dem 02.08. automatisch
-aus dem Heft – mit einem Hinweis im Protokoll, damit es nicht unbemerkt
-passiert. Niemand muss daran denken, sie herauszunehmen.
-
-Im Heftplan:
-
-```yaml
-- typ: werbeblock
-  ordner: "02_werbung/vorne"
-  optional: true
-```
-
-Einen bestehenden Werbeblock in Einzeldateien zerlegen:
-
-```bash
-stadionheft seiten-uebernehmen --aus alt.pdf --seiten 4-11 --einzeln --als vorne
-```
-
-Danach die Dateien sinnvoll umbenennen – der Ordner ist dann gleichzeitig die
-Übersicht, welche Anzeigen im Heft sind.
+Zu den rechtlichen Aspekten:
+[KONZEPT.md, Abschnitt 10](docs/KONZEPT.md#10-rechtliche-und-technische-einschränkungen).
 
 ---
 
 ## Konfiguration
 
-Drei Dateien im Ordner `config/`. Jede hat eine kommentierte `*.example.yaml`
-als Vorlage.
-
-| Datei | Inhalt | Wie oft ändern? |
-|---|---|---|
-| `config.yaml` | Verein, Mannschaften, FuPa-Links, Pfade, NAS, Layout | selten |
-| `heftplan.yaml` | Reihenfolge der Heftseiten | pro Saison |
-| `kontakte.yaml` | Kontaktlisten für die Kontaktseiten | selten |
-
-### Mannschaften pflegen
+Alles in einer Datei: `config/config.yaml`
+(Vorlage: [`config.example.yaml`](config/config.example.yaml)).
 
 ```yaml
+verein:
+  name: "SV Wörnitzstein-Berg"
+  hefttitel: "Wörnitzstein am Ball"
+
+saison: "2026/2027"
+
+datenquelle:
+  modus: "api"              # api | manuell | demo
+  fallback_modus: "manuell" # wenn nichts kommt: CSV-Dateien
+
 mannschaften:
   herren1:
     anzeigename: "Herren 1"
-    gruppe: "Herren"                 # große Zeile auf der Trennseite
-    untertitel: "1. Mannschaft"      # zweite Zeile
+    gruppe: "Herren"
+    untertitel: "1. Mannschaft"
     liga: "Bezirksliga Schwaben Nord"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
     aktiv: true
-    seiten: ["trenner", "gegner", "tabelle", "torjaeger", "spielerstatistik"]
-```
 
-Eine neue Mannschaft ist ein weiterer solcher Block – die Oberfläche zeigt sie
-danach automatisch an. Über `seiten` steuerst du, welche Seiten je Mannschaft
-entstehen (mögliche Werte: `trenner`, `spielbericht`, `gegner`, `tabelle`,
-`torjaeger`, `spielerstatistik`, `naechstes_spiel`).
-
-> **Saisonwechsel:** Die FuPa-Adressen enthalten das Saisonkürzel
-> (`…-m1-2026-27`). Einmal pro Saison bei allen Mannschaften anpassen, ebenso
-> `saison:` und ggf. `liga:`.
-
-### Heftplan
-
-Bildet die Seitenfolge ab. `mannschaftsbloecke` ist der Platzhalter, der je
-ausgewählter Mannschaft expandiert wird:
-
-```yaml
-seiten:
-  - typ: titelseite
-  - typ: freitext
-    titel: "Vorwort"
-    quelle: "03_eingaben/vorwort.md"
-  - typ: pdf                              # Werbeblock
-    quelle: "02_werbung/werbung_vorne.pdf"
-    optional: true                        # fehlt sie: nur Warnung
-  - typ: mannschaftsbloecke
-  - typ: kontakte
-  - typ: impressum
-```
-
-Bei `typ: pdf` lässt sich mit `seiten: "1-2"` ein Teil einer mehrseitigen Datei
-einbinden. `optional: false` bedeutet: fehlt die Datei, bricht der Lauf mit
-einer klaren Meldung ab.
-
-### Ausgabename
-
-```yaml
 ausgabe:
-  dateiname: "{datum_kompakt}_WaB_Druck.pdf"
+  dateiname: "{datum}_{mannschaft}_gegen_{gegner}.pdf"
+  ordner: "daten/05_ausgaben"
 ```
 
-Platzhalter: `{datum}`, `{datum_kompakt}`, `{saison}`, `{spieltag}`,
-`{mannschaften}`.
+Eine neue Mannschaft ist ein weiterer Block – die Oberfläche zeigt sie danach
+von selbst an. Am Programmcode muss dafür nichts geändert werden.
 
 ---
 
-## Daten bereitstellen
+## Wenn FuPa ausfällt
 
-### Drei Betriebsarten
+Dann greift automatisch der `fallback_modus`. Liegen CSV-Dateien in
+`daten/03_eingaben/`, werden sie verwendet; sonst bleiben die betreffenden
+Seiten leer und das Programm sagt es.
 
-`datenquelle.modus` in `config.yaml`:
-
-| Modus | Bedeutung |
-|---|---|
-| `demo` | Eingebaute Beispieldaten – zum Ausprobieren, ohne Internet |
-| `manuell` | CSV-Dateien aus `daten/03_eingaben/` – **funktioniert immer** |
-| `api` | Automatischer Abruf von FuPa – **Endpunkte müssen erst geprüft werden** |
-
-Mit `fallback_modus` legst du fest, worauf umgeschaltet wird, wenn die
-Hauptquelle ausfällt. Standard: `manuell`.
-
-### Manuelle Eingabe einrichten
-
-```bash
-stadionheft beispieldaten            # nur Kopfzeilen
-stadionheft beispieldaten --mit-daten  # mit Beispielwerten zum Überschreiben
-```
-
-Legt für jede aktive Mannschaft die passenden Dateien in `daten/03_eingaben/`
-an, dazu eine `LIESMICH.txt`.
-
-| Datei | Spalten |
-|---|---|
-| `<team>_spielplan.csv` | `heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag;ergebnis` |
-| `<team>_tabelle.csv` | `platz;mannschaft;spiele;siege;unentschieden;niederlagen;tore;gegentore;punkte;zusatz` |
-| `<team>_torjaeger.csv` | `platz;spieler;mannschaft;tore;vorlagen;spiele` |
-| `<team>_spieler.csv` | `platz;spieler;spiele;tore;vorlagen;elfmeter;gelb;gelb_rot;rot;ein;aus;minuten` |
-| `<team>_gegner_<gegner>.csv` | wie `_spieler.csv`, je Gegner (z. B. `herren1_gegner_sg-alerheim.csv`) |
-| `<team>_spielbericht.md` | Freitext |
-| `vorwort.md` | Freitext für die Vorwortseite |
-| `titelbild.jpg` | Foto für die Titelseite |
-
-#### Der Spielplan erspart die meiste Arbeit
-
-In `<team>_spielplan.csv` gehören **alle Spiele der Saison** – eine Zeile je
-Partie. Das trägt man einmal im Sommer ein. Danach schaut das Programm bei
-jedem Heft auf das **heutige Datum** und ermittelt selbst:
-
-* gegen wen als nächstes gespielt wird (Titelseite, Gegnerseite)
-* wann und wo, Heim oder Auswärts
-* welches Spiel zuletzt war (für den Spielbericht)
-
-```csv
-heim;gast;wettbewerb;datum;uhrzeit;spielort;heimspiel;spieltag;ergebnis
-TG Lauingen;SV Wörnitzstein-Berg;Bezirksliga;26.07.2026;15:00;;nein;1;0:4
-SV Wörnitzstein-Berg;TSV Meitingen;Bezirksliga;29.07.2026;18:30;Wörnitzstein;ja;2;
-SV Wörnitzstein-Berg;SG Alerheim;Bezirksliga;09.08.2026;15:00;Wörnitzstein;ja;3;
-```
-
-Maßgeblich für die Auswahl ist **allein das Datum** – nicht die Reihenfolge in
-der Datei und auch nicht, ob ein Ergebnis eingetragen ist. Ein vergessener
-Ergebniseintrag bringt also keine alte Partie auf die Titelseite.
-
-Für den Gegnerkader empfiehlt sich eine Datei **je Gegner**
-(`herren1_gegner_sg-alerheim.csv`). Das Programm greift automatisch die
-passende. Gibt es nur die allgemeine `herren1_gegner_spieler.csv`, wird das
-Heft trotzdem erzeugt – mit dem Hinweis, dass die Liste zum aktuellen Gegner
-passen muss.
-
-Wer lieber vor jedem Heft eine einzelne Partie einträgt, kann statt des
-Spielplans `<team>_naechstes_spiel.csv` mit genau einer Zeile verwenden.
-
-Die Dateien lassen sich direkt in Excel bearbeiten. Beim Speichern
-**„CSV UTF-8 (durch Trennzeichen getrennt)"** wählen. Semikolon und Komma
-werden beide erkannt, ebenso deutsche und englische Spaltennamen
-(`tore`/`goals`, `sp`/`spiele`).
-
-Fehlt eine Datei, bleibt nur die betreffende Seite leer – das Heft wird
-trotzdem erzeugt.
-
-### FuPa-Abruf
-
-`datenquelle.modus: "api"` ist die Voreinstellung – einzurichten ist nichts.
-
-FuPa veröffentlicht keine dokumentierte Schnittstelle, deshalb setzt das
-Programm nicht auf eine feste Adresse mit festen Feldnamen. Stattdessen:
-
-1. Es probiert mehrere Adressen durch – konfigurierte Endpunkte, die
-   **Teamseite der Mannschaft** (`fupa_team_url`), weitere Kandidaten.
-2. Antwortet eine Adresse mit HTML statt JSON, holt es die JSON-Blöcke aus der
-   Seite (`__NEXT_DATA__`, `window.__NUXT__` und Ähnliches).
-3. Es erkennt an der **Struktur**, was Tabelle, Torschützenliste,
-   Spielerstatistik und Spielplan ist – unabhängig davon, ob ein Feld `points`
-   oder `punkte` heißt.
-
-Sobald alles beisammen ist, hört der Abruf auf; meist genügt eine Seite.
-Kommt nichts an, wird automatisch auf `fallback_modus` (CSV) umgeschaltet.
-
-Was tatsächlich gefunden wird, zeigt:
-
-```bash
-stadionheft probe-fupa
-```
-
-Der Befehl klappert dieselben Adressen ab und meldet je Adresse Status und was
-sich daraus lesen ließ. Die Rohantworten landen in
-`daten/04_zwischenergebnisse/fupa_probe/`.
-
-Fehlt etwas, lässt sich eine Adresse nachtragen, ohne am Programm etwas zu
-ändern – `datenquelle.fupa.zusatz_adressen`, Details in
-[docs/fupa.md](docs/fupa.md).
-
-Das Programm verhält sich dabei fair: sprechender User-Agent mit
-Kontaktadresse, `robots.txt` wird respektiert, Pause zwischen Anfragen,
-Zwischenspeicher von zwei Stunden. Zu den rechtlichen Aspekten:
-[KONZEPT.md, Abschnitt 10](docs/KONZEPT.md#10-rechtliche-und-technische-einschränkungen).
-
-### Reproduzierbarkeit
-
-Neben jedem PDF entsteht `*_snapshot.json` mit **allen verwendeten Daten und
-dem Heftplan**. Damit lässt sich dasselbe Heft jederzeit erneut bauen – auch
-Wochen später, ohne FuPa:
-
-```bash
-stadionheft erstellen --snapshot daten/05_ausgaben/20260729_WaB_Druck_snapshot.json
-```
+Vorlagen dafür: `stadionheft beispieldaten`
+→ **[CSV-Reserve](docs/csv-reserve.md)**
 
 ---
 
-## Betrieb auf der Synology NAS
+## Reproduzierbarkeit
 
-Das ist der eigentliche Zielzustand: **einmal einrichten, danach öffnet jeder
-im Verein nur noch einen Link – am Rechner oder am Handy.**
+Jeder Lauf legt neben den PDFs eine `*_snapshot.json` mit genau den Daten ab,
+aus denen sie entstanden sind. Damit lassen sich dieselben Dateien später
+wieder erzeugen – ohne FuPa zu fragen.
 
-Schritt-für-Schritt-Anleitung mit DSM-Klickwegen, Handy-Zugriff und
-Fehlerbehebung: **[docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md)**
-
-Kurzfassung:
-
-1. Ordner `/volume1/Stadionheft/…` anlegen:
-   ```bash
-   cd /volume1/Stadionheft
-   mkdir -p 00_Konfiguration 01_Vorlagen 02_Werbung 03_Eingaben \
-            04_Zwischenergebnisse 05_Ausgaben/Archiv 99_Logs
-   ```
-2. `config.yaml`, `heftplan.yaml`, `kontakte.yaml` nach `00_Konfiguration`.
-3. Container Manager → **Projekt** → `docker-compose.yml` aus diesem Repository.
-4. Aufrufen unter `http://<nas-name>:8080`.
-
-### Vom Handy
-
-Die Oberfläche ist für kleine Bildschirme ausgelegt – getestet bei 320, 360
-und 390 px Breite. Im heimischen WLAN genügt dieselbe Adresse im
-Handy-Browser; über „Zum Home-Bildschirm hinzufügen" verhält sie sich wie
-eine App.
-
-> Von unterwegs bitte **nicht** einfach den Port ins Internet öffnen – die
-> App hat keine Benutzeranmeldung. Empfohlen ist der VPN-Server von DSM.
-> Details in [docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md).
-
-### NAS-Ablage konfigurieren
-
-```yaml
-nas:
-  aktiv: true
-  modus: "mount"                            # empfohlen
-  mount:
-    zielordner: "/nas/Stadionheft/05_Ausgaben"
-  ueberschreiben: false
-```
-
-`mount` bedeutet: Der NAS-Ordner ist als Volume bzw. Netzlaufwerk eingebunden
-und das Programm kopiert nur eine Datei. Kein Passwort im Programm, einfach zu
-verstehen und zu reparieren.
-
-Alternativ `modus: "smb"` für direkten Upload (benötigt
-`pip install smbprotocol`). Das Passwort kommt dann **ausschließlich** aus
-einer Umgebungsvariablen, nie aus der Konfigurationsdatei.
-
-> Schlägt die NAS-Ablage fehl, ist das nur eine Warnung – das Heft liegt
-> fertig lokal vor und lässt sich herunterladen.
-
----
-
-## Fehlermeldungen verstehen
-
-Alle Meldungen sind in normalem Deutsch formuliert und nennen einen konkreten
-nächsten Schritt. Technische Details stehen einklappbar darunter.
-
-| Meldung | Bedeutung / Lösung |
-|---|---|
-| „Die Konfiguration fehlt noch." | `stadionheft init` ausführen |
-| „Die Konfiguration enthält Fehler: …" | Die Liste nennt jeden Punkt einzeln |
-| „FuPa ist im Moment nicht erreichbar." | Später erneut versuchen oder auf `manuell` umstellen |
-| „FuPa hat den automatischen Abruf abgelehnt (403/429)." | Zu viele Anfragen oder gesperrt – auf `manuell` umstellen |
-| „Die Daten konnten nicht gelesen werden." | FuPa hat sein Format geändert → `probe-fupa` |
-| „Die Datei '…' wurde nicht gefunden." | Werbe- oder Vorlagendatei fehlt; der Pfad steht in der Meldung |
-| „Für … wurden keine Eingabedateien gefunden." | CSV-Dateien fehlen → `stadionheft beispieldaten` |
-| „Die Synology NAS ist nicht erreichbar." | Heft ist trotzdem fertig; lokaler Pfad steht in der Meldung |
-| „Das Heft hat N Seiten." (Warnung) | Für Rückendrahtheftung sind Vielfache von 4 üblich |
-
-Protokolle: `logs/stadionheft_JJJJ-MM.log` (auf der NAS `99_Logs/`).
-Ausführlicher wird es mit `protokoll.level: DEBUG`.
+Praktisch für die Frage „Wie sah die Tabelle beim Heft vom 4. Oktober aus?"
 
 ---
 
 ## Aufbau des Projekts
 
 ```
-stadionheft-svw/
-├── config/                     Beispielkonfigurationen (*.example.yaml)
-├── daten/                      lokale Entsprechung der NAS-Ordner
-│   ├── 01_vorlagen/  02_werbung/  03_eingaben/
-│   ├── 04_zwischenergebnisse/  05_ausgaben/
-├── docs/
-│   ├── ANALYSE_VORLAGE.md      Analyse des bestehenden Hefts
-│   ├── KONZEPT.md              Architektur, Recht, Projektplan
-│   └── NAS_ORDNERSTRUKTUR.md   Ordner und Berechtigungen auf der NAS
-├── stadionheft/
-│   ├── build.py                Ablaufsteuerung – das Herzstück
-│   ├── config.py               Konfiguration laden und prüfen
-│   ├── models.py               Datenmodelle (Tabelle, Torjäger, …)
-│   ├── errors.py               Fehler mit verständlichen Texten
-│   ├── cli.py                  Kommandozeile
-│   ├── sources/                Datenquellen: fupa_api, manuell, demo, cache
-│   ├── render/                 pages.py (HTML→PDF), assemble.py (Montage)
-│   ├── storage/nas.py          Ablage auf der NAS
-│   ├── templates/              Seitenvorlagen (Jinja2)
-│   ├── static/css/heft.css     **alle Layoutmaße** – hier anpassen
-│   └── web/                    Flask-Oberfläche
-├── tests/                      58 Tests
-├── Dockerfile · docker-compose.yml
-└── requirements.txt
+stadionheft/
+├── build.py              Ablauf: Daten holen → setzen → je Mannschaft eine PDF
+├── config.py             Konfiguration mit Validierung
+├── models.py             Datenmodelle, Formkurve und Saisonbilanz
+├── cli.py                Kommandozeile
+├── errors.py             Fehler mit verständlichem Text und Hinweis
+├── sources/
+│   ├── fupa_api.py       Adressen durchprobieren, Gegner mitnehmen
+│   ├── erkennung.py      Daten an ihrer Struktur erkennen
+│   ├── html_daten.py     JSON aus einer HTML-Seite holen
+│   ├── manuell.py        CSV-Dateien
+│   ├── demo.py           eingebaute Beispieldaten
+│   └── cache.py          Zwischenspeicher
+├── render/
+│   ├── pages.py          Jinja2 → HTML → WeasyPrint → PDF
+│   └── assemble.py       Seiten zu einer Datei montieren
+├── storage/nas.py        Ablage auf der NAS (Mount oder SMB)
+├── web/                  Flask-Oberfläche
+├── templates/            Seitenvorlagen
+└── static/css/heft.css   Das gesamte Layout
 ```
 
-### Layout anpassen
-
-Alle Maße stehen als CSS-Variablen am Anfang von
-`stadionheft/static/css/heft.css` und sind aus der Vorlage gemessen:
-
-```css
---rand: 12mm;            /* seitlicher Satzspiegel */
---kopf-oben: 12mm;       /* Oberkante roter Kopfbalken */
---kopf-hoehe: 15.5mm;
---inhalt-oben: 44mm;     /* Beginn des Inhalts */
---fuss-hoehe: 13mm;
-```
-
-Farbe, Schrift und Seitenformat kommen dagegen aus `config.yaml`
-(Abschnitt `layout`) – dafür muss kein CSS angefasst werden.
-
-### Tests
-
-```bash
-pip install -r requirements-dev.txt
-python -m pytest -q
-```
-
-Die Tests prüfen unter anderem, dass das Endformat exakt dem InDesign-Original
-entspricht und dass Werbeseiten mit abweichender Seitenbox korrekt
-vereinheitlicht werden.
+Tests: `python -m pytest -q` (138 Tests, kein Netzzugriff)
 
 ---
 
 ## Weiterführende Dokumente
 
-* **[docs/INSTALLATION_NAS.md](docs/INSTALLATION_NAS.md)** – Schritt für
-  Schritt auf der Synology NAS, inklusive Zugriff vom Handy
-* **[docs/KONZEPT.md](docs/KONZEPT.md)** – Architektur, Bewertung der
-  Technologie-Optionen, rechtliche Einordnung des FuPa-Abrufs, Projektplan,
-  **offene Punkte und was noch gebraucht wird**
-* **[docs/ANALYSE_VORLAGE.md](docs/ANALYSE_VORLAGE.md)** – was in der
-  bestehenden Vorlage steckt und woher die Layoutmaße stammen
-* **[docs/NAS_ORDNERSTRUKTUR.md](docs/NAS_ORDNERSTRUKTUR.md)** – Ordner,
-  Berechtigungen, Datensicherung
+| Dokument | Inhalt |
+|---|---|
+| [Anleitung als Website](https://habersatterdan.github.io/stadionheft-svw/) | Alles unten, aber schöner |
+| [Seiten erzeugen](docs/erzeugen.md) | Der Vorgang vor jedem Heimspiel |
+| [Übergabe ans Layout](docs/uebergabe.md) | Für die Person, die das Heft baut |
+| [Erste Einrichtung](docs/ERSTE_EINRICHTUNG.md) | NAS, Schritt für Schritt |
+| [Im Homelab betreiben](docs/homelab.md) | Docker außerhalb der NAS |
+| [FuPa-Anbindung](docs/fupa.md) | Wie der Abruf funktioniert |
+| [Wenn etwas nicht klappt](docs/fehler.md) | Meldungen und was zu tun ist |
+| [Umsetzungskonzept](docs/KONZEPT.md) | Architektur, Entscheidungen, Recht |
+| [Analyse der Vorlage](docs/ANALYSE_VORLAGE.md) | Maße und Farben des alten Hefts |
 
 ---
 
 ## Bekannte Einschränkungen
 
-1. **Der FuPa-Abruf ist ein geprüftes Gerüst, keine fertige Funktion.** Die
-   Endpunkte konnten nicht getestet werden – siehe
-   [KONZEPT.md, Abschnitt 9](docs/KONZEPT.md#9-wie-die-daten-aus-fupa-geholt-werden-können).
-   Die Modi `manuell` und `demo` sind vollständig getestet.
-2. **Segoe UI** ist eine Windows-Schrift und darf nicht mitgeliefert werden.
-   Im Container wird **Open Sans** verwendet (sehr ähnlich). Liegt Segoe UI
-   auf dem System, wird sie automatisch bevorzugt.
-3. **Die Titelseite** ist eine gute Annäherung an das Designer-Layout, keine
-   pixelgenaue Kopie. Wer das Original will, bindet sie im Heftplan als
-   `typ: pdf` ein.
-4. **Keine Benutzerverwaltung.** Für das Vereinsnetz angemessen; bei Zugriff
-   von außen bitte hinter den DSM-Reverse-Proxy mit Passwortschutz stellen.
+- **Der FuPa-Abruf ist aus der Entwicklungsumgebung nie gegen das echte
+  fupa.net getestet worden** – der Netzzugang dorthin war gesperrt. Geprüft
+  wurde gegen nachgebaute Seiten. Der Knopf „FuPa-Verbindung prüfen" zeigt,
+  ob es in eurer Umgebung greift.
+- Die Dateien sind in **RGB**, nicht CMYK. Die meisten Druckereien wandeln
+  selbst um.
+- Die Formkurve zeigt nur Spiele der **laufenden Saison** – weiter reicht der
+  Spielplan nicht.
+- Der Gegnerabruf hängt daran, dass FuPa im Spielplan einen Bezeichner für den
+  Gegner mitliefert. Tut er das nicht, lässt sich die Adresse von Hand
+  hinterlegen.

@@ -166,4 +166,4 @@ Solange kein Tunnel steht, ist die App von außen nicht erreichbar – das ist
 so gewollt, sie hat keine Anmeldung.
 
 Du kannst sie trotzdem **prüfen**, ohne sie zu öffnen: siehe
-[Erste Einrichtung → App ohne Weboberfläche testen](ERSTE_EINRICHTUNG.md#app-ohne-weboberflaeche-testen).
+[Erste Einrichtung → Ohne Weboberfläche arbeiten](ERSTE_EINRICHTUNG.md#ohne-weboberflache-arbeiten).

@@ -1,104 +1,91 @@
-# Ordnerstruktur auf der Synology NAS
+# Ordner auf der NAS
 
-## Vorschlag
-
-Eine gemeinsame Freigabe `Stadionheft`, darin nummerierte Ordner in der
-Reihenfolge des Arbeitsablaufs. Die Nummern sorgen dafür, dass die Ordner in
-der Dateistation immer in der logischen Reihenfolge stehen – und dass jeder
-sofort sieht, wo etwas hingehört.
+Was wo liegt – und warum.
 
 ```
-/volume1/Stadionheft/
+SVW/Stadionheft/
 │
-├── 00_Konfiguration/            ← nur Administratoren
-│   ├── config.yaml                 Mannschaften, FuPa-Links, Pfade
-│   ├── heftplan.yaml               Seitenreihenfolge des Hefts
-│   └── kontakte.yaml               Kontaktlisten (personenbezogen!)
+├── _Programm/                      Alles, was zum Programm gehört
+│   │
+│   ├── 00_Konfiguration/
+│   │   └── config.yaml             Mannschaften, FuPa-Links, Ligen, Pfade
+│   │
+│   ├── 01_Vorlagen/                Vereinswappen, falls ihr ein besseres habt
+│   │                               als das im Programm mitgelieferte
+│   │
+│   ├── 03_Eingaben/                CSV-Dateien als Reserve, falls FuPa
+│   │                               einmal ausfällt (siehe csv-reserve.md)
+│   │
+│   ├── 04_Zwischenergebnisse/      Arbeitsordner. Legt das Programm selbst an.
+│   │   ├── lauf_20261004_091205/   Einzelseiten eines Laufs
+│   │   ├── cache/                  FuPa-Antworten der letzten 15 Minuten
+│   │   └── fupa_probe/             Ergebnis von „FuPa-Verbindung prüfen"
+│   │       ├── _bericht.txt        lesbar, hier zuerst reinschauen
+│   │       └── _bericht.json       dasselbe für die Weiterverarbeitung
+│   │
+│   ├── 99_Logs/                    Protokolle, täglich eine Datei
+│   │
+│   └── docker/
+│       └── docker-compose.yml      Die Datei für den Container Manager
 │
-├── 01_Vorlagen/                 ← ändert sich fast nie
-│   ├── svw_logo.png                Vereinswappen (freigestellt, PNG)
-│   ├── titelseite_designer.pdf     optional: fertige Titelseite aus InDesign
-│   └── Original_InDesign/          das InDesign-Dokument als Archiv
-│
-├── 02_Werbung/                  ← einmal pro Saison
-│   ├── werbung_vorne.pdf           Seiten 4–11 (eine mehrseitige PDF)
-│   ├── werbung_zwischen.pdf        Trennanzeige zwischen Mannschaftsblöcken
-│   ├── werbung_hinten.pdf          Seiten 19–26
-│   ├── ruecktitel.pdf              Seite 28
-│   └── einzeln/                    Ablage der Einzelanzeigen je Kunde
-│       ├── ullmann_universa.pdf
-│       ├── axa_wiedemann.pdf
-│       └── ...
-│
-├── 03_Eingaben/                 ← hier arbeitet die Redaktion, pro Ausgabe
-│   ├── LIESMICH.txt                erklärt die Dateien (legt das Programm an)
-│   ├── vorwort.md                  Vorworttext
-│   ├── titelbild.jpg               Foto für die Titelseite
-│   ├── herren1_tabelle.csv         nur nötig bei manueller Eingabe
-│   ├── herren1_torjaeger.csv
-│   ├── herren1_spieler.csv
-│   ├── herren1_gegner_spieler.csv
-│   ├── herren1_naechstes_spiel.csv
-│   ├── herren1_spielbericht.md
-│   └── damen1_...
-│
-├── 04_Zwischenergebnisse/       ← erzeugt das Programm, darf gelöscht werden
-│   ├── cache/                      zwischengespeicherte FuPa-Antworten
-│   ├── fupa_probe/                 Diagnoseausgaben von `probe-fupa`
-│   └── lauf_20260803_101500/       Einzelseiten des jeweiligen Laufs
-│
-├── 05_Ausgaben/                 ← das Ergebnis
-│   ├── 20260729_WaB_Druck.pdf
-│   ├── 20260729_WaB_Druck_snapshot.json
-│   └── Archiv/
-│       └── Saison_2025_26/         alte Ausgaben
-│
-└── 99_Logs/
-    └── stadionheft_2026-08.log
+└── Saison 26-27/
+    └── 05_Ausgaben/                Die fertigen Dateien
+        └── 2026-10-04_Spieltag/    Je Spieltag ein Ordner
+            ├── 2026-10-04_Herren_1_gegen_SG_Alerheim.pdf
+            ├── 2026-10-04_Herren_2_gegen_TSV_Binswangen.pdf
+            ├── 2026-10-04_Spieltag_alle-Mannschaften.zip
+            └── 2026-10-04_Spieltag_snapshot.json
 ```
 
-## Warum diese Aufteilung?
+---
 
-| Ordner | Begründung |
+## Was ihr anfassen müsst
+
+| Ordner | Wann |
 |---|---|
-| `00_Konfiguration` getrennt | Nur hier braucht es Fachwissen. Der Ordner kann in DSM auf eine Admin-Gruppe beschränkt werden, ohne den Rest zu sperren. |
-| `01_Vorlagen` schreibgeschützt | Diese Dateien sollen nicht versehentlich überschrieben werden. Im Docker-Compose ist der Mount deshalb `:ro`. |
-| `02_Werbung` getrennt von `03_Eingaben` | Werbung wechselt einmal pro Saison, Eingaben alle zwei Wochen. Unterschiedliche Rhythmen, unterschiedliche Zuständige. |
-| `04_Zwischenergebnisse` als eigener Ordner | Klar erkennbar wegwerfbar. Wenn die NAS voll wird, kann man diesen Ordner bedenkenlos leeren. |
-| `05_Ausgaben` mit `Archiv/` | Die aktuelle Ausgabe liegt oben, alte wandern nach Saison sortiert ins Archiv. |
-| Snapshot neben dem PDF | Wer die Datei findet, findet auch die Daten dazu – ohne sie suchen zu müssen. |
+| `00_Konfiguration/` | Einmal am Anfang, danach bei Saisonwechsel |
+| `05_Ausgaben/` | Nach jedem Lauf – hier holt ihr die Dateien ab |
+| `03_Eingaben/` | Nur, wenn FuPa ausfällt |
 
-## Berechtigungen in DSM
+Alles andere verwaltet das Programm selbst.
 
-| Gruppe | Ordner | Recht |
-|---|---|---|
-| `stadionheft-admin` | alles | Lesen/Schreiben |
-| `stadionheft-redaktion` | `03_Eingaben`, `05_Ausgaben` | Lesen/Schreiben |
-| `stadionheft-redaktion` | `01_Vorlagen`, `02_Werbung` | nur Lesen |
-| `stadionheft-redaktion` | `00_Konfiguration` | kein Zugriff |
+---
 
-Für den Container empfiehlt sich ein eigener DSM-Benutzer `stadionheft` mit
-Schreibrecht auf `03_`, `04_`, `05_` und `99_` sowie Leserecht auf `00_`, `01_`, `02_`.
+## Die einzelnen Dateien im Ausgabeordner
 
-## Einrichtung in drei Schritten
+**Die PDFs** – das eigentliche Ergebnis, je Mannschaft eine Datei.
 
-1. **Freigabe anlegen:** DSM → Systemsteuerung → Gemeinsamer Ordner → `Stadionheft`.
-   Papierkorb aktivieren (rettet versehentlich gelöschte Werbedateien).
-2. **Unterordner anlegen** wie oben. Am schnellsten per SSH:
-   ```bash
-   cd /volume1/Stadionheft
-   mkdir -p 00_Konfiguration 01_Vorlagen/Original_InDesign 02_Werbung/einzeln \
-            03_Eingaben 04_Zwischenergebnisse 05_Ausgaben/Archiv 99_Logs
-   ```
-3. **Container starten:** Container Manager → Projekt → `docker-compose.yml`
-   aus diesem Repository verwenden. Die Volumes zeigen bereits auf die obige
-   Struktur.
+**Das ZIP** – dieselben PDFs plus eine `UEBERSICHT.txt`. Das ist die Datei,
+die ihr weitergebt.
 
-## Datensicherung
+**Die Snapshot-Datei** – alle verwendeten Zahlen als JSON. Damit lassen sich
+dieselben PDFs später exakt wieder erzeugen, ohne FuPa zu fragen:
 
-* **Unbedingt sichern:** `00_Konfiguration`, `01_Vorlagen`, `02_Werbung`,
-  `05_Ausgaben`
-* **Nicht nötig:** `04_Zwischenergebnisse` (wird jederzeit neu erzeugt)
-* Empfehlung: Hyper Backup auf ein externes Ziel, wöchentlich.
-  `00_Konfiguration` enthält mit `kontakte.yaml` personenbezogene Daten – das
-  Backup-Ziel sollte verschlüsselt sein.
+```bash
+docker exec stadionheft python -m stadionheft.cli erstellen \
+  --snapshot "/app/daten/05_ausgaben/2026-10-04_Spieltag/2026-10-04_Spieltag_snapshot.json"
+```
+
+Praktisch, wenn jemand fragt: „Wie sah die Tabelle beim Heft vom 4. Oktober
+noch mal aus?"
+
+---
+
+## Aufräumen
+
+Der Ordner `04_Zwischenergebnisse/` wächst mit jedem Lauf. Er enthält nichts,
+was gebraucht wird, sobald die PDFs fertig sind. Ein- oder zweimal pro Saison
+kann der Inhalt gelöscht werden – das Programm legt ihn neu an.
+
+Die Ausgabeordner dürfen bleiben: Eine komplette Saison sind etwa 50 MB.
+
+---
+
+## Saisonwechsel
+
+Zwei Dinge:
+
+1. In der `config.yaml` die `fupa_team_url` jeder Mannschaft auf die neue
+   Saison umstellen (`...-2026-27` → `...-2027-28`) und `saison:` ändern.
+2. In der `docker-compose.yml` den Ausgabeordner auf den neuen Saisonordner
+   umstellen, dann Projekt neu erstellen.

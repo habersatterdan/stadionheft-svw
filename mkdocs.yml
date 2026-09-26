@@ -45,17 +45,17 @@ theme:
 nav:
   - Start: index.md
   - Für alle:
-      - Heft erstellen: heft-erstellen.md
+      - Seiten erzeugen: erzeugen.md
       - Wenn etwas nicht klappt: fehler.md
-  - Für die Redaktion:
-      - Inhalte pflegen: inhalte-pflegen.md
-      - Werbung verwalten: werbung.md
+  - Fürs Layout:
+      - Übergabe ans Layout: uebergabe.md
   - Für Administratoren:
       - Erste Einrichtung (Schritt für Schritt): ERSTE_EINRICHTUNG.md
-      - Installation auf der NAS: INSTALLATION_NAS.md
+      - Im Homelab betreiben: homelab.md
       - Ordner auf der NAS: NAS_ORDNERSTRUKTUR.md
       - Zugriff von unterwegs: VPN_EINRICHTEN.md
       - FuPa-Anbindung: fupa.md
+      - CSV-Reserve: csv-reserve.md
   - Hintergrund:
       - Umsetzungskonzept: KONZEPT.md
       - Analyse der Vorlage: ANALYSE_VORLAGE.md

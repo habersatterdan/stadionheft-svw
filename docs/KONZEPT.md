@@ -1,7 +1,21 @@
 # Umsetzungskonzept
 
-Stand: 03.08.2026 · Grundlage: Analyse von `20260728_WaB_Druck.pdf`
+Grundlage: Analyse von `20260728_WaB_Druck.pdf`
 (siehe [ANALYSE_VORLAGE.md](ANALYSE_VORLAGE.md))
+
+!!! info "Der Zuschnitt hat sich im September 2026 geändert"
+    Die erste Fassung erzeugte ein **komplettes Heft** samt Titelseite,
+    Vorwort, Werbung, Kontaktlisten und Impressum. In der Praxis wird das Heft
+    aber weiterhin von Hand zusammengebaut – diese Teile ändern sich kaum und
+    stecken nicht in FuPa.
+
+    Das Programm liefert deshalb jetzt **je Mannschaft eine druckfertige
+    PDF-Datei** mit genau dem Teil, der sich automatisieren lässt: den
+    aktuellen Zahlen, inklusive derer des nächsten Gegners. Weggefallen sind
+    Heftplan, Werbeblock, Titelseite, Vorwort, Kontaktlisten und Impressum.
+
+    Die Abschnitte unten sind entsprechend angepasst; die Begründungen für
+    Layout, Technikwahl und Rechtslage gelten unverändert.
 
 ---
 
@@ -13,14 +27,19 @@ kein Aufwand. Der Aufwand steckt in **vier Seiten je Mannschaft**, deren Inhalte
 heute als **Bildschirmfotos von fupa.net** von Hand ins Layout kopiert werden:
 Tabelle, Torschützenliste, Spielerstatistik und Gegnerkader.
 
-Ziel ist ein Programm, mit dem **jede Person im Verein** ein Heft erstellen kann:
-Mannschaften anhaken, Knopf drücken, fertiges Druck-PDF erhalten – ohne InDesign,
-ohne Screenshots, ohne dass es an einer einzelnen Person hängt.
+Ziel ist ein Programm, mit dem **jede Person im Verein** diese Seiten erzeugen
+kann: Mannschaften anhaken, Knopf drücken, druckfertige PDFs erhalten – ohne
+InDesign, ohne Screenshots, ohne dass es an einer einzelnen Person hängt.
 
-Der gewählte Ansatz: **Die vier Datenseiten werden aus echten Daten gesetzt**
-(scharfer Text statt 148-dpi-Bild), die unveränderten Werbeseiten werden als
-fertige PDF-Dateien dazwischen montiert. Endformat, Anschnitt und Hausfarbe
-bleiben exakt wie bisher.
+Der gewählte Ansatz: **Die Datenseiten werden aus echten Daten gesetzt**
+(scharfer Text statt 148-dpi-Bild) und je Mannschaft zu einer Datei montiert.
+Wer das Heft baut, legt diese Dateien zwischen die unveränderten Werbeseiten.
+Endformat, Anschnitt und Hausfarbe bleiben exakt wie bisher.
+
+Dazu kommen drei Seiten, die es vorher nicht gab und die ohne zusätzliche
+Pflege entstehen, weil sie sich aus dem ohnehin gelesenen Spielplan rechnen
+lassen: die **Gegenüberstellung beider Mannschaften** vor dem Spiel, die
+**Formkurve** und die **Saisonbilanz in Zahlen**.
 
 ---
 
@@ -33,19 +52,16 @@ Sortiert nach Dringlichkeit. Ohne Punkt 1 und 2 läuft nur der Demo-Modus.
 | # | Was | Wohin | Warum |
 |---|---|---|---|
 | 1 | **Ligen von Herren 2, Herren 3, Damen 1, Damen 2** | `config/config.yaml`, Feld `liga` | steht auf der Trennseite und über der Tabelle; aktuell „TODO" |
-| 2 | **Werbeanzeigen als PDF** (A5, 3 mm Anschnitt) | `daten/02_werbung/` | 20 der 28 Seiten; ohne sie hat das Heft nur die erzeugten Seiten |
+| 2 | **FuPa-Links prüfen** | dieselbe Datei, Feld `fupa_team_url` | ohne gültigen Link findet das Programm die Mannschaft nicht |
 | 3 | **Vereinswappen** freigestellt als PNG in Druckauflösung | `daten/01_vorlagen/` | Ich habe es aus dem PDF extrahiert (107 × 155 px) – das reicht für 19 mm Breite gerade so, ein Original wäre besser |
-| 4 | **Impressumsangaben** (Redaktion, Satz, Druck) | `config.yaml`, Abschnitt `impressum` | aktuell Platzhalter |
-| 5 | **Kontaktlisten** | `config/kontakte.yaml` | ich habe sie bewusst *nicht* aus dem PDF übernommen – personenbezogene Daten gehören nicht ungefragt in ein Repository |
 
 ### Sollte – entscheidet über den Automatisierungsgrad
 
 | # | Frage | Auswirkung |
 |---|---|---|
-| 6 | **Läuft der FuPa-Abruf bei euch?** Ein Klick: „FuPa-Verbindung prüfen" in der Oberfläche, oder `python -m stadionheft.cli probe-fupa`. Das Programm sucht sich Adressen und Feldnamen selbst; der Test zeigt, ob es fündig wird. | siehe Abschnitt 9 – aus meiner Umgebung ist fupa.net gesperrt, geprüft werden kann es nur bei euch |
-| 7 | Habt ihr bei FuPa/Vereinsheim einen **Vereinszugang mit Exportfunktion**? | Ein offizieller Export wäre jedem Scraping vorzuziehen |
-| 8 | Sollen die **Kader der Gegner** weiter ins Heft? Das ist die aufwendigste Abfrage (fremdes Team, fremde Liga). | ggf. Seite streichen und Aufwand halbieren |
-| 9 | **Titelseite**: selbst erzeugen (funktioniert, kommt dem Original nahe) oder weiter vom Designstudio als PDF? | beides möglich, eine Zeile im Heftplan |
+| 4 | **Läuft der FuPa-Abruf bei euch?** Ein Klick: „FuPa-Verbindung prüfen" in der Oberfläche, oder `python -m stadionheft.cli probe-fupa`. Das Programm sucht sich Adressen und Feldnamen selbst; der Test zeigt, ob es fündig wird. | siehe Abschnitt 9 – aus meiner Umgebung ist fupa.net gesperrt, geprüft werden kann es nur bei euch |
+| 5 | Habt ihr bei FuPa/Vereinsheim einen **Vereinszugang mit Exportfunktion**? | Ein offizieller Export wäre jedem Scraping vorzuziehen |
+| 6 | Werden die **Gegnerseiten** gefunden? Falls FuPa im Spielplan keinen Bezeichner mitliefert, einmalig je Ligagegner den Link hinterlegen. | sonst bleibt eine Seite je Mannschaft leer |
 
 ### Kann – für den Vollausbau
 
@@ -71,17 +87,18 @@ Vier Schichten, klar getrennt. Jede Schicht kennt nur die darunter.
 ┌───────────────────────────▼─────────────────────────────┐
 │  Ablaufsteuerung                                        │
 │  stadionheft/build.py                                   │
-│  Daten holen → Snapshot → Seiten setzen → montieren     │
+│  Daten holen → setzen → je Mannschaft eine PDF → ZIP    │
 └───────┬───────────────────┬──────────────────┬──────────┘
         │                   │                  │
 ┌───────▼────────┐ ┌────────▼────────┐ ┌───────▼─────────┐
 │ Datenquellen   │ │ Rendering       │ │ Ablage          │
 │ sources/       │ │ render/         │ │ storage/        │
 │ ├ fupa_api.py  │ │ ├ pages.py      │ │ └ nas.py        │
-│ ├ manuell.py   │ │ │  Jinja2+CSS   │ │   Mount / SMB   │
-│ ├ demo.py      │ │ │  →WeasyPrint  │ │                 │
-│ └ cache.py     │ │ └ assemble.py   │ │                 │
-│                │ │    pypdf-Montage│ │                 │
+│ ├ erkennung.py │ │ │  Jinja2+CSS   │ │   Mount / SMB   │
+│ ├ html_daten.py│ │ │  →WeasyPrint  │ │                 │
+│ ├ manuell.py   │ │ └ assemble.py   │ │                 │
+│ ├ demo.py      │ │    pypdf-Montage│ │                 │
+│ └ cache.py     │ │                 │ │                 │
 └────────────────┘ └─────────────────┘ └─────────────────┘
         ▲                   ▲
         │                   │
@@ -98,19 +115,25 @@ CSV, Demo). Der Rest des Programms weiß nicht, welche gerade läuft. Folge:
 Wenn FuPa ausfällt oder sein Format ändert, **schaltet das Programm automatisch
 auf CSV um** statt abzustürzen – und die Hefterstellung ist nie blockiert.
 
-**b) Feste Seiten werden montiert, nicht nachgebaut.**
-Die Werbeseiten sind gestaltete Kundenanzeigen. Sie bleiben PDF-Dateien und
-werden mit `pypdf` zwischen die erzeugten Seiten gelegt. `assemble.py` bringt
-dabei **alle Seiten auf eine gemeinsame Seitenbox** – nötig, weil das
-InDesign-Original 461 × 637 pt hat und WeasyPrint 437 × 612 pt liefert. Ohne
-diesen Schritt bekäme die Druckerei ein gemischtes Dokument.
+**b) Das Programm erkennt Daten an ihrer Struktur, nicht an Feldnamen.**
+FuPa hat keine dokumentierte Schnittstelle. Eine feste Feldzuordnung müsste
+nach jeder Umstellung von Hand nachgezogen werden – und bis das jemand merkt,
+steht im Heft nichts oder Falsches. `erkennung.py` sucht deshalb in allem
+gefundenen JSON nach dem, was wie eine Tabelle *aussieht*: mehrere Zeilen mit
+Mannschaftsname, Punkten, Siegen, Toren. Ob das Feld `points`, `punkte` oder
+`pts` heißt, ist egal. `html_daten.py` holt dafür auch JSON heraus, das in
+einer normalen Webseite eingebettet ist.
+
+Die Seitenmontage vereinheitlicht weiterhin die Seitenboxen (`assemble.py`) –
+nötig, weil WeasyPrint 437 × 612 pt liefert und das InDesign-Original
+461 × 637 pt hat. Ohne diesen Schritt bekäme die Druckerei ein gemischtes
+Dokument.
 
 **c) Jeder Lauf ist reproduzierbar.**
-Neben jedem PDF entsteht `*_snapshot.json` mit **allen verwendeten Daten und
-dem Heftplan**. Damit lässt sich dasselbe Heft jederzeit erneut bauen – ohne
-FuPa, ohne dass zwischenzeitliche Tabellenänderungen etwas verschieben. Das ist
-die Antwort auf „das Heft von letzter Woche nochmal, aber mit korrigiertem
-Vorwort".
+Neben den PDFs entsteht `*_snapshot.json` mit **allen verwendeten Daten und
+der Seitenfolge**. Damit lassen sich dieselben Dateien jederzeit erneut bauen –
+ohne FuPa, ohne dass zwischenzeitliche Tabellenänderungen etwas verschieben.
+Das ist die Antwort auf „Wie sah die Tabelle beim Heft vom 4. Oktober aus?“
 
 ---
 
@@ -156,14 +179,15 @@ Aufgabenplaner automatisch erzeugen zu lassen.
 Ausführlich in [NAS_ORDNERSTRUKTUR.md](NAS_ORDNERSTRUKTUR.md). Kurzfassung:
 
 ```
-/volume1/Stadionheft/
-├── 00_Konfiguration/      config.yaml, heftplan.yaml, kontakte.yaml
-├── 01_Vorlagen/           Wappen, ggf. Designer-Titelseite, InDesign-Archiv
-├── 02_Werbung/            Werbeseiten als PDF
-├── 03_Eingaben/           Vorwort, Titelbild, CSV-Dateien  ← Redaktion
-├── 04_Zwischenergebnisse/ Cache und Einzelseiten (löschbar)
-├── 05_Ausgaben/           fertige Hefte + Snapshots
-└── 99_Logs/
+/volume1/SVW/Stadionheft/
+├── _Programm/
+│   ├── 00_Konfiguration/      config.yaml
+│   ├── 01_Vorlagen/           Vereinswappen
+│   ├── 03_Eingaben/           CSV-Dateien als Reserve
+│   ├── 04_Zwischenergebnisse/ Cache und Einzelseiten (löschbar)
+│   └── 99_Logs/
+└── Saison 26-27/
+    └── 05_Ausgaben/           fertige Dateien je Spieltag + Snapshots
 ```
 
 Die Nummerierung folgt dem Arbeitsablauf, damit in der Dateistation sofort
@@ -178,16 +202,14 @@ Administratoren beschränken, ohne den Rest zu sperren.
 Vereinsmitglieder ohne Programmierkenntnisse pflegen sollen, ist die
 Erklärung direkt neben dem Wert der halbe Nutzen.
 
-Drei Dateien, bewusst getrennt:
+**Eine** Datei, `config.yaml`: Verein, Mannschaften, FuPa-Links, Pfade, NAS,
+Layout. Sie ändert sich selten – im Wesentlichen einmal pro Saison.
 
-| Datei | Inhalt | Ändert sich |
-|---|---|---|
-| `config.yaml` | Verein, Mannschaften, FuPa-Links, Pfade, NAS, Layout | selten |
-| `heftplan.yaml` | Seitenreihenfolge des Hefts | pro Saison |
-| `kontakte.yaml` | Kontaktlisten | selten, personenbezogen |
+Vollständiges Beispiel mit Kommentaren: `config/config.example.yaml`.
 
-Vollständige Beispiele mit Kommentaren: `config/config.example.yaml`,
-`config/heftplan.example.yaml`, `config/kontakte.example.yaml`.
+Die frühere Aufteilung in `heftplan.yaml` und `kontakte.yaml` ist entfallen:
+Die Seitenfolge ist jetzt bei allen Mannschaften gleich und steht im Code,
+Kontaktlisten gehören zum handgebauten Teil des Hefts.
 
 Kernstück – eine Mannschaft:
 
@@ -200,35 +222,28 @@ mannschaften:
     liga: "Bezirksliga Schwaben Nord"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
     aktiv: true
-    seiten: ["trenner", "gegner", "tabelle", "torjaeger", "spielerstatistik"]
 ```
 
 Eine neue Mannschaft ist ein weiterer solcher Block – die Oberfläche zeigt sie
 danach automatisch an. **Kein Programmcode muss angefasst werden.**
 
-Das Feld `seiten` bestimmt, welche Seiten je Mannschaft entstehen. Damit lässt
-sich steuern, dass die Herren 1 den vollen Block bekommen und die dritte
-Mannschaft nur Tabelle und Torjäger.
+Die Seitenfolge ist bewusst bei allen Mannschaften gleich und nicht mehr
+einstellbar: Wer das Heft zusammenbaut, soll sich darauf verlassen können,
+dass jede Datei gleich aufgebaut ist.
 
-Der Heftplan bildet die 28 Seiten der Vorlage ab; `mannschaftsbloecke` ist der
-Platzhalter, der je ausgewählter Mannschaft expandiert wird:
+Einstellbar ist dagegen, **wie der Abruf sich verhält**:
 
 ```yaml
-seiten:
-  - typ: titelseite
-  - typ: freitext
-    titel: "Vorwort"
-    quelle: "03_eingaben/vorwort.md"
-  - typ: pdf
-    quelle: "02_werbung/werbung_vorne.pdf"
-    optional: true
-  - typ: mannschaftsbloecke
-    trenner_zwischen:
-      - typ: pdf
-        quelle: "02_werbung/werbung_zwischen.pdf"
-        optional: true
-  - typ: kontakte
-  - typ: impressum
+datenquelle:
+  modus: "api"
+  fallback_modus: "manuell"     # wenn nichts kommt: CSV-Dateien
+  fupa:
+    zusatz_adressen: []         # eigene Adressen nachtragen
+    gegner_abrufen: true        # auch die Zahlen des Gegners holen
+    gegner: {}                  # Notnagel: Teamseiten von Hand
+    max_abrufe: 12
+  cache:
+    gueltigkeit_minuten: 15     # kurz, damit die Zahlen aktuell sind
 ```
 
 **Passwörter stehen nie in einer Konfigurationsdatei.** Das NAS-Passwort wird
@@ -240,12 +255,12 @@ ausschließlich aus einer Umgebungsvariablen gelesen (`nas.smb.passwort_umgebung
 
 Fünf Schritte, kein technisches Vorwissen:
 
-1. Browser öffnen, Lesezeichen „Stadionheft" anklicken (`http://diskstation:8080`).
-2. Mannschaften anhaken, die ins Heft sollen.
-3. Optional: Spieltag und eigenen Namen eintragen.
-4. **„Stadionheft erstellen"** klicken.
-5. Warten (Fortschritt läuft mit), dann **„PDF herunterladen"** – oder das Heft
-   direkt im NAS-Ordner `05_Ausgaben` abholen.
+1. Browser öffnen, Lesezeichen „Stadionheft" anklicken (`http://svwnas:8080`).
+2. Mannschaften anhaken (alle sind vorausgewählt).
+3. **„Seiten jetzt erzeugen"** klicken.
+4. Warten (Fortschritt läuft mit), dann **„Alle Dateien herunterladen (ZIP)"** –
+   oder die Dateien direkt im NAS-Ordner `05_Ausgaben` abholen.
+5. Das ZIP an die Person weitergeben, die das Heft zusammenbaut.
 
 **Wenn eine Mannschaft leere Seiten hat oder eine Werbedatei fehlt**, bricht
 nichts ab. Das Heft wird erzeugt, und unter dem Ergebnis steht in Klartext, was
@@ -287,7 +302,6 @@ Zusätzlich gibt es unter `/hilfe` eine Tabelle „Was tun, wenn …".
 | Anlass | Was tun |
 |---|---|
 | Neue Saison | `fupa_team_url` aller Mannschaften auf das neue Saisonkürzel ändern (`…-2027-28`), `saison` anpassen, `liga` prüfen |
-| Neue Werbeanzeigen | PDFs nach `02_Werbung`, ggf. `heftplan.yaml` anpassen |
 | Neue Mannschaft | Block in `config.yaml` ergänzen |
 | FuPa liefert nichts mehr | „FuPa-Verbindung prüfen“ bzw. `probe-fupa` – meldet je Adresse Status und was erkannt wurde; notfalls Adresse in `datenquelle.fupa.zusatz_adressen` nachtragen. Bis dahin greift der Rückfall auf CSV. |
 | Layout anpassen | `stadionheft/static/css/heft.css` – alle Maße stehen als Variablen am Anfang |
@@ -390,7 +404,7 @@ ohnehin der pragmatischste Weg.
 | **Urheberrecht an Zahlen** | Reine Fakten (Tore, Punkte) sind **nicht** urheberrechtlich geschützt. Die *Darstellung* schon. | Das Programm setzt Zahlen **neu**, statt Screenshots zu übernehmen. Das ist rechtlich sauberer als die bisherige Praxis. |
 | **Spielerfotos** | Die runden Bilder auf FuPa sind geschützt und unterliegen dem Recht am eigenen Bild. | **Werden bewusst nicht übernommen.** |
 | **Quellenangabe** | Guter Stil und im Zweifel hilfreich. | Auf jeder Datenseite steht „Quelle: fupa.net" mit Stand-Datum. |
-| **DSGVO** | Spielernamen mit Statistik sind personenbezogene Daten. Für den eigenen Kader unproblematisch (Vereinsmitglieder, öffentlicher Spielbetrieb); beim **Gegnerkader** ist es eine Weiterverbreitung fremder Personendaten. | Bewusste Entscheidung nötig – siehe offene Frage 8. `kontakte.yaml` steht nicht im Repository. |
+| **DSGVO** | Spielernamen mit Statistik sind personenbezogene Daten. Für den eigenen Kader unproblematisch (Vereinsmitglieder, öffentlicher Spielbetrieb); beim **Gegnerkader** ist es eine Weiterverbreitung fremder Personendaten. | Bewusste Entscheidung nötig. Es werden nur Name und Spielstatistik übernommen, keine Fotos und keine Kontaktdaten. |
 
 **Meine Empfehlung, in dieser Reihenfolge:**
 
@@ -468,14 +482,12 @@ InDesign-Skripting.
 
 | Seite | Herkunft |
 |---|---|
-| Titelseite | erzeugt (oder Designer-PDF, eine Zeile im Heftplan) |
-| Vorwort | erzeugt aus `vorwort.md`, zweispaltig, läuft automatisch auf Folgeseiten |
-| Werbung | **unverändert montiert** |
 | Trennseite | erzeugt aus der Konfiguration |
-| Spielbericht | erzeugt aus `<mannschaft>_spielbericht.md` |
-| Gegner / Tabelle / Torjäger / Spielerstatistik | **erzeugt aus Daten** – das ist der eigentliche Gewinn |
-| Kontakte / Impressum | erzeugt aus der Konfiguration |
-| Rücktitel | montiert |
+| Das nächste Spiel | **erzeugt aus Daten** – Gegenüberstellung beider Mannschaften |
+| Tabelle / Torschützen / Spielerstatistik | **erzeugt aus Daten** – das ist der eigentliche Gewinn |
+| Der Gegner | **erzeugt aus Daten** – automatisch ermittelt, nichts zu pflegen |
+| Saisonbilanz | **gerechnet** aus dem Spielplan |
+| Titelseite, Vorwort, Werbung, Kontakte, Impressum, Rücktitel | bleiben von Hand |
 
 ---
 
@@ -487,23 +499,23 @@ InDesign-Skripting.
 - [x] Projektstruktur, Konfiguration mit Validierung
 - [x] Drei Datenquellen: FuPa (selbstsuchend), CSV, Demo – mit automatischem Rückfall
 - [x] Seitensatz aller Seitentypen im Layout der Vorlage
+- [x] Automatische Ermittlung des nächsten Gegners und seiner Zahlen
+- [x] Formkurve und Saisonbilanz aus dem Spielplan gerechnet
 - [x] PDF-Montage inkl. Vereinheitlichung unterschiedlicher Seitenboxen
 - [x] Weboberfläche mit Fortschrittsanzeige und verständlichen Fehlermeldungen
 - [x] Kommandozeile inkl. `pruefen`, `probe-fupa`, `beispieldaten`
 - [x] NAS-Ablage (Mount und SMB)
 - [x] Snapshot-Mechanismus für reproduzierbare Läufe
-- [x] Docker-Setup für die Synology NAS
-- [x] 159 automatische Tests
+- [x] Fertiges Docker-Image für amd64 und arm64, gebaut von GitHub Actions
+- [x] 138 automatische Tests
 
-### Schritt 1 – Betriebsbereit (etwa ein Abend, ohne FuPa)
+### Schritt 1 – Betriebsbereit
 
-1. Ligen, Impressum, Kontakte eintragen.
-2. Werbeanzeigen als PDF nach `02_Werbung`.
-3. Heftplan an die tatsächliche Seitenfolge anpassen.
-4. Probelauf, Ergebnis mit der Ausgabe vom 29.07. vergleichen.
-5. Container auf der NAS einrichten.
+1. Ligen und FuPa-Links in der `config.yaml` eintragen.
+2. Container auf der NAS einrichten ([Anleitung](ERSTE_EINRICHTUNG.md)).
+3. Probelauf, Ergebnis mit der Ausgabe vom 29.07. vergleichen.
 
-**Ergebnis:** Das Heft ist mit manueller Dateneingabe vollständig erstellbar.
+**Ergebnis:** Die Statistikseiten entstehen per Knopfdruck.
 
 ### Schritt 2 – FuPa automatisch (Voreinstellung, nur noch prüfen)
 
@@ -514,14 +526,13 @@ InDesign-Skripting.
    CSV pflegen.
 3. Probelauf mit allen fünf Mannschaften.
 
-**Ergebnis:** Mannschaften anhaken → Knopf → fertiges Heft.
+**Ergebnis:** Mannschaften anhaken → Knopf → fertige Dateien.
 
 ### Schritt 3 – Feinschliff (nach Bedarf)
 
-* Titelseite nach Designer-Vorlage verfeinern oder als PDF einbinden.
-* Vorwort direkt in der Weboberfläche bearbeitbar machen.
-* Automatischer Lauf per Aufgabenplaner (z. B. jeden Donnerstag ein
-  Entwurf ins Postfach der Redaktion).
+* Automatischer Lauf per Aufgabenplaner, z. B. jeden Freitagabend, damit die
+  Dateien am Samstag schon bereitliegen.
+* CMYK statt RGB, falls die Druckerei es verlangt.
 * Segoe UI durch eine lizenzierte Datei ersetzen.
 
 ---
@@ -530,17 +541,18 @@ InDesign-Skripting.
 
 Damit hier nichts überversprochen wird:
 
-1. **Die FuPa-Endpunkte sind ungeprüft.** Siehe Abschnitt 9. Der Modus `api`
-   ist als Gerüst vorhanden, nicht als fertige Funktion. `manuell` und `demo`
-   sind vollständig getestet.
+1. **Der FuPa-Abruf ist nie gegen das echte fupa.net gelaufen.** Der
+   Netzzugang dorthin war aus der Entwicklungsumgebung gesperrt (Abschnitt 9).
+   Geprüft wurde gegen nachgebaute Seiten in mehreren plausiblen Formaten.
+   Ob es in eurer Umgebung greift, zeigt der Knopf „FuPa-Verbindung prüfen".
+   `manuell` und `demo` sind vollständig getestet.
 2. **Segoe UI fehlt auf dem Server.** Die Schrift ist eine Windows-Systemschrift
    und darf nicht mitgeliefert werden. Im Container wird **Open Sans**
    verwendet – gleiche Anmutung, ganz leicht andere Buchstabenbreiten. Wer
    Segoe UI lizenziert hat, legt die Dateien in den Container und ändert nichts
    weiter: die Schriftliste probiert Segoe UI zuerst.
-3. **Die Titelseite ist eine sehr gute Annäherung, keine pixelgenaue Kopie.**
-   Die diagonalen Formen des Designstudios sind nachgebildet, nicht
-   nachgemessen. Wer das Original will, bindet die Titelseite als PDF ein.
+3. **Die Dateien sind in RGB, nicht CMYK.** Die meisten Druckereien wandeln
+   selbst um. Falls nicht, lässt es sich nachrüsten.
 4. **Das Vereinswappen** stammt aus dem PDF (107 × 155 px). Für 19 mm Breite
    reicht das knapp; ein Original in Druckauflösung wäre besser.
 5. **Keine Benutzerverwaltung.** Wer die Adresse kennt, kann ein Heft erzeugen.
