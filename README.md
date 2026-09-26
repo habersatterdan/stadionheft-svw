@@ -234,7 +234,7 @@ stadionheft/
 └── static/css/heft.css   Das gesamte Layout
 ```
 
-Tests: `python -m pytest -q` (138 Tests, kein Netzzugriff)
+Tests: `python -m pytest -q` (141 Tests, kein Netzzugriff)
 
 ---
 

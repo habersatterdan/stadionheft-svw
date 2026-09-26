@@ -327,6 +327,57 @@ def test_ohne_fupa_link_klare_ansage(konfiguration: Konfiguration):
     assert "FuPa-Link" in fehler.value.benutzer_text
 
 
+def test_tote_adressen_werden_im_lauf_uebersprungen(konfiguration: Konfiguration,
+                                                    herren1):
+    """Was einmal nichts lieferte, wird beim naechsten Mal nicht neu probiert."""
+    protokoll: list[str] = []
+    quelle = _quelle(konfiguration, {herren1.fupa_team_url: Antwort(_teamseite())},
+                     protokoll)
+
+    quelle.hole(herren1)
+    erster_lauf = len(protokoll)
+    protokoll.clear()
+
+    quelle.hole(herren1)
+    assert len(protokoll) < erster_lauf
+
+
+def test_bewaehrtes_muster_bleibt_fuer_die_naechste_mannschaft(
+        konfiguration: Konfiguration):
+    """Fehlt die Seite einer Mannschaft, darf das die naechste nicht lahmlegen.
+
+    Sonst reicht eine Mannschaft ohne FuPa-Auftritt, um allen folgenden die
+    Daten zu nehmen -- der Fehler faellt erst im fertigen Heft auf.
+    """
+    herren1 = konfiguration.mannschaft("herren1")
+    damen1 = konfiguration.mannschaft("damen1")
+    damen1.fupa_team_url = "https://www.fupa.net/team/svw-damen1-2026-27"
+
+    # Nur Herren 1 hat eine Seite. Damen 1 laeuft ins Leere ...
+    quelle = _quelle(konfiguration, {herren1.fupa_team_url: Antwort(_teamseite())})
+    quelle.hole(herren1)
+    leer = quelle.hole(damen1)
+    assert leer.tabelle == []
+
+    # ... und danach muss Herren 1 immer noch funktionieren.
+    wieder = quelle.hole(herren1)
+    assert len(wieder.tabelle) == 5
+
+
+def test_ohne_uebrige_adresse_wird_doch_alles_probiert(
+        konfiguration: Konfiguration, herren1):
+    """Lieber ein paar Abrufe zu viel als eine Mannschaft ohne jeden Versuch."""
+    protokoll: list[str] = []
+    quelle = _quelle(konfiguration, {}, protokoll)
+    quelle._tote_muster = {"{slug}"}          # alles als tot markieren
+    quelle._tote_muster.update(
+        quelle._muster(a, herren1.fupa_slug)
+        for a in adressen_fuer(quelle.client, herren1))
+
+    quelle.hole(herren1)
+    assert protokoll, "Es wurde gar keine Adresse versucht"
+
+
 def test_hoechstens_so_viele_abrufe_wie_erlaubt(konfiguration: Konfiguration,
                                                 herren1):
     protokoll: list[str] = []

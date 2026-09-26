@@ -507,7 +507,7 @@ InDesign-Skripting.
 - [x] NAS-Ablage (Mount und SMB)
 - [x] Snapshot-Mechanismus für reproduzierbare Läufe
 - [x] Fertiges Docker-Image für amd64 und arm64, gebaut von GitHub Actions
-- [x] 138 automatische Tests
+- [x] 141 automatische Tests
 
 ### Schritt 1 – Betriebsbereit
 

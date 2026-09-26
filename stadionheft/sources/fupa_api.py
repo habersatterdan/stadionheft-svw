@@ -595,14 +595,24 @@ class FupaApiQuelle:
         return adresse.replace(kennung, "{slug}") if kennung else adresse
 
     def _sortieren(self, adressen: list[str], kennung: str) -> list[str]:
-        """Bewaehrte Adressen zuerst, in diesem Lauf tote gar nicht."""
+        """Bewaehrte Adressen zuerst, in diesem Lauf tote gar nicht.
+
+        Zwei Sicherungen, damit die Abkuerzung nicht zur Falle wird:
+
+        * Ein Muster, das schon einmal etwas geliefert hat, wird nie
+          uebersprungen -- dass die Seite *dieser* Mannschaft fehlt, sagt
+          nichts ueber die naechste.
+        * Bliebe nichts uebrig, wird doch alles probiert. Lieber ein paar
+          Abrufe zu viel als eine Mannschaft ohne jeden Versuch.
+        """
         gut, offen = [], []
         for adresse in adressen:
             muster = self._muster(adresse, kennung)
-            if muster in self._tote_muster:
-                continue
-            (gut if muster in self._gute_muster else offen).append(adresse)
-        return gut + offen
+            if muster in self._gute_muster:
+                gut.append(adresse)
+            elif muster not in self._tote_muster:
+                offen.append(adresse)
+        return (gut + offen) or list(adressen)
 
     def _sammeln(self, adressen: list[str], vereinsname: str,
                  hoechstens: int, kennung: str = "") -> Fund:
@@ -634,7 +644,10 @@ class FupaApiQuelle:
                 self._auswerten(bloecke, fund, vereinsname, adresse)
                 if muster not in self._gute_muster:
                     self._gute_muster.append(muster)
-            else:
+                self._tote_muster.discard(muster)
+            elif muster not in self._gute_muster:
+                # Ein bewaehrtes Muster wird nicht totgeschrieben, nur weil
+                # es zu dieser einen Mannschaft nichts gibt.
                 self._tote_muster.add(muster)
         return fund
 
