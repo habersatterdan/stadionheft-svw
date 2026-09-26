@@ -1,12 +1,23 @@
 # Stadionheft „Wörnitzstein am Ball"
 
-Diese Anleitung erklärt, wie das Stadionheft des SV Wörnitzstein-Berg erstellt
-wird. Sie richtet sich an alle im Verein – Vorkenntnisse sind nicht nötig.
+Diese Anleitung erklärt, wie die aktuellen Statistikseiten für das Stadionheft
+des SV Wörnitzstein-Berg entstehen. Sie richtet sich an alle im Verein –
+Vorkenntnisse sind nicht nötig.
 
-Das Programm nimmt die Arbeit ab, die bisher am meisten Zeit gekostet hat:
-Tabelle, Torschützenliste, Spielerstatistik und Gegnerkader werden nicht mehr
-als Bildschirmfotos zusammengesucht, sondern automatisch gesetzt. Werbung,
-Kontaktlisten und Impressum bleiben unverändert wie bisher.
+## Was das Programm macht — und was nicht
+
+Das Programm nimmt genau die Arbeit ab, die bisher am meisten Zeit gekostet
+hat: **Tabelle, Torschützenliste, Spielerstatistik und die Zahlen des nächsten
+Gegners** werden nicht mehr als Bildschirmfotos zusammengesucht, sondern
+automatisch von fupa.net geholt und sauber gesetzt.
+
+Es entsteht **pro Mannschaft eine druckfertige PDF-Datei**. Diese Dateien gehen
+an die Person, die das Heft zusammenbaut – zusammen mit Titelseite, Vorwort,
+Werbung, Kontaktlisten und Impressum, die weiterhin von Hand kommen.
+
+!!! tip "In einem Satz"
+    Mannschaften anhaken → Knopf drücken → fertige PDFs herunterladen →
+    weitergeben.
 
 ---
 
@@ -14,70 +25,67 @@ Kontaktlisten und Impressum bleiben unverändert wie bisher.
 
 <div class="grid cards" markdown>
 
--   **ein Heft erstellen**
+-   **die aktuellen Seiten erzeugen**
 
-    Mannschaften anhaken, Knopf drücken, PDF herunterladen.
+    Mannschaften anhaken, Knopf drücken, Dateien herunterladen.
 
-    [→ Heft erstellen](heft-erstellen.md)
+    [→ Seiten erzeugen](erzeugen.md)
 
--   **Texte oder Bilder ändern**
+-   **das Heft zusammenbauen**
 
-    Vorwort, Titelbild, Spielplan und Zahlen pflegen.
+    Was in den Dateien steckt und wie sie ins Heft kommen.
 
-    [→ Inhalte pflegen](inhalte-pflegen.md)
+    [→ Übergabe ans Layout](uebergabe.md)
 
--   **eine Werbeanzeige austauschen**
+-   **nachsehen, wenn etwas fehlt**
 
-    Anzeige aufnehmen, entfernen oder befristen.
-
-    [→ Werbung verwalten](werbung.md)
-
--   **wissen, was eine Fehlermeldung bedeutet**
-
-    Die häufigsten Meldungen und was zu tun ist.
+    Leere Seiten, falscher Gegner, FuPa nicht erreichbar.
 
     [→ Wenn etwas nicht klappt](fehler.md)
+
+-   **das Programm einrichten**
+
+    Einmalig auf der NAS oder im Homelab aufsetzen.
+
+    [→ Erste Einrichtung](ERSTE_EINRICHTUNG.md)
 
 </div>
 
 ---
 
-## So läuft es ab
+## Was in einer Mannschaftsdatei steht
 
-| | Schritt | Wer |
+Jede Datei hat sieben Seiten, immer in derselben Reihenfolge:
+
+| # | Seite | Inhalt |
 |---|---|---|
-| 1 | Mannschaften auswählen | du |
-| 2 | Daten holen – von FuPa oder aus den CSV-Dateien | Programm |
-| 3 | Seiten setzen: Titel, Tabelle, Torschützen, Statistik | Programm |
-| 4 | Werbung dazwischen montieren | Programm |
-| 5 | Fertiges PDF auf der NAS ablegen | Programm |
+| 1 | Trennseite | Mannschaftsname und Liga |
+| 2 | Das nächste Spiel | Gegenüberstellung beider Mannschaften: Platz, Punkte, Tore, Form |
+| 3 | Tabelle | Liga-Tabelle, eigene Mannschaft und Gegner hervorgehoben |
+| 4 | Torschützenliste | Liga-Torschützen, beide Vereine hervorgehoben |
+| 5 | Spielerstatistik | Der eigene Kader mit allen Werten |
+| 6 | Der Gegner | Kader des nächsten Gegners |
+| 7 | Saisonbilanz | Heim/Auswärts, Tore pro Spiel, Serien – für beide Mannschaften |
 
-Das Programm läuft **auf der Vereins-NAS**. Alle anderen Geräte brauchen nur
-einen Browser – Windows, Linux, Mac, iPhone oder Android spielt keine Rolle,
-und es muss nichts installiert werden.
+Spielt der Gegner ausnahmsweise in einer anderen Liga (Pokal), kommen dessen
+Tabelle und Torschützenliste als zusätzliche Seiten dazu.
 
----
-
-## Was das Programm automatisch macht
-
-| | |
-|---|---|
-| **Nächsten Gegner finden** | Anhand des heutigen Datums wird aus dem Spielplan die Partie herausgesucht, die als nächste ansteht. |
-| **Statistiken setzen** | Tabelle, Torschützen und Spielerstatistik werden als scharfer Text gesetzt statt als Bildschirmfoto eingefügt. |
-| **Werbung zusammenstellen** | Alle Anzeigen aus dem Werbeordner, in der richtigen Reihenfolge. Befristete Anzeigen fallen nach Ablauf von selbst heraus. |
-| **Druckformat einhalten** | A5 mit 3 mm Anschnitt und Schnittmarken – dasselbe Format wie bisher. |
-| **Alles nachvollziehbar halten** | Zu jedem Heft wird gespeichert, aus welchen Daten es entstanden ist. Damit lässt es sich jederzeit unverändert neu erzeugen. |
+Format: **A5, 3 mm Anschnitt, Schnittmarken** – exakt wie die bisherigen
+Heftseiten.
 
 ---
 
-## Was weiterhin von Hand kommt
+## Woher die Zahlen kommen
 
-* **Vorwort** – der Text der Redaktion
-* **Titelbild** – das Foto für die erste Seite
-* **Spielbericht** – Text zum letzten Spiel
-* **Werbeanzeigen** – die fertigen PDF-Dateien der Kunden
+Von **fupa.net**, live beim Klick auf den Knopf. Auf jeder Seite steht unten,
+wann die Daten geholt wurden – so lässt sich später nachvollziehen, welchem
+Spieltag ein Blatt entspricht.
 
-!!! note "Hinweis zu den Statistiken"
-    Ob Tabelle und Torschützen automatisch von FuPa geholt werden oder als
-    CSV-Datei gepflegt werden müssen, hängt davon ab, ob die FuPa-Anbindung
-    eingerichtet ist. Siehe [FuPa-Anbindung](fupa.md).
+Der **nächste Gegner wird automatisch ermittelt**: Das Programm schaut in den
+Spielplan und nimmt die Partie, die als nächste ansteht. Nichts muss von Hand
+umgestellt werden.
+
+Ist FuPa einmal nicht erreichbar, greift das Programm auf hinterlegte
+CSV-Dateien zurück und sagt das deutlich.
+
+[→ Details zur FuPa-Anbindung](fupa.md)

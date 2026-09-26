@@ -49,12 +49,15 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # Achtung: Paketnamen unterscheiden sich zwischen Ubuntu (hier) und
+      # Debian (im Dockerfile). Auf Ubuntu heisst die JPEG-Bibliothek
+      # libjpeg-turbo8, auf Debian libjpeg62-turbo.
       - name: Systembibliotheken für WeasyPrint
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
             libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
-            libjpeg62-turbo shared-mime-info fonts-dejavu-core
+            libjpeg-turbo8 shared-mime-info fonts-dejavu-core
 
       - name: Abhängigkeiten installieren
         run: |
