@@ -33,13 +33,38 @@ DOCKER=$(command -v docker || echo /usr/local/bin/docker)
   sed -n '1,80p' "$COMPOSE" | grep -v '^\s*#' | grep -v '^\s*$'
   echo
 
-  if grep -q '^\s*build:' "$COMPOSE"; then
-      echo "ACHTUNG: Diese Datei baut selbst (build:)."
-      echo "Ein Pull hilft dann nicht - dafuer braucht es neuen Quellcode."
+  HAT_BUILD=$(grep -c '^[[:space:]]*build:' "$COMPOSE")
+  HAT_IMAGE=$(grep -c '^[[:space:]]*image:' "$COMPOSE")
+  if [ "$HAT_BUILD" -gt 0 ] && [ "$HAT_IMAGE" -gt 0 ]; then
+      echo "PROBLEM: 'build:' UND 'image:' sind beide aktiv."
+      echo
+      echo "Docker baut dann aus dem oertlichen Quellcode und haengt dem"
+      echo "Ergebnis den Namen des GitHub-Abbilds an. Es wird nie etwas"
+      echo "geholt - der Container laeuft mit altem Code unter einem Namen,"
+      echo "der nach dem aktuellen aussieht."
+      echo
+      echo "ZU TUN: In $COMPOSE die Zeile mit 'build:' loeschen."
+      echo "        Die Zeile mit 'image:' bleibt stehen."
+  elif [ "$HAT_BUILD" -gt 0 ]; then
+      echo "Diese Datei baut selbst (build:). Ein Pull hilft dann nicht -"
+      echo "dafuer braucht es neuen Quellcode als ZIP."
       echo "Zum Umsteigen die build-Zeile ersetzen durch:"
       echo "  image: ghcr.io/habersatterdan/stadionheft-svw:latest"
   fi
   echo
+
+  if ! $DOCKER info >/dev/null 2>&1; then
+      echo "PROBLEM: Kein Zugriff auf Docker."
+      echo
+      echo "ZU TUN: Im Aufgabenplaner diese Aufgabe bearbeiten und unter"
+      echo "        'Allgemein' als Benutzer 'root' eintragen."
+      echo
+      echo "Meldung im Original:"
+      $DOCKER info 2>&1 | head -3
+      echo
+      echo "=== Abbruch ==="
+      exit 1
+  fi
 
   echo "########## 2. Stand VOR der Aktualisierung ##########"
   $DOCKER exec stadionheft python -m stadionheft.cli stand 2>&1

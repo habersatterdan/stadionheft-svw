@@ -18,9 +18,15 @@
 services:
   stadionheft:
     image: ghcr.io/habersatterdan/stadionheft-svw:latest
-    # Nur noetig, wenn ausnahmsweise selbst gebaut werden soll (z. B. um eine
-    # Aenderung zu testen, bevor sie auf GitHub liegt). Dann die Zeile
-    # "image:" oben auskommentieren und diese hier aktivieren:
+
+    # ACHTUNG: "image:" und "build:" duerfen NIE beide aktiv sein.
+    # Stehen beide da, baut Docker aus dem oertlichen Quellcode und haengt
+    # dem Ergebnis den Namen des GitHub-Abbilds an. Es wird dann nie etwas
+    # geholt, und der Container laeuft mit altem Code unter einem Namen, der
+    # nach dem aktuellen aussieht.
+    #
+    # Soll ausnahmsweise selbst gebaut werden, die Zeile "image:" oben
+    # loeschen und diese hier aktivieren:
     # build: .
     container_name: stadionheft
     restart: unless-stopped
