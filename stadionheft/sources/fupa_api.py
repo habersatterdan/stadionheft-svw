@@ -46,7 +46,8 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from ..config import Konfiguration, Mannschaft
-from ..errors import DatenNichtLesbarFehler, DatenquelleNichtErreichbarFehler
+from ..errors import (AdresseGesperrtFehler, DatenNichtLesbarFehler,
+                      DatenquelleNichtErreichbarFehler)
 from ..logging_setup import logger
 from ..models import (GegnerDaten, MannschaftsDaten, Spiel, SpielerZeile,
                       TabellenZeile, TorjaegerZeile, spiele_einordnen)
@@ -225,11 +226,12 @@ class FupaClient:
             return zwischengespeichert
 
         if not self._robots_erlaubt(url):
-            raise DatenquelleNichtErreichbarFehler(
+            raise AdresseGesperrtFehler(
                 f"robots.txt verbietet den Abruf von {url}.",
-                benutzer_text="FuPa erlaubt den automatischen Abruf dieser Seite nicht.",
-                hinweis=("Bitte in der Konfiguration auf den Modus 'manuell' "
-                         "umstellen und die Daten als CSV bereitstellen."),
+                benutzer_text=("FuPa erlaubt den automatischen Abruf dieser "
+                               "Adresse nicht."),
+                hinweis=("Diese Adresse wird uebersprungen. Andere Adressen "
+                         "werden weiter probiert."),
             )
 
         import requests
@@ -409,19 +411,28 @@ def _nutzlasten_aus(antwort: Any) -> list[Any]:
 #: Teamseiten**. Letztere sind der verlaessliche Teil: Ihre Adresse steht in
 #: der Konfiguration und muss nicht geraten werden. Die Daten stecken dort im
 #: eingebetteten JSON der Seite (siehe :mod:`stadionheft.sources.html_daten`).
+#: Die Reihenfolge stammt aus einem echten Probelauf auf der NAS (29.09.2026):
+#: Die Teamseite antwortet mit 200 und enthaelt eingebettetes JSON, die
+#: Unterseiten antworten mit 404, und api.fupa.net ist per robots.txt
+#: gesperrt. Das Sichere kommt deshalb zuerst.
 KANDIDATEN: tuple[str, ...] = (
-    # Moegliche JSON-Schnittstellen
+    # Die oeffentliche Teamseite -- geprueft, antwortet
+    "https://www.fupa.net/team/{slug}",
+    # Unterseiten: im Probelauf 404, aber billig mitzunehmen, falls FuPa sie
+    # wieder einfuehrt. Nach dem ersten Fehlschlag werden sie im Lauf
+    # uebersprungen.
+    "https://www.fupa.net/team/{slug}/tabelle",
+    "https://www.fupa.net/team/{slug}/spielplan",
+    "https://www.fupa.net/team/{slug}/kader",
+    "https://www.fupa.net/team/{slug}/statistiken",
+    # Moegliche JSON-Schnittstellen. Derzeit per robots.txt gesperrt; sie
+    # bleiben stehen, weil sich das aendern kann -- gesperrte Adressen kosten
+    # keinen Abruf, nur einen Blick in die gemerkte robots.txt.
     "https://api.fupa.net/v1/teams/{slug}",
     "https://api.fupa.net/v1/teams/{slug}/standing",
     "https://api.fupa.net/v1/teams/{slug}/matches",
     "https://api.fupa.net/v1/teams/{slug}/players",
     "https://api.fupa.net/v1/teams/{slug}/topscorers",
-    # Oeffentliche Seiten -- Daten stecken im eingebetteten JSON
-    "https://www.fupa.net/team/{slug}",
-    "https://www.fupa.net/team/{slug}/tabelle",
-    "https://www.fupa.net/team/{slug}/spielplan",
-    "https://www.fupa.net/team/{slug}/kader",
-    "https://www.fupa.net/team/{slug}/statistiken",
 )
 
 
@@ -625,6 +636,15 @@ class FupaApiQuelle:
                 break
             try:
                 bloecke = self.client.hole_nutzlasten(adresse)
+            except AdresseGesperrtFehler:
+                # Ein Verbot ist eine Auskunft, kein Ausfall: Diese Adresse
+                # faellt endgueltig weg, der Rest wird ganz normal probiert.
+                # Wuerde das als Netzfehler zaehlen, koennten drei gesperrte
+                # Adressen am Anfang der Liste den ganzen Abruf abwuergen --
+                # noch bevor die Teamseite an die Reihe kommt.
+                logger().info("Uebersprungen (robots.txt): %s", _kurz(adresse))
+                self._tote_muster.add(self._muster(adresse, kennung))
+                continue
             except DatenquelleNichtErreichbarFehler as fehler:
                 fund.netzfehler = fehler
                 fehlschlaege += 1
@@ -841,6 +861,9 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
                                             "sieht nach Spieldaten aus")
                 else:
                     eintrag["bewertung"] = "antwortet, enthaelt aber kein JSON"
+        except AdresseGesperrtFehler:
+            eintrag["bewertung"] = ("laut robots.txt gesperrt - wird "
+                                    "uebersprungen")
         except DatenquelleNichtErreichbarFehler as fehler:
             eintrag["bewertung"] = f"nicht erreichbar: {fehler.technisch}"
         except Exception as fehler:  # noqa: BLE001 - Diagnose soll nie abbrechen

@@ -51,8 +51,15 @@ def _json_oder_nichts(text: str) -> Any | None:
         return None
 
 
+#: Zusammengehoerige Klammern. Listen zaehlen mit, weil neuere
+#: Next.js-Versionen ihre Daten als ``self.__next_f.push([1,"..."])``
+#: ausliefern -- die Nutzlast steckt dort in einem Array, nicht in einem
+#: Objekt.
+_KLAMMERN = {"{": "}", "[": "]"}
+
+
 def _objekte_im_text(text: str, mindestlaenge: int = 200) -> Iterator[Any]:
-    """Sucht in freiem JavaScript nach vollstaendigen JSON-Objekten.
+    """Sucht in freiem JavaScript nach vollstaendigen JSON-Werten.
 
     Geht die Klammern durch und gibt jeden ausbalancierten Block aus, der sich
     als JSON lesen laesst. Anfuehrungszeichen und Escapes werden dabei
@@ -60,6 +67,7 @@ def _objekte_im_text(text: str, mindestlaenge: int = 200) -> Iterator[Any]:
     """
     tiefe = 0
     start = -1
+    auf = ""
     im_text = False
     escaped = False
 
@@ -74,11 +82,11 @@ def _objekte_im_text(text: str, mindestlaenge: int = 200) -> Iterator[Any]:
             continue
         if zeichen == '"':
             im_text = True
-        elif zeichen == "{":
+        elif zeichen in _KLAMMERN and (tiefe == 0 or zeichen == auf):
             if tiefe == 0:
-                start = stelle
+                start, auf = stelle, zeichen
             tiefe += 1
-        elif zeichen == "}":
+        elif auf and zeichen == _KLAMMERN[auf]:
             if tiefe > 0:
                 tiefe -= 1
                 if tiefe == 0 and start >= 0:
@@ -87,7 +95,7 @@ def _objekte_im_text(text: str, mindestlaenge: int = 200) -> Iterator[Any]:
                         gelesen = _json_oder_nichts(block)
                         if gelesen is not None:
                             yield gelesen
-                    start = -1
+                    start, auf = -1, ""
 
 
 def json_aus_html(html: str) -> list[Any]:
@@ -110,14 +118,18 @@ def json_aus_html(html: str) -> list[Any]:
         if gelesen is not None:
             gefunden.append(gelesen)
 
-    # 3. Notnagel: irgendein grosses JSON-Objekt in einem Skriptblock.
-    #    Nur, wenn oben nichts Brauchbares kam -- sonst unnoetig teuer.
-    if not gefunden:
-        for inhalt in _SCRIPT.findall(html):
-            if len(inhalt) < 200:
-                continue
-            for gelesen in _objekte_im_text(inhalt):
-                gefunden.append(gelesen)
+    # 3. Jedes grosse JSON in einem Skriptblock, auch in freiem JavaScript.
+    #
+    #    Das lief frueher nur, wenn oben gar nichts kam. Das war ein Fehler:
+    #    Eine Seite kann einen winzigen JSON-LD-Block enthalten (Adresse des
+    #    Vereins o. Ae.) und die eigentlichen Spieldaten trotzdem in freiem
+    #    JavaScript fuehren. Dann galt die Seite als ausgewertet, obwohl das
+    #    Wesentliche nie angesehen wurde. Der Durchlauf kostet nur Rechenzeit.
+    for inhalt in _SCRIPT.findall(html):
+        if len(inhalt) < 200:
+            continue
+        for gelesen in _objekte_im_text(inhalt):
+            gefunden.append(gelesen)
 
     # 4. In Next.js-Streams stecken die Daten als JSON *in einer Zeichenkette*.
     #    Solche Zeichenketten noch einmal aufloesen.
@@ -130,16 +142,26 @@ def json_aus_html(html: str) -> list[Any]:
     return ausgepackt
 
 
+#: Next.js-Streams stellen ihren Nutzdaten eine Kennung voran:
+#: ``3:["$","div",...]``. Ohne das Abschneiden ist der Rest kein gueltiges JSON.
+_STROM_PRAEFIX = re.compile(r'^\s*[0-9a-zA-Z]{1,4}:\s*(?=[\[{])')
+
+
 def _zeichenketten_aufloesen(knoten: Any, tiefe: int = 0) -> list[Any]:
     """Findet JSON, das als Text in einem JSON-Feld steckt."""
     if tiefe > 4:
         return []
     ergebnis: list[Any] = []
     if isinstance(knoten, str):
-        if len(knoten) > 200 and knoten.lstrip()[:1] in "[{":
-            gelesen = _json_oder_nichts(knoten)
-            if gelesen is not None:
-                ergebnis.append(gelesen)
+        if len(knoten) > 200:
+            text = _STROM_PRAEFIX.sub("", knoten, count=1)
+            if text.lstrip()[:1] in "[{":
+                gelesen = _json_oder_nichts(text)
+                if gelesen is not None:
+                    ergebnis.append(gelesen)
+                    # Der Strom verschachtelt weiter: Nutzdaten stecken oft
+                    # noch einmal als Text in dem, was gerade ausgepackt wurde.
+                    ergebnis.extend(_zeichenketten_aufloesen(gelesen, tiefe + 1))
         return ergebnis
     if isinstance(knoten, dict):
         for wert in knoten.values():

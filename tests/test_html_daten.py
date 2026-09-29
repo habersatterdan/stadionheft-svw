@@ -91,3 +91,34 @@ def test_mehrere_bloecke_werden_alle_geliefert():
         '<script type="application/json">' + json.dumps({"a": TABELLE}) + "</script>"
         '<script type="application/json">' + json.dumps({"b": TABELLE}) + "</script>")
     assert len(json_aus_html(html)) >= 2
+
+
+def test_kleiner_json_block_verdeckt_die_echten_daten_nicht():
+    """Ein JSON-LD-Schnipsel darf die Suche nach den Nutzdaten nicht beenden.
+
+    Genau dieser Fall trat auf der echten FuPa-Teamseite auf: Die Seite
+    lieferte JSON, aber nur eine Adressangabe -- die Spieldaten steckten
+    daneben in freiem JavaScript und wurden nie angesehen.
+    """
+    html = _seite(
+        '<script type="application/ld+json">'
+        + json.dumps({"@type": "SportsTeam", "name": "SV Wörnitzstein-Berg"})
+        + "</script>"
+        "<script>self.__DATA__ = " + json.dumps({"standings": TABELLE})
+        + ";</script>")
+    bloecke = json_aus_html(html)
+    assert any(len(tabelle_erkennen(b)) == 3 for b in bloecke)
+
+
+def test_next_js_strom_wird_ausgepackt():
+    """Neuere Next.js-Versionen liefern self.__next_f.push([1,"..."])."""
+    nutzlast = "4:" + json.dumps({"standings": TABELLE})
+    html = _seite("<script>self.__next_f=self.__next_f||[];"
+                  "self.__next_f.push([1," + json.dumps(nutzlast) + "]);</script>")
+    bloecke = json_aus_html(html)
+    assert any(len(tabelle_erkennen(b)) == 3 for b in bloecke)
+
+
+def test_liste_auf_oberster_ebene_wird_gefunden():
+    html = _seite("<script>var daten = " + json.dumps(TABELLE) + ";</script>")
+    assert any(len(tabelle_erkennen(b)) == 3 for b in json_aus_html(html))

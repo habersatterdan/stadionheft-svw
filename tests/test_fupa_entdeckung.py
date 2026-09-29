@@ -305,6 +305,51 @@ def test_netzausfall_bricht_nach_wenigen_versuchen_ab(konfiguration: Konfigurati
     assert len(versuche) == 3
 
 
+def test_robots_verbot_wuergt_den_lauf_nicht_ab(konfiguration: Konfiguration,
+                                                 herren1):
+    """Gesperrte Adressen am Listenanfang duerfen die Teamseite nicht blockieren.
+
+    So ist es in der Praxis: FuPas robots.txt verbietet api.fupa.net, und
+    genau diese fuenf Adressen stehen ganz oben. Wurden sie als Netzausfall
+    gezaehlt, brach der Abruf nach dreien ab -- bevor die Teamseite, die
+    einwandfrei antwortet, ueberhaupt an die Reihe kam.
+    """
+    from stadionheft.errors import AdresseGesperrtFehler
+
+    quelle = _quelle(konfiguration, {herren1.fupa_team_url: Antwort(_teamseite())})
+    attrappe = quelle.client.abrufen        # type: ignore[assignment]
+
+    def abrufen(url: str):
+        if "api.fupa.net" in url:
+            raise AdresseGesperrtFehler(
+                f"robots.txt verbietet den Abruf von {url}.",
+                benutzer_text="Gesperrt.")
+        return attrappe(url)
+
+    quelle.client.abrufen = abrufen         # type: ignore[method-assign]
+
+    daten = quelle.hole(herren1)
+    assert len(daten.tabelle) == 5
+    assert daten.naechstes_spiel is not None
+
+
+def test_nur_gesperrte_adressen_ergibt_klare_meldung(konfiguration: Konfiguration,
+                                                     herren1):
+    """Ist wirklich alles gesperrt, muss das als solches gemeldet werden."""
+    from stadionheft.errors import AdresseGesperrtFehler
+
+    def gesperrt(url: str):
+        raise AdresseGesperrtFehler(f"robots.txt verbietet {url}.",
+                                    benutzer_text="Gesperrt.")
+
+    quelle = _quelle(konfiguration, {})
+    quelle.client.abrufen = gesperrt        # type: ignore[method-assign]
+
+    with pytest.raises(DatenquelleNichtErreichbarFehler) as fehler:
+        quelle.hole(herren1)
+    assert "verwertbare Antwort" in fehler.value.benutzer_text
+
+
 def test_abweisung_durch_fupa_stoppt_nicht_die_uebrigen_adressen(
         konfiguration: Konfiguration, herren1):
     """Eine 403-Antwort auf die API darf die oeffentliche Seite nicht verhindern."""

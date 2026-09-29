@@ -60,6 +60,19 @@ class DatenquelleNichtErreichbarFehler(StadionheftFehler):
     )
 
 
+class AdresseGesperrtFehler(StadionheftFehler):
+    """Die Quelle erlaubt den Abruf dieser Adresse nicht (robots.txt).
+
+    Bewusst **kein** Unterfall von DatenquelleNichtErreichbarFehler: Ein
+    Verbot ist eine klare Auskunft, kein Ausfall. Die Adresse faellt weg,
+    alle anderen werden weiter probiert.
+    """
+
+    standard_text = (
+        "Diese Adresse darf laut robots.txt nicht automatisch abgerufen werden."
+    )
+
+
 class DatenNichtLesbarFehler(StadionheftFehler):
     standard_text = (
         "Die Daten konnten nicht gelesen werden. Moeglicherweise hat sich der "
