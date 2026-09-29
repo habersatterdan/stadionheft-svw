@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
+from .. import programmstand
 from ..config import Konfiguration, Mannschaft
 from ..errors import (AdresseGesperrtFehler, DatenNichtLesbarFehler,
                       DatenquelleNichtErreichbarFehler)
@@ -867,6 +868,7 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
 
     adressen = adressen_fuer(client, team)
     bericht: dict[str, Any] = {
+        "programmstand": programmstand(),
         "basis_url": client.basis_url,
         "mannschaft": team.schluessel,
         "team_slug": team.fupa_slug,
@@ -943,6 +945,7 @@ def bericht_als_text(bericht: dict) -> str:
     zeilen: list[str] = [
         "FuPa-Verbindung geprüft",
         "=" * 40,
+        f"Programmstand: {bericht.get('programmstand', '?')}",
         f"Mannschaft   : {bericht.get('mannschaft', '?')} "
         f"({bericht.get('team_slug', '?')})",
         f"Adressen     : {bericht.get('geprueft', 0)} geprüft",

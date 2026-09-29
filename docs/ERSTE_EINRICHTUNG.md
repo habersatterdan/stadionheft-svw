@@ -156,13 +156,30 @@ und sich in der File Station herunterladen lassen.
 
 ## Aktualisieren
 
-Wenn es eine neue Fassung gibt:
+**Wenn das Image von GitHub kommt:** Container Manager → Projekt
+`stadionheft` → **Aktion** → **Erstellen**, dabei „Images neu aufbauen"
+anhaken. Die NAS holt das aktuelle Image.
 
-**Container Manager** → Projekt `stadionheft` → **Aktion** → **Erstellen**
-(dabei „Images neu aufbauen" anhaken). Die NAS holt dann das aktuelle Image.
+**Wenn selbst gebaut wird:** Das reicht *nicht*. „Erstellen" baut aus dem
+Quellcode, der auf der NAS liegt – und der ändert sich davon nicht. Es braucht
+erst ein neues ZIP:
 
-Die `config.yaml` und alle Daten bleiben erhalten – sie liegen außerhalb des
-Containers.
+1. ZIP herunterladen, alten Quellordner löschen, neu entpacken
+2. `docker-compose.yml` im neuen Ordner wieder auf `build: .` umstellen
+3. Projekt neu erstellen
+
+!!! tip "Nachsehen, welcher Stand wirklich läuft"
+    Ganz oben in `pruefen` und im FuPa-Prüfbericht steht eine Zeile
+
+    ```
+    Programmstand : v0.2.0 · gebaut 29.09.2026 15:12 UTC
+    ```
+
+    Ist das Datum älter als die letzte Änderung, läuft der Container noch mit
+    dem alten Code – dann hat die Aktualisierung nicht gegriffen.
+
+Die `config.yaml` und alle Daten bleiben in beiden Fällen erhalten – sie
+liegen außerhalb des Containers.
 
 ---
 

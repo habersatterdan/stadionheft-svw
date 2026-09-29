@@ -34,6 +34,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir gunicorn
 
+# Woher stammt dieses Image? Ohne diese Angabe laesst sich spaeter nicht
+# feststellen, ob ein Container den neuen Code enthaelt oder den alten --
+# und jede Aktualisierung kostet einen Ratedurchgang.
+ARG BUILD_REF=unbekannt
+ENV STADIONHEFT_BUILD=$BUILD_REF
+RUN date -u "+%d.%m.%Y %H:%M UTC" > /app/.build_datum
+
 COPY stadionheft/ ./stadionheft/
 COPY config/ ./config/
 COPY pyproject.toml README.md ./

@@ -609,3 +609,20 @@ def test_robots_wird_je_host_nur_einmal_geholt(konfiguration: Konfiguration):
     for pfad in ("/a", "/b", "/c"):
         client._robots_erlaubt(f"https://www.fupa.net{pfad}")
     assert abrufe == ["https://www.fupa.net/robots.txt"]
+
+
+def test_bericht_nennt_den_programmstand(konfiguration: Konfiguration,
+                                         monkeypatch, tmp_path):
+    """Ohne diese Zeile kostet jede Aktualisierung einen Ratedurchgang.
+
+    Genau das ist am 29.09. passiert: Der Container lief noch mit dem alten
+    Code, der Bericht sah aus wie zuvor, und niemand konnte es dem Bericht
+    ansehen.
+    """
+    from stadionheft.sources import fupa_api
+
+    monkeypatch.setattr(fupa_api.FupaClient, "abrufen",
+                        lambda self, url: Antwort("", status=404))
+    bericht = probe_fupa(konfiguration, "herren1", tmp_path)
+    assert bericht["programmstand"]
+    assert "Programmstand" in fupa_api.bericht_als_text(bericht)

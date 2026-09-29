@@ -19,6 +19,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from . import programmstand
 from .config import BEISPIEL_CONFIG, Konfiguration, STANDARD_CONFIG
 from .errors import StadionheftFehler
 from .logging_setup import einrichten, logger
@@ -40,6 +41,7 @@ def _konfiguration(args) -> Konfiguration:
 def befehl_pruefen(args) -> int:
     """Konfiguration, Vorlagen und NAS pruefen, ohne etwas zu erzeugen."""
     k = _konfiguration(args)
+    print(f"Programmstand : {programmstand()}")
     print(f"Konfiguration : {k.quelle}")
     print(f"Verein        : {k.vereinsname}")
     print(f"Saison        : {k.saison}")
