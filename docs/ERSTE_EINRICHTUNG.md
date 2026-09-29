@@ -158,7 +158,21 @@ und sich in der File Station herunterladen lassen.
 
 **Wenn das Image von GitHub kommt:** Container Manager → Projekt
 `stadionheft` → **Aktion** → **Erstellen**, dabei „Images neu aufbauen"
-anhaken. Die NAS holt das aktuelle Image.
+anhaken.
+
+!!! warning "Das reicht nicht immer"
+    Docker holt ein Abbild mit dem Namen `latest` **nicht von selbst neu**.
+    Liegt lokal schon eines unter dem Namen, wird das weiterverwendet – der
+    Container läuft dann mit altem Code, ohne dass irgendwo ein Fehler
+    erscheint.
+
+    Sicher geht es mit dem Skript [`skripte/nas_aktualisieren.sh`][skript]:
+    Es holt das Abbild ausdrücklich, startet den Container neu und schreibt
+    den Programmstand vorher und nachher in
+    `99_Logs/aktualisierung.txt`. Einmal als Aufgabe im Aufgabenplaner
+    angelegt, ist jede weitere Aktualisierung ein Klick auf „Ausführen".
+
+[skript]: https://github.com/habersatterdan/stadionheft-svw/blob/main/skripte/nas_aktualisieren.sh
 
 **Wenn selbst gebaut wird:** Das reicht *nicht*. „Erstellen" baut aus dem
 Quellcode, der auf der NAS liegt – und der ändert sich davon nicht. Es braucht

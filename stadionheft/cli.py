@@ -80,6 +80,12 @@ def befehl_pruefen(args) -> int:
     return 0
 
 
+def befehl_stand(args) -> int:
+    """Nur den Programmstand ausgeben -- fuer Skripte und zur Kontrolle."""
+    print(programmstand())
+    return 0
+
+
 def befehl_mannschaften(args) -> int:
     k = _konfiguration(args)
     for m in k.aktive_mannschaften():
@@ -200,6 +206,9 @@ def parser_bauen() -> argparse.ArgumentParser:
 
     b = unter.add_parser("pruefen", help="Konfiguration, Ordner und NAS pruefen")
     b.set_defaults(funktion=befehl_pruefen)
+
+    b = unter.add_parser("stand", help="welcher Programmstand laeuft hier?")
+    b.set_defaults(funktion=befehl_stand)
 
     b = unter.add_parser("mannschaften", help="konfigurierte Mannschaften auflisten")
     b.set_defaults(funktion=befehl_mannschaften)
