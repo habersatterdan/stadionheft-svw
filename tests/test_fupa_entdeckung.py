@@ -444,14 +444,15 @@ def test_robots_gilt_je_host(konfiguration: Konfiguration):
 
     client = FupaClient(konfiguration)
 
-    def regeln(text: str):
+    def lage(text: str) -> dict:
         parser = urllib.robotparser.RobotFileParser()
         parser.parse(text.splitlines())
-        return parser
+        return {"status": 200, "text": text, "regeln": parser,
+                "bewertung": "Regeln gelesen"}
 
     client._robots = {
-        "api.fupa.net": regeln("User-agent: *\nDisallow: /"),
-        "www.fupa.net": regeln("User-agent: *\nDisallow: /admin"),
+        "api.fupa.net": lage("User-agent: *\nDisallow: /"),
+        "www.fupa.net": lage("User-agent: *\nDisallow: /admin"),
     }
     assert client._robots_erlaubt("https://api.fupa.net/v1/teams/x") is False
     assert client._robots_erlaubt("https://www.fupa.net/team/x") is True
@@ -544,3 +545,67 @@ def test_probe_haelt_fehler_aus(konfiguration: Konfiguration, monkeypatch, tmp_p
     assert bericht["zusammenfassung"] == {}
     assert all("nicht erreichbar" in e["bewertung"]
                for e in bericht["ergebnisse"].values())
+
+
+# ---------------------------------------------------------------------------
+# robots.txt -- nach RFC 9309, nicht nach Pythons strengerem Standardverhalten
+# ---------------------------------------------------------------------------
+
+def _client_mit_robots(konfiguration: Konfiguration, status: int, text: str = ""):
+    from stadionheft.sources.fupa_api import FupaClient
+
+    client = FupaClient(konfiguration)
+    client.cache.aktiv = False
+    typ = "text/plain"
+    client._sitzung = lambda: type("S", (), {           # type: ignore[assignment]
+        "get": staticmethod(lambda url, **k: Antwort(text, status, typ))})()
+    return client
+
+
+def test_robots_regel_wird_befolgt(konfiguration: Konfiguration):
+    client = _client_mit_robots(konfiguration, 200,
+                                "User-agent: *\nDisallow: /v1/\n")
+    assert client._robots_erlaubt("https://api.fupa.net/v1/teams/x") is False
+    assert client._robots_erlaubt("https://api.fupa.net/anderes") is True
+
+
+def test_robots_403_ist_kein_verbot(konfiguration: Konfiguration):
+    """RFC 9309, 2.3.1.4: Bei 4xx gibt es keine Regeln -- also kein Verbot.
+
+    Pythons RobotFileParser sperrt bei 403 alles. Ein API-Host hinter einer
+    Schutzschicht antwortet aber gern mit 403 auf /robots.txt, ohne dass
+    irgendwo etwas verboten waere. Wir haetten uns selbst ausgesperrt.
+    """
+    client = _client_mit_robots(konfiguration, 403)
+    assert client._robots_erlaubt("https://api.fupa.net/v1/teams/x") is True
+    assert "keine Regeln" in client.robots_lage("api.fupa.net")["bewertung"]
+
+
+def test_robots_404_ist_kein_verbot(konfiguration: Konfiguration):
+    client = _client_mit_robots(konfiguration, 404)
+    assert client._robots_erlaubt("https://api.fupa.net/v1/teams/x") is True
+
+
+def test_robots_serverfehler_sperrt(konfiguration: Konfiguration):
+    """RFC 9309, 2.3.1.3: unerreichbar wegen 5xx -> vollstaendig sperren."""
+    client = _client_mit_robots(konfiguration, 503)
+    assert client._robots_erlaubt("https://api.fupa.net/v1/teams/x") is False
+
+
+def test_robots_wird_je_host_nur_einmal_geholt(konfiguration: Konfiguration):
+    abrufe = []
+    from stadionheft.sources.fupa_api import FupaClient
+
+    client = FupaClient(konfiguration)
+    client.cache.aktiv = False
+
+    def sitzung():
+        def get(url, **k):
+            abrufe.append(url)
+            return Antwort("User-agent: *\nDisallow: /geheim\n", 200, "text/plain")
+        return type("S", (), {"get": staticmethod(get)})()
+
+    client._sitzung = sitzung        # type: ignore[assignment]
+    for pfad in ("/a", "/b", "/c"):
+        client._robots_erlaubt(f"https://www.fupa.net{pfad}")
+    assert abrufe == ["https://www.fupa.net/robots.txt"]

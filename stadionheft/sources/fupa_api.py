@@ -159,7 +159,7 @@ class FupaClient:
         self.veraltet_genutzt = False
         # Je Host eine eigene robots.txt: api.fupa.net und www.fupa.net sind
         # verschiedene Server und duerfen verschiedene Regeln haben.
-        self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
+        self._robots: dict[str, dict] = {}
         self._session = None
 
     # -- Hilfen -------------------------------------------------------------
@@ -182,22 +182,64 @@ class FupaClient:
             })
         return self._session
 
+    def robots_lage(self, host: str, schema: str = "https") -> dict:
+        """Holt und bewertet die robots.txt eines Hosts -- einmal je Lauf.
+
+        Bewusst **nicht** mit ``RobotFileParser.read()``. Dessen Verhalten ist
+        strenger als der Standard: Antwortet der Server auf ``/robots.txt``
+        mit 401 oder 403, setzt Python "alles verboten". RFC 9309 sagt dazu
+        das Gegenteil (Abschnitt 2.3.1.4): Bei 4xx gibt es schlicht keine
+        Regeln, der Abruf ist erlaubt.
+
+        Der Unterschied ist hier nicht theoretisch. Ein API-Host hinter einer
+        Schutzschicht beantwortet ``/robots.txt`` gern mit 403, ohne dass
+        irgendwo eine Regel stuende -- und wir haetten uns selbst ausgesperrt,
+        ohne dass FuPa je etwas verboten haette.
+
+        Rueckgabe: ``{"status", "bewertung", "text", "regeln"}``.
+        """
+        if host in self._robots:
+            return self._robots[host]
+
+        lage: dict[str, Any] = {"status": None, "text": "", "regeln": None}
+        parser = urllib.robotparser.RobotFileParser()
+        adresse = f"{schema}://{host}/robots.txt"
+        try:
+            self._drosseln()
+            antwort = self._sitzung().get(adresse, timeout=self.timeout)
+            lage["status"] = antwort.status_code
+            if antwort.status_code == 200:
+                lage["text"] = (antwort.text or "")[:4000]
+                parser.parse(lage["text"].splitlines())
+                lage["bewertung"] = "Regeln gelesen"
+            elif antwort.status_code == 429 or antwort.status_code >= 500:
+                # RFC 9309, 2.3.1.3: unerreichbar -> vollstaendig sperren.
+                parser.disallow_all = True
+                lage["bewertung"] = (f"HTTP {antwort.status_code} - Server "
+                                     f"ueberlastet oder gestoert, alles gesperrt")
+            else:
+                # RFC 9309, 2.3.1.4: 4xx -> es gibt keine Regeln.
+                parser.parse([])
+                lage["bewertung"] = (f"HTTP {antwort.status_code} - keine "
+                                     f"robots.txt vorhanden, also keine Regeln")
+        except Exception as fehler:                           # noqa: BLE001
+            # Kommt die robots.txt gar nicht an, scheitert der eigentliche
+            # Abruf ohnehin. Sich hier zu sperren brächte nichts.
+            parser.parse([])
+            lage["bewertung"] = f"nicht abrufbar ({fehler})"
+            logger().info("robots.txt von %s nicht lesbar (%s).", host, fehler)
+
+        lage["regeln"] = parser
+        logger().info("robots.txt %s: %s", host, lage["bewertung"])
+        self._robots[host] = lage
+        return lage
+
     def _robots_erlaubt(self, url: str) -> bool:
         if not self.robots_beachten:
             return True
         teile = urlparse(url)
-        if teile.netloc not in self._robots:
-            regeln = urllib.robotparser.RobotFileParser()
-            regeln.set_url(f"{teile.scheme}://{teile.netloc}/robots.txt")
-            try:
-                regeln.read()
-            except Exception as fehler:  # robots.txt nicht abrufbar
-                logger().info("robots.txt von %s nicht lesbar (%s) - Abruf wird "
-                              "fortgesetzt.", teile.netloc, fehler)
-                regeln = urllib.robotparser.RobotFileParser()
-                regeln.parse([])         # leere Regeln = alles erlaubt
-            self._robots[teile.netloc] = regeln
-        return self._robots[teile.netloc].can_fetch(self.user_agent, url)
+        lage = self.robots_lage(teile.netloc, teile.scheme or "https")
+        return bool(lage["regeln"].can_fetch(self.user_agent, url))
 
     def _drosseln(self) -> None:
         wartezeit = self.pause - (time.monotonic() - self._letzte_anfrage)
@@ -870,6 +912,16 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
             eintrag["bewertung"] = f"Fehler: {fehler}"
         bericht["ergebnisse"][_kurz(url)] = eintrag
 
+    # Die robots.txt je Host mit ausweisen. Ohne sie laesst sich ein "gesperrt"
+    # nicht deuten: Steht dort wirklich eine Regel, oder war die Datei nur
+    # nicht lesbar? Das entscheidet, ob der Weg zu ist oder ob wir uns selbst
+    # ausgesperrt haben.
+    bericht["robots"] = {
+        host: {"status": lage.get("status"),
+               "bewertung": lage.get("bewertung", ""),
+               "text": (lage.get("text") or "")[:1500]}
+        for host, lage in client._robots.items()
+    }
     bericht["zusammenfassung"] = _zusammenfassung(bericht["ergebnisse"])
     (ziel / "_bericht.json").write_text(
         json.dumps(bericht, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -914,6 +966,16 @@ def bericht_als_text(bericht: dict) -> str:
             teile = ", ".join(f"{DATENTEILE.get(s, s)}: {n}"
                               for s, n in eintrag["erkannt"].items())
             zeilen.append(f"        Erkannt: {teile}")
+
+    robots = bericht.get("robots") or {}
+    if robots:
+        zeilen += ["", "robots.txt", "-" * 40]
+        for host, lage in robots.items():
+            zeilen.append(f"  {host}: {lage.get('bewertung', '')}")
+            text = (lage.get("text") or "").strip()
+            if text:
+                for regel in text.splitlines()[:25]:
+                    zeilen.append(f"      | {regel}")
 
     zeilen += ["", "Was das bedeutet", "-" * 40]
     if len(bilanz) == len(DATENTEILE):
