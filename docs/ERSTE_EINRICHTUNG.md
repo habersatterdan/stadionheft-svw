@@ -91,6 +91,25 @@ keine Konfiguration – die liegen alle auf der NAS.
 
 ---
 
+??? tip "Alternative: selbst auf der NAS bauen"
+    Wer sich nicht mit Paketsichtbarkeit befassen will, lässt die NAS das
+    Image selbst bauen. Dann entfällt Schritt 4 komplett.
+
+    1. Auf GitHub den Branch öffnen → **Code** → **Download ZIP**
+    2. Das ZIP in der File Station nach `_Programm/docker/` hochladen und dort
+       entpacken. Es entsteht ein Ordner
+       `stadionheft-svw-claude-stadionheft-fupa-automation-lvyt1e`.
+    3. In **diesem** Ordner die `docker-compose.yml` ersetzen: die Zeile
+       `image: ghcr.io/...` löschen und stattdessen `build: .` eintragen.
+    4. Im Container Manager diesen entpackten Ordner als Projektpfad wählen.
+
+    Die NAS baut dann etwa zehn Minuten. Für eine Aktualisierung wiederholt
+    sich das jedes Mal – deshalb ist der Weg über das fertige Image auf Dauer
+    bequemer. Umsteigen geht jederzeit: `build: .` wieder gegen die
+    `image:`-Zeile tauschen.
+
+---
+
 ## Schritt 5 – Projekt anlegen
 
 1. **Container Manager** öffnen
