@@ -355,6 +355,19 @@ def _dateiname(konfiguration: Konfiguration, daten: MannschaftsDaten,
     except KeyError as fehler:
         logger().warning("Unbekannter Platzhalter im Dateinamen: %s", fehler)
         name = f"{werte['datum']}_{werte['schluessel']}.pdf"
+
+    # Sicherung gegen eine Vorlage aus der Zeit des Gesamthefts: Enthält sie
+    # nichts, was die Mannschaften unterscheidet, bekaemen alle denselben
+    # Namen -- und im selben Ordner bliebe nur die letzte Datei uebrig.
+    # Das faellt sonst erst auf, wenn vier von fuenf Mannschaften fehlen.
+    if not any(f"{{{p}}}" in vorlage for p in ("mannschaft", "schluessel", "gegner")):
+        stamm, punkt, endung = name.rpartition(".")
+        name = f"{stamm or name}_{werte['schluessel']}{punkt}{endung}"
+        logger().warning(
+            "ausgabe.dateiname unterscheidet die Mannschaften nicht ('%s'). "
+            "Der Schluessel wird angehaengt. Besser in config.yaml auf "
+            "'{datum}_{mannschaft}_gegen_{gegner}.pdf' umstellen.", vorlage)
+
     if not name.lower().endswith(".pdf"):
         name += ".pdf"
     return _sauberer_name(name)

@@ -42,6 +42,21 @@ def test_dateiname_nennt_datum_mannschaft_und_gegner(konfiguration: Konfiguratio
     assert name.endswith(".pdf")
 
 
+def test_alter_dateiname_ueberschreibt_nicht_alles(konfiguration: Konfiguration):
+    """Eine Vorlage aus der Zeit des Gesamthefts darf keine Dateien fressen.
+
+    `{datum_kompakt}_WaB_Druck.pdf` unterscheidet die Mannschaften nicht --
+    im selben Ordner bliebe nur die letzte uebrig.
+    """
+    konfiguration.roh["ausgabe"]["dateiname"] = "{datum_kompakt}_WaB_Druck.pdf"
+    ergebnis = dateien_erstellen(konfiguration, ["herren1", "damen1"])
+
+    namen = [d.pdf.name for d in ergebnis.dateien]
+    assert len(set(namen)) == 2, namen
+    assert all(d.pdf.exists() for d in ergebnis.dateien)
+    assert any("herren1" in n for n in namen)
+
+
 def test_endformat_entspricht_der_vorlage(konfiguration: Konfiguration):
     ergebnis = dateien_erstellen(konfiguration, ["herren1"])
     for seite in PdfReader(str(ergebnis.dateien[0].pdf)).pages:
