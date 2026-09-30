@@ -516,9 +516,24 @@ def adressen_fuer_kennung(client: FupaClient, kennung: str,
 
 
 def adressen_fuer(client: FupaClient, mannschaft: Mannschaft) -> list[str]:
-    """Alle Adressen, die fuer eine konfigurierte Mannschaft in Frage kommen."""
-    return adressen_fuer_kennung(client, mannschaft.fupa_slug,
-                                 mannschaft.fupa_team_url)
+    """Alle Adressen, die fuer eine konfigurierte Mannschaft in Frage kommen.
+
+    Von Hand eingetragene Adressen stehen ganz vorn -- sie hat ein Mensch
+    ausgesucht und sind damit vertrauenswuerdiger als jede Vermutung. Ueber
+    sie laesst sich auch eine ganz andere Quelle anbinden (etwa der BFV):
+    Die Erkennung arbeitet ueber die Struktur der Daten, nicht ueber den
+    Anbieter.
+    """
+    eigene = [u.strip() for u in mannschaft.zusatz_urls if u and u.strip()]
+    geraten = adressen_fuer_kennung(client, mannschaft.fupa_slug,
+                                    mannschaft.fupa_team_url)
+    gesehen: set[str] = set()
+    alle: list[str] = []
+    for adresse in (*eigene, *geraten):
+        if adresse not in gesehen:
+            gesehen.add(adresse)
+            alle.append(adresse)
+    return alle
 
 
 def _kurz(adresse: str) -> str:

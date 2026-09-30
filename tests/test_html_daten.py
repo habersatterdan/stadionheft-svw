@@ -122,3 +122,27 @@ def test_next_js_strom_wird_ausgepackt():
 def test_liste_auf_oberster_ebene_wird_gefunden():
     html = _seite("<script>var daten = " + json.dumps(TABELLE) + ";</script>")
     assert any(len(tabelle_erkennen(b)) == 3 for b in json_aus_html(html))
+
+
+def test_kurze_nutzlast_im_next_js_strom():
+    """Auch eine kleine Tabelle muss durchkommen.
+
+    Die Mindestlaenge zum Aufloesen verpackter Zeichenketten lag bei 200
+    Zeichen. Eine Tabelle mit drei Zeilen ist kuerzer und fiel durchs
+    Raster -- obwohl sie sauber verpackt war.
+    """
+    klein = [{"place": 1, "teamName": "A", "points": 9, "wins": 3, "losses": 0},
+             {"place": 2, "teamName": "B", "points": 6, "wins": 2, "losses": 1},
+             {"place": 3, "teamName": "C", "points": 3, "wins": 1, "losses": 2}]
+    nutzlast = "7:" + json.dumps({"standings": klein})
+    html = _seite("<script>self.__next_f=self.__next_f||[];"
+                  "self.__next_f.push([1," + json.dumps(nutzlast) + "]);</script>")
+    assert any(len(tabelle_erkennen(b)) == 3 for b in json_aus_html(html))
+
+
+def test_kurze_beschriftungen_werden_nicht_gelesen():
+    """Die Untergrenze darf nicht ganz fallen -- sonst wird jeder Text geprüft."""
+    from stadionheft.sources.html_daten import _zeichenketten_aufloesen
+
+    assert _zeichenketten_aufloesen({"titel": "[Vorschau]"}) == []
+    assert _zeichenketten_aufloesen("{kurz}") == []

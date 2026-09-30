@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +35,12 @@ class Mannschaft:
     liga: str = ""
     fupa_team_url: str = ""
     aktiv: bool = True
+    #: Weitere Adressen, die fuer genau diese Mannschaft abgefragt werden --
+    #: vor allen anderen. Damit laesst sich jede Quelle anbinden, nicht nur
+    #: FuPa: eine BFV-Seite, ein Widget, eine selbst gepflegte JSON-Datei im
+    #: Netz. Die Erkennung arbeitet ueber die Struktur der Daten und fragt
+    #: nicht danach, von welchem Anbieter sie stammen.
+    zusatz_urls: list[str] = field(default_factory=list)
 
     @property
     def fupa_slug(self) -> str:
@@ -132,6 +138,7 @@ class Konfiguration:
                 untertitel=eintrag.get("untertitel", ""),
                 liga=eintrag.get("liga", ""),
                 fupa_team_url=eintrag.get("fupa_team_url", ""),
+                zusatz_urls=[str(u) for u in (eintrag.get("zusatz_urls") or [])],
                 aktiv=bool(eintrag.get("aktiv", True)),
             )
 

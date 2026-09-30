@@ -661,3 +661,32 @@ def test_rohantwort_entfaellt_wenn_alles_erkannt_wurde(
     bericht = probe_fupa(konfiguration, "herren1", tmp_path)
     gut = [e for e in bericht["ergebnisse"].values() if e.get("erkannt")]
     assert gut and not gut[0].get("rohantwort")
+
+
+def test_eigene_adressen_stehen_ganz_vorn(konfiguration: Konfiguration):
+    """Eine von Hand eingetragene Adresse hat Vorrang vor jeder Vermutung.
+
+    Darueber laesst sich auch eine ganz andere Quelle anbinden -- etwa eine
+    BFV-Seite. Die Erkennung arbeitet ueber die Struktur der Daten, nicht
+    ueber den Anbieter.
+    """
+    from stadionheft.sources.fupa_api import FupaClient
+
+    mannschaft = konfiguration.mannschaft("herren1")
+    mannschaft.zusatz_urls = ["https://www.bfv.de/mannschaften/irgendwas-123"]
+
+    adressen = adressen_fuer(FupaClient(konfiguration), mannschaft)
+    assert adressen[0] == "https://www.bfv.de/mannschaften/irgendwas-123"
+    assert mannschaft.fupa_team_url in adressen
+
+
+def test_fremde_quelle_wird_genauso_ausgewertet(konfiguration: Konfiguration):
+    """Kommen die Daten von woanders, aendert das nichts an der Erkennung."""
+    mannschaft = konfiguration.mannschaft("herren1")
+    fremd = "https://www.bfv.de/wettbewerb/1234"
+    mannschaft.zusatz_urls = [fremd]
+
+    quelle = _quelle(konfiguration, {fremd: Antwort(_teamseite())})
+    daten = quelle.hole(mannschaft)
+    assert len(daten.tabelle) == 5
+    assert daten.naechstes_spiel is not None

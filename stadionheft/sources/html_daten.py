@@ -58,7 +58,7 @@ def _json_oder_nichts(text: str) -> Any | None:
 _KLAMMERN = {"{": "}", "[": "]"}
 
 
-def _objekte_im_text(text: str, mindestlaenge: int = 200) -> Iterator[Any]:
+def _objekte_im_text(text: str, mindestlaenge: int = 60) -> Iterator[Any]:
     """Sucht in freiem JavaScript nach vollstaendigen JSON-Werten.
 
     Geht die Klammern durch und gibt jeden ausbalancierten Block aus, der sich
@@ -153,7 +153,11 @@ def _zeichenketten_aufloesen(knoten: Any, tiefe: int = 0) -> list[Any]:
         return []
     ergebnis: list[Any] = []
     if isinstance(knoten, str):
-        if len(knoten) > 200:
+        # 60 Zeichen: kurz genug fuer einen kleinen Datensatz, lang genug,
+        # dass nicht jede Beschriftung durch den JSON-Leser geschickt wird.
+        # Zuvor standen hier 200 -- damit fiel eine Tabelle mit drei Zeilen
+        # durchs Raster, obwohl sie sauber verpackt war.
+        if len(knoten) >= 60:
             text = _STROM_PRAEFIX.sub("", knoten, count=1)
             if text.lstrip()[:1] in "[{":
                 gelesen = _json_oder_nichts(text)
