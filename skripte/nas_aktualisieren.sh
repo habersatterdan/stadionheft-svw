@@ -71,9 +71,16 @@ BEHAELTER=stadionheft
   echo
 
   # -- 2. Womit laeuft der Container gerade? --------------------------------
+  # Der Befehl 'stand' kam erst spaeter dazu. Fehlt er, ist das schon die
+  # Antwort: Dann laeuft eine aeltere Fassung.
+  stand() {
+      if ! $DOCKER exec "$BEHAELTER" python -m stadionheft.cli stand 2>/dev/null; then
+          echo "(aeltere Fassung - kennt den Befehl 'stand' noch nicht)"
+      fi
+  }
+
   echo "########## 2. Stand VORHER ##########"
-  $DOCKER exec "$BEHAELTER" python -m stadionheft.cli stand 2>&1 \
-      || $DOCKER exec "$BEHAELTER" python -m stadionheft.cli pruefen 2>&1 | head -2
+  stand
   echo
 
   # -- 3. Abbild holen. Schlaegt das fehl, bleibt alles wie es ist. ---------
@@ -104,17 +111,39 @@ BEHAELTER=stadionheft
   echo "Compose-Projekt: $PROJEKT"
 
   cd "$(dirname "$COMPOSE")" || exit 1
-  if $DOCKER compose version >/dev/null 2>&1; then
-      $DOCKER compose -p "$PROJEKT" up -d --force-recreate 2>&1
-  else
-      docker-compose -p "$PROJEKT" up -d --force-recreate 2>&1
-  fi
+
+  hochfahren() {
+      if $DOCKER compose version >/dev/null 2>&1; then
+          $DOCKER compose -p "$PROJEKT" up -d --force-recreate 2>&1
+      else
+          docker-compose -p "$PROJEKT" up -d --force-recreate 2>&1
+      fi
+  }
+
+  AUSGABE=$(hochfahren)
+  echo "$AUSGABE"
+
+  # "name is already in use": Compose haelt den laufenden Container fuer
+  # einen fremden. Dann wird er weggeraeumt und neu angelegt. Das ist
+  # gefahrlos -- der Container haelt keine Daten. Konfiguration, Eingaben
+  # und fertige PDFs liegen alle in eingehaengten Ordnern ausserhalb.
+  case "$AUSGABE" in
+      *"already in use"*)
+          echo
+          echo "Der alte Container steht im Weg. Er wird entfernt und neu"
+          echo "angelegt (die Daten liegen ausserhalb und bleiben)."
+          $DOCKER rm -f "$BEHAELTER" 2>&1
+          hochfahren
+          ;;
+  esac
   echo
 
   # -- 5. Kontrolle ----------------------------------------------------------
   echo "########## 5. Stand NACHHER ##########"
   sleep 8
-  $DOCKER exec "$BEHAELTER" python -m stadionheft.cli stand 2>&1
+  stand
+  echo
+  echo "Stehen VORHER und NACHHER gleich da, hat sich nichts geaendert."
   echo
 
   echo "########## 6. FuPa-Verbindung ##########"

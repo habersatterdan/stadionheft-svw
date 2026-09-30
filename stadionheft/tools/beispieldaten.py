@@ -62,18 +62,22 @@ def vorlagen_schreiben(konfiguration: Konfiguration,
                  z.gelb, z.gelb_rot, z.rot, z.eingewechselt, z.ausgewechselt,
                  z.minuten]
                 for z in daten.spieler]
+            gegnerkader = daten.gegner_daten.spieler if daten.gegner_daten else []
             inhalte["gegner_spieler"] = [
                 [z.platz, z.spieler, z.spiele, z.tore, z.vorlagen, z.elfmeter,
                  z.gelb, z.gelb_rot, z.rot, z.eingewechselt, z.ausgewechselt,
                  z.minuten]
-                for z in daten.gegner_spieler]
-            for spiel in (daten.letztes_spiel, daten.naechstes_spiel):
-                if spiel:
-                    inhalte["spielplan"].append([
-                        spiel.heim, spiel.gast, spiel.wettbewerb, spiel.datum,
-                        spiel.uhrzeit.replace(" Uhr", ""), spiel.spielort,
-                        "ja" if spiel.heimspiel else "nein", spiel.spieltag,
-                        spiel.ergebnis])
+                for z in gegnerkader]
+            # Der ganze Spielplan, nicht nur die beiden Partien um heute
+            # herum: Aus ihm entstehen Formkurve und Saisonbilanz.
+            spiele = daten.spiele or [s for s in (daten.letztes_spiel,
+                                                  daten.naechstes_spiel) if s]
+            inhalte["spielplan"] = [
+                [spiel.heim, spiel.gast, spiel.wettbewerb, spiel.datum,
+                 spiel.uhrzeit.replace(" Uhr", ""), spiel.spielort,
+                 "ja" if spiel.heimspiel else "nein", spiel.spieltag,
+                 spiel.ergebnis]
+                for spiel in spiele]
 
         for art, spalten in SPALTEN.items():
             ziel = ordner / f"{mannschaft.schluessel}_{art}.csv"
@@ -81,18 +85,6 @@ def vorlagen_schreiben(konfiguration: Konfiguration,
                 continue
             ziel.write_text(_csv_text(spalten, inhalte[art]), encoding="utf-8-sig")
             geschrieben.append(ziel)
-
-    vorwort = ordner / "vorwort.md"
-    if not vorwort.exists():
-        vorwort.write_text(
-            "Liebe Gäste, liebe Fans,\n\n"
-            "hier steht der Text für das Vorwort. Die erste kurze Zeile wird "
-            "als Überschrift gesetzt, danach folgen ganz normale Absätze – "
-            "getrennt durch eine Leerzeile.\n\n"
-            "Der Text läuft automatisch zweispaltig und bei Bedarf auf die "
-            "nächste Seite weiter.\n",
-            encoding="utf-8")
-        geschrieben.append(vorwort)
 
     liesmich = ordner / "LIESMICH.txt"
     if not liesmich.exists():
@@ -119,15 +111,12 @@ def _liesmich(konfiguration: Konfiguration) -> str:
         zeilen.append(f"  {mannschaft.anzeigename} ({mannschaft.schluessel}):")
         for art in SPALTEN:
             zeilen.append(f"    {mannschaft.schluessel}_{art}.csv")
-        zeilen.append(f"    {mannschaft.schluessel}_spielbericht.md   (optional)")
         zeilen.append("")
     zeilen += [
-        "Weitere Dateien:",
-        "  vorwort.md      Text für die Vorwortseite",
-        "  titelbild.jpg   Foto für die Titelseite (optional)",
-        "",
-        "Fehlt eine Datei, bleibt nur die betreffende Seite leer – das Heft",
-        "wird trotzdem erzeugt.",
+        "Fehlt eine einzelne Datei, bleibt nur die betreffende Seite leer –",
+        "die anderen Seiten entstehen trotzdem. Fehlen für eine Mannschaft",
+        "ALLE Dateien, entsteht für sie keine PDF; die übrigen Mannschaften",
+        "sind davon nicht betroffen.",
         "",
         "",
         "DER SPIELPLAN ERSPART DIR DIE MEISTE ARBEIT",

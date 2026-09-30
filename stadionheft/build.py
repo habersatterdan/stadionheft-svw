@@ -119,10 +119,16 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
     Als Ausfall gilt nicht nur ein Fehler, sondern auch eine Quelle, die zwar
     antwortet, aber **nichts liefert**. Lauter leere Seiten waeren formal ein
     Erfolg und praktisch wertlos.
+
+    Eine einzelne Mannschaft, fuer die es keine Daten gibt, ist dagegen **kein**
+    Ausfall. Sie wird uebersprungen und als Warnung gemeldet. Alles andere
+    waere unbrauchbar: Solange nicht alle fuenf Mannschaften angebunden sind,
+    duerfte sonst nie eine einzige Datei entstehen.
     """
     primaer = modus or str(konfiguration.get("datenquelle.modus", "api"))
     ersatz = str(konfiguration.get("datenquelle.fallback_modus", "") or "")
     warnungen: list[str] = []
+    bestes: tuple[list[MannschaftsDaten], list, str] | None = None
 
     for versuch, aktueller_modus in enumerate([primaer, ersatz]):
         if not aktueller_modus:
@@ -130,23 +136,14 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
         if versuch == 1:
             logger().warning("Wechsle auf Ersatz-Datenquelle '%s'.", aktueller_modus)
         quelle = quelle_erzeugen(aktueller_modus, konfiguration)
-        ergebnis: list[MannschaftsDaten] = []
-        try:
-            for name in schluessel:
-                mannschaft: Mannschaft = konfiguration.mannschaft(name)
-                logger().info("Lade Daten fuer %s (Quelle: %s) ...",
-                              mannschaft.anzeigename, aktueller_modus)
-                ergebnis.append(quelle.hole(mannschaft))
-            if versuch == 0 and ersatz and not _brauchbar(ergebnis):
-                logger().warning(
-                    "Datenquelle '%s' hat geantwortet, aber keine Spieldaten "
-                    "geliefert.", aktueller_modus)
-                warnungen.append(
-                    f"Von '{aktueller_modus}' kamen keine verwertbaren Daten. "
-                    f"Es wurde automatisch auf '{ersatz}' umgeschaltet.")
-                continue
-            return ergebnis, aktueller_modus, warnungen
-        except StadionheftFehler as fehler:
+
+        ergebnis, ausgefallen = _je_mannschaft_holen(
+            konfiguration, quelle, schluessel, aktueller_modus)
+
+        # Keine einzige Mannschaft durchgekommen: Das liegt an der Quelle,
+        # nicht an den Mannschaften.
+        if not ergebnis:
+            fehler = ausgefallen[0][1]
             logger().error("Datenquelle '%s' fehlgeschlagen: %s",
                            aktueller_modus, fehler.technisch)
             if versuch == 0 and ersatz:
@@ -154,12 +151,70 @@ def daten_holen(konfiguration: Konfiguration, schluessel: list[str],
                     f"{fehler.benutzer_text} Es wurde automatisch auf "
                     f"'{ersatz}' umgeschaltet.")
                 continue
-            raise
+            if bestes:
+                break
+            raise fehler
 
-    raise StadionheftFehler(
-        "Keine nutzbare Datenquelle.",
-        benutzer_text="Es konnte keine Datenquelle verwendet werden.",
-        hinweis="Bitte datenquelle.modus in config/config.yaml pruefen.")
+        if versuch == 0 and ersatz and not _brauchbar(ergebnis):
+            logger().warning(
+                "Datenquelle '%s' hat geantwortet, aber keine Spieldaten "
+                "geliefert.", aktueller_modus)
+            warnungen.append(
+                f"Von '{aktueller_modus}' kamen keine verwertbaren Daten. "
+                f"Es wurde automatisch auf '{ersatz}' umgeschaltet.")
+            continue
+
+        if bestes is None or len(ergebnis) > len(bestes[0]):
+            bestes = (ergebnis, ausgefallen, aktueller_modus)
+
+        # Hat die primaere Quelle einzelne Mannschaften nicht bedient, ist
+        # erst die Ersatzquelle dran: Vielleicht kann die alle. Gemischte
+        # Staende aus zwei Quellen wollen wir nicht -- aber eine Datei
+        # weniger auch nicht. Liefert die Ersatzquelle nicht mehr, bleibt es
+        # beim Ergebnis der primaeren.
+        if versuch == 0 and ersatz and ausgefallen:
+            logger().info(
+                "'%s' hat %d Mannschaft(en) nicht geliefert - erst einmal "
+                "'%s' versuchen.", aktueller_modus, len(ausgefallen), ersatz)
+            continue
+
+        break
+
+    if bestes is None:
+        raise StadionheftFehler(
+            "Keine nutzbare Datenquelle.",
+            benutzer_text="Es konnte keine Datenquelle verwendet werden.",
+            hinweis="Bitte datenquelle.modus in config/config.yaml pruefen.")
+
+    ergebnis, ausgefallen, gewaehlter_modus = bestes
+    for name, fehler in ausgefallen:
+        anzeigename = konfiguration.mannschaft(name).anzeigename
+        warnungen.append(
+            f"Für {anzeigename} gibt es keine Daten – es entsteht keine "
+            f"Datei. {fehler.benutzer_text}")
+    return ergebnis, gewaehlter_modus, warnungen
+
+
+def _je_mannschaft_holen(konfiguration: Konfiguration, quelle, schluessel: list[str],
+                         modus: str
+                         ) -> tuple[list[MannschaftsDaten],
+                                    list[tuple[str, StadionheftFehler]]]:
+    """Holt jede Mannschaft fuer sich und sammelt die Ausfaelle ein."""
+    ergebnis: list[MannschaftsDaten] = []
+    ausgefallen: list[tuple[str, StadionheftFehler]] = []
+
+    for name in schluessel:
+        mannschaft: Mannschaft = konfiguration.mannschaft(name)
+        logger().info("Lade Daten fuer %s (Quelle: %s) ...",
+                      mannschaft.anzeigename, modus)
+        try:
+            ergebnis.append(quelle.hole(mannschaft))
+        except StadionheftFehler as fehler:
+            logger().warning("%s uebersprungen: %s",
+                             mannschaft.anzeigename, fehler.technisch)
+            ausgefallen.append((name, fehler))
+
+    return ergebnis, ausgefallen
 
 
 def _brauchbar(ergebnis: list[MannschaftsDaten]) -> bool:

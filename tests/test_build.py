@@ -215,6 +215,60 @@ def test_leere_antwort_gilt_als_ausfall(konfiguration: Konfiguration, monkeypatc
     assert any("keine verwertbaren Daten" in w for w in ergebnis.warnungen)
 
 
+def test_eine_mannschaft_ohne_daten_haelt_den_lauf_nicht_auf(
+        konfiguration: Konfiguration):
+    """Der haeufigste Fall im Alltag: Noch nicht alle Mannschaften gepflegt.
+
+    Aus dem Bericht vom 30.09.2026: Fuer Herren 1 lagen alle CSV-Dateien vor,
+    fuer die uebrigen vier noch keine -- und der komplette Lauf brach ab. Am
+    Ende gab es keine einzige Datei, obwohl eine haette entstehen koennen.
+    """
+    from stadionheft.tools.beispieldaten import vorlagen_schreiben
+
+    konfiguration.roh["datenquelle"]["fallback_modus"] = ""
+    vorlagen_schreiben(konfiguration, nur_vorlagen=False)
+    for datei in konfiguration.eingabe_ordner.glob("damen1_*.csv"):
+        datei.unlink()
+
+    ergebnis = dateien_erstellen(konfiguration, ["herren1", "damen1"],
+                                 datenquelle="manuell")
+
+    assert [d.schluessel for d in ergebnis.dateien] == ["herren1"]
+    assert ergebnis.dateien[0].pdf.exists()
+    assert any("Damen 1" in w for w in ergebnis.warnungen), ergebnis.warnungen
+
+
+def test_ohne_daten_fuer_alle_bleibt_es_ein_fehler(konfiguration: Konfiguration):
+    """Wenn gar nichts geht, muss es auch gesagt werden -- nicht nur gewarnt."""
+    konfiguration.roh["datenquelle"]["fallback_modus"] = ""
+    konfiguration.eingabe_ordner.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(StadionheftFehler):
+        dateien_erstellen(konfiguration, ["herren1", "damen1"],
+                          datenquelle="manuell")
+
+
+def test_ersatzquelle_gewinnt_nur_wenn_sie_mehr_liefert(
+        konfiguration: Konfiguration):
+    """Die Ersatzquelle darf das bessere Ergebnis nicht verdraengen.
+
+    'manuell' kennt hier nur Herren 1. Waere der Wechsel bedingungslos, kaeme
+    aus einer vollstaendigen Demo-Antwort eine einzige Datei statt zweien.
+    """
+    from stadionheft.tools.beispieldaten import vorlagen_schreiben
+
+    konfiguration.roh["datenquelle"]["fallback_modus"] = "manuell"
+    vorlagen_schreiben(konfiguration, nur_vorlagen=False)
+    for datei in konfiguration.eingabe_ordner.glob("damen1_*.csv"):
+        datei.unlink()
+
+    ergebnis = dateien_erstellen(konfiguration, ["herren1", "damen1"],
+                                 datenquelle="demo")
+
+    assert ergebnis.verwendete_quelle == "demo"
+    assert len(ergebnis.dateien) == 2
+
+
 def test_frisch_schaltet_den_zwischenspeicher_ab(konfiguration: Konfiguration):
     dateien_erstellen(konfiguration, ["herren1"], frisch=True)
     assert konfiguration.get("datenquelle.cache.aktiv") is False

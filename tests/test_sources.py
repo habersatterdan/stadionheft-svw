@@ -240,3 +240,29 @@ def test_umlaute_im_gegnernamen():
     from stadionheft.sources.manuell import _slug
     assert _slug("Türk Gücü Lauingen") == "tuerk-guecue-lauingen"
     assert _slug("TSV Nördlingen II") == "tsv-noerdlingen-ii"
+
+
+# ---------------------------------------------------------------------------
+# CSV-Vorlagen
+# ---------------------------------------------------------------------------
+
+def test_beispieldaten_lassen_sich_direkt_wieder_einlesen(
+        konfiguration: Konfiguration):
+    """Was `beispieldaten --mit-daten` schreibt, muss 'manuell' lesen koennen.
+
+    Der Kreis war zwischenzeitlich offen: Das Schreiben griff auf ein Feld zu,
+    das es nach dem Umbau des Datenmodells nicht mehr gab.
+    """
+    from stadionheft.sources.manuell import ManuelleQuelle
+    from stadionheft.tools.beispieldaten import vorlagen_schreiben
+
+    vorlagen_schreiben(konfiguration, nur_vorlagen=False)
+
+    mannschaft = konfiguration.mannschaft("herren1")
+    daten = ManuelleQuelle(konfiguration).hole(mannschaft)
+
+    assert daten.tabelle and daten.torjaeger and daten.spieler
+    # Der ganze Spielplan gehoert in die Vorlage - aus ihm entstehen
+    # Formkurve und Saisonbilanz. Frueher standen dort nur zwei Partien.
+    assert len(daten.spiele) > 2
+    assert daten.form, "Aus den Ergebnissen muss eine Formkurve entstehen"

@@ -84,8 +84,19 @@ pruefe() {
         return
     fi
 
-    # Kurze Antworten (robots.txt, Fehlerseiten) ganz zeigen -- da steht
-    # der Inhalt selbst schneller da als jede Auswertung.
+    # Reiner Text (robots.txt, Fehlerseiten) wird gezeigt statt ausgewertet:
+    # Der Inhalt selbst steht schneller da als jede Zusammenfassung. Die
+    # Groesse entscheidet hier nicht -- www.fupa.net/robots.txt hat ueber
+    # 4 KB und ist trotzdem genau das, was wir lesen wollen.
+    case "$URL$TYP" in
+        *robots.txt*|*text/plain*)
+            echo "  Inhalt (bis 80 Zeilen):"
+            sed -n '1,80p' "$DATEI" | sed 's/^/      /'
+            echo
+            return
+            ;;
+    esac
+
     if [ "$GROESSE" -lt 4000 ]; then
         echo "  Inhalt (bis 40 Zeilen):"
         sed -n '1,40p' "$DATEI" | sed 's/^/      /'
