@@ -626,3 +626,38 @@ def test_bericht_nennt_den_programmstand(konfiguration: Konfiguration,
     bericht = probe_fupa(konfiguration, "herren1", tmp_path)
     assert bericht["programmstand"]
     assert "Programmstand" in fupa_api.bericht_als_text(bericht)
+
+
+def test_rohantwort_wird_gesichert_wenn_nichts_erkannt_wird(
+        konfiguration: Konfiguration, monkeypatch, tmp_path):
+    """Erkennt das Programm nichts, ist die Rohantwort das Einzige, was hilft.
+
+    Ohne sie bleibt nur Raten, wie die Seite ihre Daten fuehrt -- und genau
+    daran haben wir uns mehrere Runden lang aufgehalten.
+    """
+    from stadionheft.sources import fupa_api
+
+    seite = ("<html><body><script>self.__x=" + json.dumps({"a": [1, 2, 3]})
+             + ";</script>Kein Fussball hier.</body></html>")
+    monkeypatch.setattr(fupa_api.FupaClient, "abrufen",
+                        lambda self, url: Antwort(seite))
+    bericht = probe_fupa(konfiguration, "herren1", tmp_path)
+
+    treffer = [e for e in bericht["ergebnisse"].values() if e.get("rohantwort")]
+    assert treffer, "Keine Rohantwort gesichert"
+    datei = tmp_path / "fupa_probe" / treffer[0]["rohantwort"]
+    assert "Kein Fussball hier." in datei.read_text(encoding="utf-8")
+    assert "Rohantwort:" in fupa_api.bericht_als_text(bericht)
+
+
+def test_rohantwort_entfaellt_wenn_alles_erkannt_wurde(
+        konfiguration: Konfiguration, herren1, monkeypatch, tmp_path):
+    from stadionheft.sources import fupa_api
+
+    monkeypatch.setattr(fupa_api.FupaClient, "abrufen",
+                        lambda self, url: (Antwort(_teamseite())
+                                           if url == herren1.fupa_team_url
+                                           else Antwort("", status=404)))
+    bericht = probe_fupa(konfiguration, "herren1", tmp_path)
+    gut = [e for e in bericht["ergebnisse"].values() if e.get("erkannt")]
+    assert gut and not gut[0].get("rohantwort")

@@ -204,8 +204,11 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
         puffer = io.BytesIO()
         with zipfile.ZipFile(puffer, "w", zipfile.ZIP_DEFLATED) as archiv:
-            for datei in sorted(ordner.glob("*.json")):
-                archiv.write(datei, arcname=datei.name)
+            # Auch die Rohantworten: Wenn nichts erkannt wurde, sind sie
+            # das Einzige, woran sich der Aufbau der Seite ablesen laesst.
+            for muster in ("*.json", "*.html", "*.txt"):
+                for datei in sorted(ordner.glob(muster)):
+                    archiv.write(datei, arcname=datei.name)
         puffer.seek(0)
         return send_file(puffer, mimetype="application/zip", as_attachment=True,
                          download_name="fupa_probe.zip")

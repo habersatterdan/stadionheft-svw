@@ -833,6 +833,12 @@ class FupaApiQuelle:
 # Diagnose: welche Endpunkte antworten ueberhaupt?
 # ---------------------------------------------------------------------------
 
+#: So viel der Rohantwort wird bei einem Fehlschlag mitgeschrieben. 400.000
+#: Zeichen sind gross genug fuer eine komplette Seite samt eingebetteter
+#: Daten und klein genug, um die Datei noch weitergeben zu koennen.
+ROHANTWORT_ZEICHEN = 400_000
+
+
 def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None = None,
                ausgabe_ordner: Path | None = None) -> dict:
     """Probiert **alle** in Frage kommenden Adressen aus und berichtet.
@@ -897,6 +903,16 @@ def probe_fupa(konfiguration: Konfiguration, mannschaft_schluessel: str | None =
                         json.dumps(bloecke, ensure_ascii=False, indent=2),
                         encoding="utf-8")
                     eintrag["gespeichert"] = datei.name
+
+                # Wurde nichts erkannt, ist die Rohantwort das Einzige, was
+                # weiterhilft: Nur an ihr laesst sich sehen, wie die Seite
+                # ihre Daten wirklich fuehrt. Ohne sie bleibt nur Raten.
+                if not erkannt:
+                    roh = ziel / f"{nummer:02d}_{_dateiname(url)}_roh.html"
+                    roh.write_text((antwort.text or "")[:ROHANTWORT_ZEICHEN],
+                                   encoding="utf-8")
+                    eintrag["rohantwort"] = roh.name
+
                 eintrag["gefundene_zeilen"] = sum(erkannt.values())
                 if erkannt:
                     eintrag["bewertung"] = "ok"
@@ -969,6 +985,8 @@ def bericht_als_text(bericht: dict) -> str:
             teile = ", ".join(f"{DATENTEILE.get(s, s)}: {n}"
                               for s, n in eintrag["erkannt"].items())
             zeilen.append(f"        Erkannt: {teile}")
+        if eintrag.get("rohantwort"):
+            zeilen.append(f"        Rohantwort: {eintrag['rohantwort']}")
 
     robots = bericht.get("robots") or {}
     if robots:
