@@ -14,7 +14,7 @@
 # ---------------------------------------------------------------------------
 set -u
 
-WURZEL=/volume1/SVW/Stadionheft/_Programm
+WURZEL=${WURZEL:-/volume1/SVW/Stadionheft/_Programm}
 BERICHT="$WURZEL/99_Logs/quellen_pruefen.txt"
 ABLAGE="$WURZEL/99_Logs/quellen"
 mkdir -p "$ABLAGE"
@@ -32,7 +32,9 @@ UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrom
 # alles. Kalenderdateien sind also der eine Weg, den FuPa freigibt -- wir
 # wissen nur noch nicht, unter welcher Adresse sie liegen. Welche der
 # Zeilen HTTP 200 und "BEGIN:VCALENDAR" liefert, ist die richtige.
-ADRESSEN="
+# Zum Ausprobieren laesst sich die Liste von aussen setzen:
+#   ADRESSEN="name|https://..." sh quellen_pruefen.sh
+ADRESSEN=${ADRESSEN:-"
 fupa-team|https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27
 fupa-robots|https://api.fupa.net/robots.txt
 fupa-www-robots|https://www.fupa.net/robots.txt
@@ -45,7 +47,7 @@ ics-www-slug|https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27.ics
 bfv-wettbewerb|https://www.bfv.de/ergebnisse/wettbewerb/-/03151UJ1KC000005VS5489BUVSBBVPEU-G
 bfv-robots|https://www.bfv.de/robots.txt
 bfv-app-robots|https://app.bfv.de/robots.txt
-"
+"}
 
 pruefe() {
     NAME=$1

@@ -14,7 +14,7 @@
 # ---------------------------------------------------------------------------
 set -u
 
-WURZEL=/volume1/SVW/Stadionheft/_Programm
+WURZEL=${WURZEL:-/volume1/SVW/Stadionheft/_Programm}
 BERICHT="$WURZEL/99_Logs/aktualisierung.txt"
 DOCKER=$(command -v docker || echo /usr/local/bin/docker)
 BEHAELTER=stadionheft

@@ -146,6 +146,30 @@ Adresse, was zurückkam.
 
 ---
 
+## Zuerst: die Skripte selbst aktuell halten
+
+Die Hilfsskripte in `skripte/` werden weiterentwickelt. Auf der NAS liegt
+aber die Kopie von dem Tag, an dem sie hochgeladen wurde. Läuft ein alter
+Stand, tauchen Fehler auf, die längst behoben sind – und die Berichte passen
+nicht zu dem, was in der Dokumentation steht.
+
+`skripte/skripte_holen.sh` holt alle Skripte frisch von GitHub, sich selbst
+eingeschlossen. Einmal als Aufgabe anlegen:
+
+1. *Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
+   Benutzerdefiniertes Skript*, Zeitplan deaktiviert
+2. Benutzer: beliebig (Docker wird nicht gebraucht), Befehl:
+   `sh /volume1/SVW/Stadionheft/_Programm/skripte/skripte_holen.sh`
+
+Ergebnis: `_Programm/99_Logs/skripte_holen.txt`. Vor jeder der beiden
+folgenden Aufgaben einmal ausführen, dann stimmt der Stand.
+
+!!! note "Wenn nichts ankommt"
+    Dann heißt der Zweig inzwischen anders. Im Skript oben steht
+    `ZWEIG=...` – nach dem Zusammenführen ist das `main`.
+
+---
+
 ## Quellen prüfen – ganz ohne Container
 
 Wenn nicht einmal klar ist, ob eine Webseite die gesuchten Daten überhaupt
@@ -154,12 +178,11 @@ Programm noch Docker – nur `curl`.
 
 **So wird es angestoßen:**
 
-1. Datei nach `_Programm/skripte/quellen_pruefen.sh` legen
-2. *Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
+1. *Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
    Benutzerdefiniertes Skript*
-3. Benutzer: `root`, Befehl:
+2. Benutzer: `root`, Befehl:
    `sh /volume1/SVW/Stadionheft/_Programm/skripte/quellen_pruefen.sh`
-4. Aufgabe markieren → **Ausführen**
+3. Aufgabe markieren → **Ausführen**
 
 **Das Ergebnis** steht in `_Programm/99_Logs/quellen_pruefen.txt`, die
 abgeholten Seiten selbst in `_Programm/99_Logs/quellen/`.
