@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from flask import Flask, render_template
 
+from .. import programmstand
 from ..errors import StadionheftFehler
 from ..logging_setup import einrichten, logger
 from . import app_erzeugen
@@ -31,7 +32,7 @@ def _ersatz_app(fehler: StadionheftFehler) -> Flask:
 
     @app.context_processor
     def kontext():
-        return {"konfiguration": _Platzhalter()}
+        return {"konfiguration": _Platzhalter(), "programmstand": programmstand()}
 
     # Diese Endpunktnamen muessen existieren, weil das gemeinsame
     # Seitengeruest (_layout.html) per url_for darauf verweist.

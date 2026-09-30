@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 
+from stadionheft import programmstand
 from stadionheft.config import Konfiguration
 from stadionheft.web import app_erzeugen
 
@@ -18,6 +19,17 @@ def test_startseite_zeigt_mannschaften(konfiguration: Konfiguration):
     text = antwort.get_data(as_text=True)
     assert "Herren 1" in text and "Damen 1" in text
     assert "Aktuelle Seiten erzeugen" in text
+
+
+def test_fusszeile_nennt_den_programmstand(konfiguration: Konfiguration):
+    """Ohne diese Angabe merkt niemand, dass der Container alten Code faehrt.
+
+    Genau das ist auf der NAS die haeufigste Stoerung -- und die einzige, die
+    keine Fehlermeldung erzeugt.
+    """
+    text = _client(konfiguration).get("/").get_data(as_text=True)
+    assert "Stand:" in text
+    assert programmstand() in text
 
 
 def test_hilfeseite(konfiguration: Konfiguration):

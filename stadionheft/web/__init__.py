@@ -20,6 +20,7 @@ from pathlib import Path
 from flask import (Flask, abort, jsonify, redirect, render_template, request,
                    send_file, url_for)
 
+from .. import programmstand
 from ..build import dateien_erstellen
 from ..config import Konfiguration
 from ..errors import StadionheftFehler
@@ -70,7 +71,10 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
     # fuer Kopf- und Fusszeile.
     @app.context_processor
     def standard_kontext():
-        return {"konfiguration": k}
+        # Der Programmstand steht in der Fusszeile jeder Seite. Grund: Auf der
+        # NAS ist die haeufigste Stoerung, dass der Container noch mit altem
+        # Code laeuft -- das sieht man sonst nirgends, weil nichts fehlschlaegt.
+        return {"konfiguration": k, "programmstand": programmstand()}
 
     laeufe: dict[str, Lauf] = {}
     sperre = threading.Lock()

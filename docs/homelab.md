@@ -53,6 +53,16 @@ services:
 
 Aktualisieren: `docker compose pull && docker compose up -d`
 
+!!! warning "`up -d` allein holt nichts Neues"
+    Liegt lokal schon ein Abbild mit dem Namen `latest`, verwendet Docker
+    genau dieses weiter – ohne Fehlermeldung, ohne Hinweis. Das `pull` davor
+    ist deshalb nicht optional.
+
+    Ob es geklappt hat, steht **in der Fußzeile der Weboberfläche**:
+    dort erscheint hinter „Stand:" die Fassung, mit der der Container gerade
+    läuft. Dieselbe Angabe liefert
+    `docker exec stadionheft python -m stadionheft.cli stand`.
+
 ---
 
 ## Prozessorarten

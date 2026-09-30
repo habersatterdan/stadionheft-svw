@@ -156,21 +156,43 @@ und sich in der File Station herunterladen lassen.
 
 ## Aktualisieren
 
-**Wenn das Image von GitHub kommt:** Container Manager → Projekt
-`stadionheft` → **Aktion** → **Erstellen**, dabei „Images neu aufbauen"
-anhaken.
-
-!!! warning "Das reicht nicht immer"
+!!! danger "Der eine Stolperstein"
     Docker holt ein Abbild mit dem Namen `latest` **nicht von selbst neu**.
     Liegt lokal schon eines unter dem Namen, wird das weiterverwendet – der
     Container läuft dann mit altem Code, ohne dass irgendwo ein Fehler
-    erscheint.
+    erscheint. „Erstellen" im Container Manager ändert daran nichts.
 
-    Sicher geht es mit dem Skript [`skripte/nas_aktualisieren.sh`][skript]:
-    Es holt das Abbild ausdrücklich, startet den Container neu und schreibt
-    den Programmstand vorher und nachher in
-    `99_Logs/aktualisierung.txt`. Einmal als Aufgabe im Aufgabenplaner
-    angelegt, ist jede weitere Aktualisierung ein Klick auf „Ausführen".
+    Es braucht also immer ein ausdrückliches **Holen**.
+
+### Weg A – Aufgabenplaner (empfohlen)
+
+Das Skript [`skripte/nas_aktualisieren.sh`][skript] holt das Abbild
+ausdrücklich, startet den Container neu und schreibt den Programmstand
+vorher und nachher nach `99_Logs/aktualisierung.txt`. Schlägt das Holen
+fehl, bricht es ab, **bevor** es den laufenden Container anfasst.
+
+Einmalig anlegen:
+
+1. *Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
+   Benutzerdefiniertes Skript*
+2. Name: `Stadionheft aktualisieren`, Benutzer: **root**
+3. *Zeitplan* → Haken bei „Aktiviert" **entfernen** (soll nur auf Zuruf laufen)
+4. *Aufgabeneinstellungen → Benutzerdefiniertes Skript*:
+   ```
+   sh /volume1/SVW/Stadionheft/_Programm/skripte/nas_aktualisieren.sh
+   ```
+
+Ab da ist jede Aktualisierung: Aufgabe markieren → **Ausführen** → nach
+zwei Minuten `99_Logs/aktualisierung.txt` lesen.
+
+### Weg B – nur Container Manager, ohne Skript
+
+Funktioniert, weil Docker holen *muss*, wenn lokal nichts mehr da ist:
+
+1. *Projekt* → `stadionheft` → **Aktion → Beenden**
+2. Reiter **Abbild** → `ghcr.io/habersatterdan/stadionheft-svw:latest`
+   markieren → **Löschen**
+3. *Projekt* → `stadionheft` → **Aktion → Erstellen**
 
 [skript]: https://github.com/habersatterdan/stadionheft-svw/blob/main/skripte/nas_aktualisieren.sh
 
@@ -183,14 +205,17 @@ erst ein neues ZIP:
 3. Projekt neu erstellen
 
 !!! tip "Nachsehen, welcher Stand wirklich läuft"
-    Ganz oben in `pruefen` und im FuPa-Prüfbericht steht eine Zeile
+    Am schnellsten: **die Fußzeile der Weboberfläche**. Dort steht hinter
+    „Stand:" die Fassung, mit der der Container gerade arbeitet:
 
     ```
-    Programmstand : v0.2.0 · gebaut 29.09.2026 15:12 UTC
+    Hilfe · FuPa-Verbindung prüfen · Stadionheft-Generator ·
+    Stand: v0.2.0 · gebaut 30.09.2026 07:24 UTC
     ```
 
-    Ist das Datum älter als die letzte Änderung, läuft der Container noch mit
-    dem alten Code – dann hat die Aktualisierung nicht gegriffen.
+    Dieselbe Zeile steht oben in `pruefen` und im FuPa-Prüfbericht. Ist das
+    Datum älter als die letzte Änderung, läuft der Container noch mit dem
+    alten Code – dann hat die Aktualisierung nicht gegriffen.
 
 Die `config.yaml` und alle Daten bleiben in beiden Fällen erhalten – sie
 liegen außerhalb des Containers.
