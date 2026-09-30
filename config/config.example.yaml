@@ -56,8 +56,10 @@ datenquelle:
     # am Programm muss nichts geaendert werden.
     zusatz_adressen: []
     # Wie viele Seiten hoechstens je Mannschaft geholt werden. Sobald alle
-    # vier Datenteile beisammen sind, hoert das Programm ohnehin auf.
-    max_abrufe: 12
+    # vier Datenteile beisammen sind, hoert das Programm ohnehin auf; und
+    # Adressen, die einmal nichts geliefert haben, werden im selben Lauf
+    # uebersprungen. In der Praxis bleibt es bei wenigen Abrufen.
+    max_abrufe: 16
 
     # Zu jeder Mannschaft auch die Zahlen des naechsten Gegners holen.
     # Der Bezeichner des Gegners steht im Spielplan, der ohnehin gelesen wird.

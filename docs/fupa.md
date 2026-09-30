@@ -26,6 +26,59 @@ darum einen anderen Weg.
 
 ---
 
+## Was FuPa erlaubt – und was nicht
+
+Zwei Dateien sagen das, und sie sagen Unterschiedliches.
+
+**`api.fupa.net/robots.txt`:**
+
+```
+User-agent: *
+Allow: /*.ics$
+Disallow: /
+```
+
+Die JSON-Schnittstelle ist also gesperrt. Das Programm hält sich daran und
+ruft `api.fupa.net` gar nicht erst auf – **mit einer Ausnahme**:
+Kalenderdateien sind ausdrücklich freigegeben. Das ist keine Lücke, sondern
+Absicht: Kalender sind zum Abonnieren gedacht.
+
+**`www.fupa.net/robots.txt`** enthält überhaupt keine Gruppe `User-agent: *`.
+Geregelt sind dort nur einzelne Werbe- und Suchmaschinen-Crawler. Für einen
+Abruf wie unseren gilt damit keine Einschränkung – die öffentlichen Teamseiten
+dürfen gelesen werden.
+
+### Der Kalender ist der saubere Weg für den Spielplan
+
+Eine Kalenderdatei (`.ics`) enthält alle Termine einer Mannschaft: Datum,
+Uhrzeit, Paarung, Spielort – und bei manchen Vereinen auch das nachgetragene
+Ergebnis. Daraus ergeben sich:
+
+* der **nächste Gegner** samt Anstoß und Spielort,
+* die **Formkurve** der letzten fünf Spiele,
+* die **Saisonbilanz** in Zahlen.
+
+Das Programm erkennt eine Kalenderdatei am Inhalt (`BEGIN:VCALENDAR`) und
+liest sie ohne Zusatzbibliothek (`stadionheft/sources/ics_daten.py`). Der
+Spielplan läuft danach durch dieselbe Erkennung wie alle anderen Daten.
+
+!!! warning "Die Kalenderadresse muss einmal gefunden werden"
+    Unter welcher Adresse FuPa den Kalender ausliefert, ist nicht
+    dokumentiert. Das Programm probiert mehrere naheliegende Schreibweisen
+    durch. Führt keine zum Ziel, hilft `skripte/quellen_pruefen.sh`
+    (siehe [Fehler suchen](fehler.md)): Es holt alle Kandidaten roh ab und
+    meldet, welche mit einem Kalender antwortet. Die richtige Adresse kommt
+    dann unter `datenquelle.fupa.zusatz_adressen` in die Konfiguration.
+
+    Alternativ: die Mannschaftsseite auf fupa.net im Browser öffnen und nach
+    „Kalender abonnieren" suchen. Die Adresse dahinter ist die gesuchte.
+
+Tabelle, Torschützen und Spielerstatistik stehen **nicht** im Kalender. Die
+kommen von der Teamseite – oder, solange das nicht trägt, aus den CSV-Dateien
+(siehe [CSV als Rückfalllösung](csv-reserve.md)).
+
+---
+
 ## Wie der Abruf funktioniert
 
 Das Programm **rät nicht, es sucht**. In drei Schritten:
@@ -39,7 +92,8 @@ Reihenfolge:
 2. die **Teamseite der Mannschaft** (`fupa_team_url`) – die verlässlichste
    Adresse überhaupt, denn die hat der Verein selbst eingetragen
 3. selbst ergänzte Adressen aus `zusatz_adressen`
-4. eine eingebaute Liste weiterer Kandidaten (`/tabelle`, `/spielplan`,
+4. eine eingebaute Liste weiterer Kandidaten – zuerst die **Kalenderdateien**
+   (ausdrücklich erlaubt), dann Unterseiten (`/tabelle`, `/spielplan`,
    `/kader`, `/statistiken` …)
 
 Sobald alle vier Datenteile beisammen sind, hört das Programm auf. In der Regel
@@ -52,7 +106,8 @@ Wartezeit.
 
 ### 2. Die Daten aus der Seite holen
 
-Antwortet eine Adresse mit JSON, wird das direkt verwendet. Antwortet sie mit
+Antwortet eine Adresse mit einer **Kalenderdatei**, wird daraus der Spielplan
+gelesen. Antwortet sie mit JSON, wird das direkt verwendet. Antwortet sie mit
 HTML – also mit einer ganz normalen Webseite –, sucht das Programm die
 JSON-Blöcke, die in der Seite eingebettet sind. Moderne Websites liefern ihre
 Daten genau so aus (`__NEXT_DATA__`, `window.__NUXT__` und Ähnliches).

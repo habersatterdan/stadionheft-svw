@@ -57,6 +57,7 @@ from .cache import DateiCache
 from .erkennung import (spiele_erkennen, spieler_erkennen, tabelle_erkennen,
                         torjaeger_erkennen)
 from .html_daten import json_aus_html
+from .ics_daten import ist_kalender, spiele_aus_ics
 
 # ---------------------------------------------------------------------------
 # Nachsichtige Feldsuche
@@ -424,8 +425,17 @@ class FupaClient:
 
 
 def _nutzlasten_aus(antwort: Any) -> list[Any]:
-    """Zerlegt eine HTTP-Antwort in die JSON-Bloecke, die darin stecken."""
+    """Zerlegt eine HTTP-Antwort in das, was an Daten darin steckt."""
     typ = (antwort.headers.get("Content-Type") or "").lower()
+
+    # Kalenderdateien zuerst: Sie sind der eine Weg, den FuPa ausdruecklich
+    # erlaubt (robots.txt: Allow: /*.ics$). Der Spielplan wird als Liste mit
+    # deutschen Feldnamen ausgeliefert und laeuft danach durch dieselbe
+    # Erkennung wie alles andere.
+    if "calendar" in typ or ist_kalender(antwort.text or ""):
+        spiele = spiele_aus_ics(antwort.text or "")
+        return [{"spiele": spiele}] if spiele else []
+
     if "json" in typ:
         try:
             return [antwort.json()]
@@ -459,6 +469,15 @@ def _nutzlasten_aus(antwort: Any) -> list[Any]:
 #: Unterseiten antworten mit 404, und api.fupa.net ist per robots.txt
 #: gesperrt. Das Sichere kommt deshalb zuerst.
 KANDIDATEN: tuple[str, ...] = (
+    # Der Kalender: der einzige Weg, den FuPas robots.txt ausdruecklich
+    # freigibt ("Allow: /*.ics$"). Liefert den Spielplan -- und damit den
+    # naechsten Gegner, das Datum und den Spielort.
+    "https://api.fupa.net/v1/teams/{slug}/calendar.ics",
+    "https://api.fupa.net/v1/teams/{slug}/matches.ics",
+    "https://api.fupa.net/v1/teams/{slug}.ics",
+    "https://api.fupa.net/v1/teams/{slug}/kalender.ics",
+    "https://www.fupa.net/team/{slug}/kalender.ics",
+    "https://www.fupa.net/team/{slug}.ics",
     # Die oeffentliche Teamseite -- geprueft, antwortet
     "https://www.fupa.net/team/{slug}",
     # Unterseiten: im Probelauf 404, aber billig mitzunehmen, falls FuPa sie
@@ -595,7 +614,7 @@ class FupaApiQuelle:
         self.konfiguration = konfiguration
         self.client = FupaClient(konfiguration)
         self.vereinsname = konfiguration.vereinsname
-        self.max_abrufe = int(konfiguration.get("datenquelle.fupa.max_abrufe", 12))
+        self.max_abrufe = int(konfiguration.get("datenquelle.fupa.max_abrufe", 16))
         self.gegner_abrufen = bool(
             konfiguration.get("datenquelle.fupa.gegner_abrufen", True))
         #: Von Hand hinterlegte Gegneradressen, falls der Spielplan keinen

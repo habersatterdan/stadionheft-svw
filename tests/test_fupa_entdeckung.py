@@ -690,3 +690,54 @@ def test_fremde_quelle_wird_genauso_ausgewertet(konfiguration: Konfiguration):
     daten = quelle.hole(mannschaft)
     assert len(daten.tabelle) == 5
     assert daten.naechstes_spiel is not None
+
+
+# ---------------------------------------------------------------------------
+# Der Kalenderweg -- das Einzige, was FuPas robots.txt ausdruecklich freigibt
+# ---------------------------------------------------------------------------
+
+def _kalender(eigen: str = "SV Wörnitzstein-Berg") -> str:
+    from datetime import datetime, timedelta
+
+    def wann(tage: int) -> str:
+        return (datetime.now() + timedelta(days=tage)).strftime("%Y%m%dT130000Z")
+
+    return (
+        "BEGIN:VCALENDAR\nVERSION:2.0\n"
+        "BEGIN:VEVENT\nDTSTART:" + wann(-14) + "\n"
+        f"SUMMARY:Türk Gücü Lauingen - {eigen} (0:4)\nEND:VEVENT\n"
+        "BEGIN:VEVENT\nDTSTART:" + wann(-7) + "\n"
+        f"SUMMARY:{eigen} - TSV Meitingen (2:1)\nEND:VEVENT\n"
+        "BEGIN:VEVENT\nDTSTART:" + wann(8) + "\n"
+        f"SUMMARY:{eigen} - SG Alerheim\n"
+        "LOCATION:Sportgelände Wörnitzstein\n"
+        "DESCRIPTION:Bezirksliga Schwaben Nord\nEND:VEVENT\n"
+        "END:VCALENDAR\n")
+
+
+def test_spielplan_kommt_aus_dem_kalender(konfiguration: Konfiguration, herren1):
+    """Liefert nur der Kalender etwas, muss der Spielplan trotzdem stehen."""
+    adresse = f"https://api.fupa.net/v1/teams/{herren1.fupa_slug}/calendar.ics"
+    quelle = _quelle(konfiguration, {
+        adresse: Antwort(_kalender(), typ="text/calendar; charset=utf-8")})
+    daten = quelle.hole(herren1)
+
+    assert daten.naechstes_spiel is not None
+    assert daten.naechstes_spiel.gegner == "SG Alerheim"
+    assert daten.naechstes_spiel.heimspiel is True
+    assert daten.naechstes_spiel.spielort == "Sportgelände Wörnitzstein"
+    assert daten.letztes_spiel.ergebnis == "2:1"
+    # Aus den nachgetragenen Ergebnissen entsteht auch die Formkurve
+    assert "".join(f.ausgang for f in daten.form) == "SS"
+    # Tabelle und Torschuetzen liefert der Kalender nicht -- das muss gesagt werden
+    assert any("Tabelle" in w for w in daten.warnungen)
+
+
+def test_kalender_wird_auch_ohne_richtigen_inhaltstyp_erkannt(
+        konfiguration: Konfiguration, herren1):
+    """Manche Server liefern .ics als text/plain aus."""
+    adresse = f"https://api.fupa.net/v1/teams/{herren1.fupa_slug}/calendar.ics"
+    quelle = _quelle(konfiguration, {
+        adresse: Antwort(_kalender(), typ="text/plain")})
+    daten = quelle.hole(herren1)
+    assert daten.naechstes_spiel.gegner == "SG Alerheim"

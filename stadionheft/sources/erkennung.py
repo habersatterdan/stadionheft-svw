@@ -443,6 +443,11 @@ def _elfmeter(z: Zeile) -> tuple[int, int]:
     return (0, 0)
 
 
+#: Ein fertig formuliertes Ergebnis, z. B. "2:1". Manche Quellen liefern das
+#: statt zweier Torzahlen -- Kalenderdateien etwa.
+_FERTIGES_ERGEBNIS = re.compile(r"^\s*(\d{1,2})\s*:\s*(\d{1,2})\s*$")
+
+
 def _ergebnis(z: Zeile) -> str:
     heim = None
     gast = None
@@ -453,6 +458,14 @@ def _ergebnis(z: Zeile) -> str:
             gast = _zahl_aus(wert)
     if heim is not None and gast is not None:
         return f"{heim}:{gast}"
+
+    # Kein Torpaar gefunden -- steht das Ergebnis vielleicht schon fertig da?
+    for name in ("ergebnis", "result", "score", "endstand"):
+        wert = z.flach.get(name)
+        if isinstance(wert, str):
+            treffer = _FERTIGES_ERGEBNIS.match(wert)
+            if treffer:
+                return f"{int(treffer.group(1))}:{int(treffer.group(2))}"
     return ""
 
 

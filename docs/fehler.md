@@ -143,3 +143,37 @@ _Programm/04_Zwischenergebnisse/fupa_probe/_bericht.txt
 
 Sie entsteht beim Klick auf **„FuPa-Verbindung prüfen"** und nennt zu jeder
 Adresse, was zurückkam.
+
+---
+
+## Quellen prüfen – ganz ohne Container
+
+Wenn nicht einmal klar ist, ob eine Webseite die gesuchten Daten überhaupt
+ausliefert, hilft `skripte/quellen_pruefen.sh`. Das Skript braucht weder das
+Programm noch Docker – nur `curl`.
+
+**So wird es angestoßen:**
+
+1. Datei nach `_Programm/skripte/quellen_pruefen.sh` legen
+2. *Systemsteuerung → Aufgabenplaner → Erstellen → Geplante Aufgabe →
+   Benutzerdefiniertes Skript*
+3. Benutzer: `root`, Befehl:
+   `sh /volume1/SVW/Stadionheft/_Programm/skripte/quellen_pruefen.sh`
+4. Aufgabe markieren → **Ausführen**
+
+**Das Ergebnis** steht in `_Programm/99_Logs/quellen_pruefen.txt`, die
+abgeholten Seiten selbst in `_Programm/99_Logs/quellen/`.
+
+Zu jeder Adresse meldet der Bericht:
+
+| Zeile im Bericht | Bedeutung |
+|---|---|
+| `*** KALENDER gefunden, 24 Termine ***` | Treffer. Diese Adresse gehört unter `datenquelle.fupa.zusatz_adressen`. |
+| `enthaelt __NEXT_DATA__ (1 x)` | Die Seite bringt eingebettetes JSON mit – das Programm kann es lesen. |
+| `nennt 'Wörnitzstein' (2 x)` bei 200 KB Seite | Die Daten stehen **nicht** in der Seite; der Browser holt sie nach. Diese Adresse bringt nichts. |
+| `HTTP 404` | Gibt es nicht. |
+| `HTTP 403` | Vorhanden, aber gesperrt. |
+
+Welche Adressen geprüft werden, steht im Skript oben unter `ADRESSEN` –
+eine Zeile je Adresse, Name und URL durch `|` getrennt. Weitere lassen sich
+dort einfach anhängen.
