@@ -615,6 +615,18 @@ class FupaApiQuelle:
         self.client = FupaClient(konfiguration)
         self.vereinsname = konfiguration.vereinsname
         self.max_abrufe = int(konfiguration.get("datenquelle.fupa.max_abrufe", 16))
+        #: Obergrenze fuer den gesamten FuPa-Teil eines Laufs.
+        #:
+        #: Ohne sie laesst sich die Dauer nicht abschaetzen: fuenf
+        #: Mannschaften mal ein Dutzend Adressen mal Zeitlimit mal
+        #: Wiederholungen ergibt im schlechtesten Fall eine Viertelstunde.
+        #: Der Webserver bricht vorher ab -- und dann steht man ohne alles da,
+        #: obwohl die Ersatzquelle bereitgelegen haette. Lieber nach zwei
+        #: Minuten aufhoeren und mit den CSV-Dateien weitermachen.
+        self.zeitbudget = float(
+            konfiguration.get("datenquelle.fupa.zeitbudget_sekunden", 120))
+        self._frist = time.monotonic() + self.zeitbudget if self.zeitbudget > 0 else 0.0
+        self._budget_gemeldet = False
         self.gegner_abrufen = bool(
             konfiguration.get("datenquelle.fupa.gegner_abrufen", True))
         #: Von Hand hinterlegte Gegneradressen, falls der Spielplan keinen
@@ -711,6 +723,8 @@ class FupaApiQuelle:
         for adresse in self._sortieren(adressen, kennung):
             if fund.abrufe >= hoechstens or fund.vollstaendig:
                 break
+            if self._zeit_abgelaufen():
+                break
             try:
                 bloecke = self.client.hole_nutzlasten(adresse)
             except AdresseGesperrtFehler:
@@ -747,6 +761,16 @@ class FupaApiQuelle:
                 # es zu dieser einen Mannschaft nichts gibt.
                 self._tote_muster.add(muster)
         return fund
+
+    def _zeit_abgelaufen(self) -> bool:
+        if not self._frist or time.monotonic() < self._frist:
+            return False
+        if not self._budget_gemeldet:
+            logger().warning(
+                "Zeitbudget von %.0f Sekunden fuer den FuPa-Abruf aufgebraucht. "
+                "Die restlichen Adressen werden uebersprungen.", self.zeitbudget)
+            self._budget_gemeldet = True
+        return True
 
     def _auswerten(self, bloecke: list[Any], fund: Fund, vereinsname: str,
                    adresse: str) -> None:

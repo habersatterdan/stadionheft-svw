@@ -75,7 +75,7 @@ class DemoQuelle:
         daten.spiele = self._spielplan_erfinden(daten)
         daten.gegner_daten = GegnerDaten(
             name=daten.gegner,
-            liga=mannschaft.liga,
+            liga=mannschaft.liga_anzeige,
             tabelle=daten.tabelle,
             torjaeger=daten.torjaeger,
             spieler=[self._spieler_zeile(z)
@@ -168,14 +168,14 @@ class DemoQuelle:
             heim=f"{self.konfiguration.get('verein.kurzname', 'SVW')} "
                  f"{mannschaft.anzeigename}",
             gast=_PLATZHALTER_GEGNER[0],
-            wettbewerb=mannschaft.liga or "Beispielliga",
+            wettbewerb=mannschaft.liga_anzeige or "Beispielliga",
             anstoss=anstoss.isoformat(),
             spielort="Sportgelände Wörnitzstein",
             heimspiel=True,
         )
         daten.spiele = self._spielplan_erfinden(daten)
         daten.gegner_daten = GegnerDaten(
-            name=daten.gegner, liga=mannschaft.liga,
+            name=daten.gegner, liga=mannschaft.liga_anzeige,
             tabelle=daten.tabelle, torjaeger=daten.torjaeger,
             spieler=daten.spieler[:14],
             spiele=self._spielplan_erfinden(daten, versatz=1),

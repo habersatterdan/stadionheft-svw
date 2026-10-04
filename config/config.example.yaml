@@ -8,17 +8,35 @@
 # Ablagepfade gepflegt werden. Kein Programmcode muss dafuer geaendert werden.
 # ---------------------------------------------------------------------------
 
+# Diese Datei ist zugleich das Schema: Das Programm vergleicht die eigene
+# config.yaml damit. Ein vertippter Schluessel ("fallbackmodus" statt
+# "fallback_modus") wird dadurch gemeldet, statt stillschweigend ignoriert zu
+# werden. Ein Eintrag, der hier nicht vorkommt, erzeugt einen Hinweis.
+
 verein:
   name: "SV Wörnitzstein-Berg"
   kurzname: "SVW"
   # Wird im Titel jeder Inhaltsseite und in der Fusszeile verwendet:
   hefttitel: "Wörnitzstein am Ball"
+  # Die beiden naechsten Angaben wertet das Programm nicht aus. Sie stehen
+  # hier, weil sie zum Verein gehoeren und man sie an dieser Stelle sucht.
   website: "https://www.sv-woernitzstein-berg.de/"
   fupa_verein_url: "https://www.fupa.net/club/sv-woernitzstein-berg"
-  # Pfad relativ zum Projektordner oder absolut:
+  # Pfad relativ zum Projektordner oder absolut.
+  # Im Docker-Betrieb auf der NAS: "/app/daten/01_vorlagen/svw_logo.png"
   logo: "stadionheft/static/img/svw_logo.png"
 
 saison: "2026/2027"
+
+
+# ---------------------------------------------------------------------------
+# Ablage
+# ---------------------------------------------------------------------------
+daten:
+  # Gemeinsamer Wurzelordner fuer alle Datenordner. Einzelne Ordner lassen
+  # sich darunter weiterhin absolut setzen (siehe ausgabe.ordner).
+  # Im Docker-Betrieb auf der NAS: "/app/daten"
+  wurzel: "daten"
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +91,12 @@ datenquelle:
     timeout_sekunden: 20
     wiederholungen: 2
     pause_zwischen_anfragen_sekunden: 1.5
+    # Obergrenze fuer den gesamten FuPa-Teil eines Laufs, ueber alle
+    # Mannschaften hinweg. Ist sie erreicht, wird der Rest uebersprungen und
+    # auf die Ersatzquelle gewechselt. Ohne diese Grenze kann ein Lauf bei
+    # einem haengenden FuPa so lange dauern, dass der Webserver vorher
+    # abbricht - und dann entsteht gar nichts. 0 = keine Grenze.
+    zeitbudget_sekunden: 120
     # Bitte eine erreichbare Kontaktadresse eintragen - faires Verhalten
     # gegenueber dem Betreiber und im Zweifel der Unterschied zwischen
     # "geduldet" und "gesperrt".
@@ -112,6 +136,12 @@ mannschaften:
     liga: "Bezirksliga Schwaben Nord"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
     aktiv: true
+    # Eigene Adressen nur fuer diese Mannschaft. Sie werden vor allen
+    # anderen probiert. Damit laesst sich jede Quelle anbinden - eine
+    # Kalenderdatei, eine BFV-Seite, eine selbst gepflegte JSON-Datei.
+    # Die Erkennung arbeitet ueber die Struktur der Daten und fragt nicht,
+    # von welchem Anbieter sie stammen.
+    zusatz_urls: []
 
   herren2:
     anzeigename: "Herren 2"

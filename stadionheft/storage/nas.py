@@ -156,6 +156,13 @@ class NasAblage:
         variable = str(self.k.get("nas.smb.passwort_umgebungsvariable", "NAS_PASSWORT"))
         passwort = os.environ.get(variable, "")
 
+        # Die Domaene gehoert bei SMB vor den Benutzernamen. Sie stand bisher
+        # in der Konfiguration, wurde aber nirgends verwendet -- in einer
+        # Domaenenumgebung schlug die Anmeldung dadurch fehl.
+        domaene = str(self.k.get("nas.smb.domaene", "") or "").strip()
+        if domaene and "\\" not in benutzer and "@" not in benutzer:
+            benutzer = f"{domaene}\\{benutzer}"
+
         if not passwort:
             raise NasFehler(
                 f"Umgebungsvariable {variable} ist leer.",

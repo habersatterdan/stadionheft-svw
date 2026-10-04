@@ -1,0 +1,71 @@
+{% extends "_layout.html" %}
+{% block titel %}Vorab-Prüfung{% endblock %}
+
+{% block inhalt %}
+<h1>Vorab-Prüfung</h1>
+<p style="color:#666; margin-top:0">
+  Beantwortet eine Frage: <strong>Wenn jetzt auf den Knopf gedrückt wird –
+  was kommt heraus?</strong> Dafür wird eine Probeseite gesetzt; ins Netz
+  geht diese Prüfung nicht.
+</p>
+
+{% if lage.probleme %}
+  <div class="fehlerkasten"><strong>{{ lage.urteil }}</strong></div>
+{% elif lage.offene %}
+  <div class="hinweis"><strong>{{ lage.urteil }}</strong></div>
+{% else %}
+  <div class="erfolg"><strong>{{ lage.urteil }}</strong></div>
+{% endif %}
+
+<div class="karte">
+  <h2 style="margin-top:0">Woher kommen die Zahlen?</h2>
+  <table class="info">
+    {% for m in lage.mannschaften %}
+      <tr>
+        <td>
+          {% if m.bereit %}✓{% else %}<strong style="color:var(--rot)">✗</strong>{% endif %}
+          {{ m.anzeigename }}
+        </td>
+        <td>
+          {{ m.quelle or 'keine Quelle' }}
+          <br><span style="color:#666; font-size:.85rem">{{ m.bemerkung }}</span>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="karte">
+  <h2 style="margin-top:0">Technische Voraussetzungen</h2>
+  <table class="info">
+    {% for b in lage.befunde %}
+      <tr>
+        <td>
+          {% if b.stufe == 'ok' %}✓
+          {%- elif b.stufe == 'hinweis' %}!
+          {%- else %}<strong style="color:var(--rot)">✗</strong>{% endif %}
+          {{ b.thema }}
+        </td>
+        <td>
+          {{ b.text }}
+          {% if b.zu_tun and b.stufe != 'ok' %}
+            <br><span style="color:#666; font-size:.85rem">{{ b.zu_tun }}</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="karte">
+  <details>
+    <summary>Als Text (zum Kopieren)</summary>
+    <pre style="white-space:pre-wrap; font-size:.8rem; overflow-x:auto">{{ text }}</pre>
+  </details>
+</div>
+
+<p>
+  <a class="knopf-zweit" href="{{ url_for('start') }}">Zurück</a>
+  <a class="knopf-zweit" href="{{ url_for('fupa_test') }}">FuPa-Verbindung prüfen</a>
+</p>
+{% endblock %}

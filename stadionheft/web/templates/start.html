@@ -9,6 +9,27 @@
   eigene Mannschaft und nächster Gegner.
 </p>
 
+{# Was kommt heraus, wenn jetzt geklickt wird? Lieber vorher sagen als
+   hinterher erklaeren. #}
+{% if lage.probleme %}
+  <div class="fehlerkasten">
+    <strong>So wird das nichts.</strong>
+    {{ lage.urteil }}
+    <ul style="margin:.5rem 0 0 1rem; padding:0">
+      {% for b in lage.probleme %}
+        <li>{{ b.thema }}: {{ b.text }}{% if b.zu_tun %} <em>{{ b.zu_tun }}</em>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% elif lage.offene %}
+  <div class="hinweis">
+    <strong>{{ lage.urteil }}</strong>
+    Ohne Daten:
+    {{ lage.offene | map(attribute='anzeigename') | join(', ') }}.
+    <a href="{{ url_for('vorab') }}">Vollständige Prüfung</a>
+  </div>
+{% endif %}
+
 {% for warnung in warnungen %}
   <div class="hinweis">{{ warnung }}</div>
 {% endfor %}
@@ -33,6 +54,9 @@
             <span class="liga">
               {%- if m.liga_fehlt %}Liga noch nicht eingetragen
               {%- else %}{{ m.liga }}{% endif -%}
+              {%- set q = quelle_je_mannschaft.get(m.schluessel) %}
+              {%- if q %} · {% if q.bereit %}{{ q.quelle }}
+              {%- else %}<strong style="color:var(--rot)">keine Daten</strong>{% endif %}{% endif -%}
             </span>
           </span>
         </label>

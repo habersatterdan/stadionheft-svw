@@ -84,7 +84,12 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
     @app.get("/")
     def start():
         from ..storage.nas import NasAblage
+        from ..vorabpruefung import vorab_pruefen
+
         nas_ok, nas_meldung = NasAblage(k).erreichbar()
+        # Ohne Probeseite: Die Startseite soll sofort da sein. Den
+        # vollstaendigen Durchlauf gibt es auf der eigenen Pruefseite.
+        lage = vorab_pruefen(k, probeseite=False)
         return render_template(
             "start.html",
             konfiguration=k,
@@ -94,8 +99,23 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             nas_aktiv=bool(k.get("nas.aktiv", False)),
             nas_ok=nas_ok,
             nas_meldung=nas_meldung,
-            warnungen=k.warnungen,
+            # Die fehlende Liga steht schon bei der Mannschaft selbst. Noch
+            # einmal als Kasten obendrueber macht die Seite nur voll und
+            # gewoehnt daran, Hinweise zu ueberlesen.
+            warnungen=[w for w in k.warnungen
+                       if "keine Liga eingetragen" not in w],
+            lage=lage,
+            quelle_je_mannschaft={m.schluessel: m for m in lage.mannschaften},
         )
+
+    @app.get("/vorab")
+    def vorab():
+        """Die vollstaendige Vorab-Pruefung, mit Probeseite."""
+        from ..vorabpruefung import als_text, vorab_pruefen
+
+        lage = vorab_pruefen(k)
+        return render_template("vorab.html", konfiguration=k, lage=lage,
+                               text=als_text(k, lage))
 
     @app.post("/erstellen")
     def erstellen():

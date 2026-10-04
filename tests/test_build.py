@@ -287,3 +287,18 @@ def test_schriftliste_wehrt_ausbruch_ab():
     layout = LayoutWerte(schriftfamilie="A} body{display:none")
     assert "}" not in str(layout.schrift_css)
     assert "{" not in str(layout.schrift_css)
+
+
+def test_kein_todo_platzhalter_im_pdf(konfiguration: Konfiguration):
+    """'TODO: Liga eintragen' darf nicht in den Druck gehen.
+
+    Genau das stand am 30.09.2026 auf den Trennseiten von vier der fuenf
+    Mannschaftsdateien.
+    """
+    konfiguration.roh["mannschaften"]["damen1"]["liga"] = "TODO: Liga eintragen"
+
+    ergebnis = dateien_erstellen(konfiguration, ["damen1"])
+
+    text = " ".join(s.extract_text()
+                    for s in PdfReader(str(ergebnis.dateien[0].pdf)).pages)
+    assert "TODO" not in text

@@ -741,3 +741,53 @@ def test_kalender_wird_auch_ohne_richtigen_inhaltstyp_erkannt(
         adresse: Antwort(_kalender(), typ="text/plain")})
     daten = quelle.hole(herren1)
     assert daten.naechstes_spiel.gegner == "SG Alerheim"
+
+
+# ---------------------------------------------------------------------------
+# Zeitbudget
+# ---------------------------------------------------------------------------
+
+def test_zeitbudget_bricht_den_abruf_ab(konfiguration: Konfiguration, herren1,
+                                        monkeypatch):
+    """Ein haengendes FuPa darf den Lauf nicht ueber das Webserver-Limit ziehen.
+
+    Fuenf Mannschaften mal ein Dutzend Adressen mal Zeitlimit mal
+    Wiederholungen ergibt im schlechtesten Fall eine Viertelstunde. Der
+    Webserver bricht vorher ab -- und dann entsteht gar nichts, obwohl die
+    Ersatzquelle bereitgelegen haette.
+    """
+    import stadionheft.sources.fupa_api as modul
+
+    konfiguration.roh["datenquelle"]["fupa"]["zeitbudget_sekunden"] = 5
+    versuche: list[str] = []
+    quelle = _quelle(konfiguration, {}, protokoll=versuche)
+
+    # Jeder Abruf "dauert" zwei Sekunden - ohne wirklich zu warten.
+    uhr = {"jetzt": 0.0}
+    monkeypatch.setattr(modul.time, "monotonic", lambda: uhr["jetzt"])
+    quelle._frist = quelle.zeitbudget
+
+    echt = quelle.client.abrufen
+
+    def langsam(url: str):
+        uhr["jetzt"] += 2.0
+        return echt(url)
+
+    quelle.client.abrufen = langsam        # type: ignore[method-assign]
+
+    fund = quelle._sammeln(adressen_fuer(quelle.client, herren1),
+                           konfiguration.vereinsname, 50, herren1.fupa_slug)
+
+    # Fuenf Sekunden Budget bei zwei Sekunden je Abruf: nach dem dritten ist
+    # Schluss, auch wenn noch ein Dutzend Adressen in der Liste steht.
+    assert len(versuche) == 3, versuche
+    assert len(adressen_fuer(quelle.client, herren1)) > 5
+
+
+def test_ohne_zeitbudget_laeuft_alles_durch(konfiguration: Konfiguration, herren1):
+    """0 bedeutet 'keine Grenze' - das muss auch so bleiben."""
+    konfiguration.roh["datenquelle"]["fupa"]["zeitbudget_sekunden"] = 0
+    quelle = _quelle(konfiguration, {})
+
+    assert quelle._frist == 0.0
+    assert quelle._zeit_abgelaufen() is False

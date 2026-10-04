@@ -145,7 +145,31 @@ fertig eingerichtet.
 
 ---
 
-## Schritt 8 – Probelauf
+## Schritt 8 – Vorab-Prüfung
+
+Unten auf der Seite: **„Vorab-Prüfung"**. Sie beantwortet in Sekunden die
+Frage, auf die es ankommt:
+
+> Wenn jetzt auf den Knopf gedrückt wird – was kommt heraus?
+
+Dort steht je Mannschaft, woher die Zahlen kommen werden. Ganz oben das
+Urteil, zum Beispiel:
+
+```
+Ein Lauf erzeugt 1 von 5 Dateien. Für die übrigen fehlen die Daten.
+```
+
+Das ist der Normalfall am Anfang: Solange nur für eine Mannschaft Zahlen
+erreichbar sind, entsteht auch nur eine Datei. Die anderen kommen dazu,
+sobald es für sie eine Quelle gibt – ein FuPa-Abruf, der trägt, oder
+CSV-Dateien.
+
+Steht dort ein roter Kasten, bitte erst den beheben. Alles andere wäre
+vergebliche Mühe.
+
+---
+
+## Schritt 9 – Probelauf
 
 Zurück auf die Startseite, eine Mannschaft anhaken, **„Seiten jetzt erzeugen"**.
 

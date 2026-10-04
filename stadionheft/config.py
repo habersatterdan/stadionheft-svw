@@ -6,6 +6,7 @@ einem klaren Text gemeldet -- nicht erst mitten im Heft-Lauf.
 
 from __future__ import annotations
 
+import difflib
 import os
 import re
 from dataclasses import dataclass, field
@@ -20,6 +21,13 @@ PROJEKT_WURZEL = Path(__file__).resolve().parent.parent
 STANDARD_CONFIG = PROJEKT_WURZEL / "config" / "config.yaml"
 BEISPIEL_CONFIG = PROJEKT_WURZEL / "config" / "config.example.yaml"
 GUELTIGE_MODI = {"api", "manuell", "demo"}
+
+#: Abschnitte, unter denen die Schluessel frei gewaehlt sind und deshalb
+#: nicht gegen die Vorlage geprueft werden koennen.
+FREIE_ABSCHNITTE = {
+    "datenquelle.fupa.endpunkte",   # Name des Endpunkts ist frei
+    "datenquelle.fupa.gegner",      # Schluessel ist der Vereinsname
+}
 
 _SLUG_MUSTER = re.compile(r"/team/([^/?#]+)")
 
@@ -56,6 +64,16 @@ class Mannschaft:
     @property
     def liga_fehlt(self) -> bool:
         return not self.liga or self.liga.upper().startswith("TODO")
+
+    @property
+    def liga_anzeige(self) -> str:
+        """Die Liga, wie sie gedruckt werden darf.
+
+        Ein unausgefuellter Platzhalter ist kein Liganame. Stand er erst
+        einmal im PDF, steht er auch im gedruckten Heft -- deshalb wird hier
+        lieber nichts gezeigt als 'TODO: Liga eintragen'.
+        """
+        return "" if self.liga_fehlt else self.liga
 
 
 class Konfiguration:
@@ -156,11 +174,83 @@ class Konfiguration:
                 hinweis=f"Bekannte Mannschaften: {bekannt}",
             ) from None
 
+    # -- Schreibfehler in Schluesseln ---------------------------------------
+
+    def _schluessel_pruefen(self) -> tuple[list[str], list[str]]:
+        """Vergleicht die Schluessel mit denen der Beispielkonfiguration.
+
+        Der Grund: Ein vertippter Schluessel wird sonst stillschweigend
+        ignoriert. Aus ``fallbackmodus`` statt ``fallback_modus`` wird kein
+        Fehler, sondern ein Programm, das sich anders verhaelt als die Datei
+        aussagt -- und niemand sieht, warum.
+
+        Die Beispielkonfiguration dient dabei als Schema. Das ist Absicht:
+        Eine zweite, von Hand gepflegte Liste bekannter Schluessel wuerde
+        auseinanderlaufen, sobald jemand nur einen davon ergaenzt.
+
+        Unterschieden wird:
+
+        * Ein Schluessel, der einem bekannten **sehr aehnlich** sieht, ist
+          mit grosser Wahrscheinlichkeit ein Tippfehler -> Fehler.
+        * Ein voellig unbekannter Schluessel kann eine bewusste Ergaenzung
+          sein -> nur ein Hinweis.
+        """
+        if not BEISPIEL_CONFIG.exists():
+            return [], []
+        try:
+            vorlage = yaml.safe_load(
+                BEISPIEL_CONFIG.read_text(encoding="utf-8")) or {}
+        except (OSError, yaml.YAMLError):
+            return [], []
+        if not isinstance(vorlage, dict):
+            return [], []
+
+        fehler: list[str] = []
+        hinweise: list[str] = []
+
+        def vergleichen(eigen: Any, muster: Any, pfad: str) -> None:
+            if not isinstance(eigen, dict) or not isinstance(muster, dict):
+                return
+            if pfad in FREIE_ABSCHNITTE:
+                return
+            # Unter 'mannschaften' sind die Schluessel frei, die Felder
+            # darunter aber nicht. Darum wird mit einem beliebigen
+            # Beispieleintrag verglichen.
+            if pfad == "mannschaften":
+                beispiel = next((w for w in muster.values()
+                                 if isinstance(w, dict)), {})
+                for name, wert in eigen.items():
+                    vergleichen(wert, beispiel, f"{pfad}.{name}")
+                return
+
+            for name, wert in eigen.items():
+                voll = f"{pfad}.{name}" if pfad else str(name)
+                if name in muster:
+                    vergleichen(wert, muster[name], voll)
+                    continue
+                aehnlich = difflib.get_close_matches(
+                    str(name), [str(k) for k in muster], n=1, cutoff=0.8)
+                if aehnlich:
+                    fehler.append(
+                        f"Unbekannter Eintrag '{voll}'. Gemeint war "
+                        f"vermutlich '{aehnlich[0]}'.")
+                else:
+                    hinweise.append(
+                        f"Der Eintrag '{voll}' ist dem Programm nicht "
+                        f"bekannt und wird nicht beachtet.")
+
+        vergleichen(self.roh, vorlage, "")
+        return fehler, hinweise
+
     # -- Validierung --------------------------------------------------------
 
     def _pruefen(self) -> None:
         fehler: list[str] = []
         warnungen: list[str] = []
+
+        schreibfehler, unbekannt = self._schluessel_pruefen()
+        fehler.extend(schreibfehler)
+        warnungen.extend(unbekannt)
 
         if not self.mannschaften:
             fehler.append("Es ist keine einzige Mannschaft konfiguriert.")
@@ -178,11 +268,17 @@ class Konfiguration:
                 f"{', '.join(sorted(GUELTIGE_MODI))} oder leer.")
 
         for m in self.mannschaften.values():
-            if modus == "api" and not m.fupa_slug and m.aktiv:
-                fehler.append(
-                    f"Mannschaft '{m.schluessel}': aus der FuPa-URL laesst sich "
-                    f"kein Team-Bezeichner lesen (erwartet wird eine Adresse der "
-                    f"Form https://www.fupa.net/team/...).")
+            # Bewusst nur eine Warnung: Eine einzelne Mannschaft ohne
+            # FuPa-Seite (eine neu gegruendete AH etwa) darf nicht dazu
+            # fuehren, dass das Programm gar nicht erst startet und auch die
+            # anderen vier Mannschaften keine Datei bekommen. Der Abruf faellt
+            # fuer sie auf die Ersatzquelle zurueck; die Vorab-Pruefung sagt
+            # deutlich, woran man ist.
+            if modus == "api" and not m.fupa_slug and m.aktiv and not m.zusatz_urls:
+                warnungen.append(
+                    f"Fuer '{m.anzeigename}' steht keine FuPa-Teamseite in der "
+                    f"Konfiguration (mannschaften.{m.schluessel}.fupa_team_url). "
+                    f"Die Zahlen muessen aus CSV-Dateien kommen.")
             if m.liga_fehlt and m.aktiv:
                 warnungen.append(
                     f"Fuer '{m.anzeigename}' ist noch keine Liga eingetragen "

@@ -146,6 +146,38 @@ Adresse, was zurückkam.
 
 ---
 
+## Die erste Frage: Was käme jetzt heraus?
+
+Bevor irgendetwas anderes untersucht wird – **Vorab-Prüfung**. Sie steht in
+der Fußzeile jeder Seite der Weboberfläche und beantwortet genau eine Frage:
+
+> Wenn jetzt auf den Knopf gedrückt wird – was kommt heraus?
+
+Sie sagt je Mannschaft, woher die Zahlen kommen *werden*, und nennt die
+Mannschaften, für die gar nichts da ist. Dafür setzt sie eine Probeseite –
+das prüft in einem Rutsch Vorlagen, Schriften und Schreibrechte. Ins Netz
+geht sie nicht; sie ist in Sekunden durch.
+
+Auf der Kommandozeile dasselbe:
+
+```bash
+docker exec stadionheft python -m stadionheft.cli pruefen
+```
+
+Der Rückgabewert ist `0`, wenn ein Lauf Dateien erzeugen würde, sonst `1` –
+damit lässt sich die Prüfung einem Skript voranstellen.
+
+!!! note "Warum das wichtig ist"
+    Die frühere Prüfung meldete „Konfiguration ist gueltig" und der Lauf
+    brach unmittelbar danach ab. Eine Prüfung, der man nicht trauen kann,
+    ist schlimmer als gar keine – man verlässt sich darauf.
+
+    Eine Einschränkung bleibt: Ob FuPa wirklich Zahlen liefert, weiß die
+    Vorab-Prüfung nur aus dem **letzten FuPa-Test**. Wurde der noch nie
+    angestoßen, steht bei der Quelle „FuPa (noch nicht bestätigt)".
+
+---
+
 ## Zuerst: die Skripte selbst aktuell halten
 
 Die Hilfsskripte in `skripte/` werden weiterentwickelt. Auf der NAS liegt

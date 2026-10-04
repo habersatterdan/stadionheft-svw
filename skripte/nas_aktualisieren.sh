@@ -149,5 +149,12 @@ BEHAELTER=stadionheft
   echo "########## 6. FuPa-Verbindung ##########"
   $DOCKER exec "$BEHAELTER" python -m stadionheft.cli probe-fupa 2>&1
   echo
+
+  # Zum Schluss die Frage, auf die es ankommt. Sie steht bewusst nach dem
+  # FuPa-Test: Der schreibt seinen Bericht auf die Platte, und die
+  # Vorab-Pruefung liest ihn -- sonst muesste sie raten, ob der Abruf traegt.
+  echo "########## 7. Was wuerde ein Lauf jetzt erzeugen? ##########"
+  $DOCKER exec "$BEHAELTER" python -m stadionheft.cli pruefen 2>&1
+  echo
   echo "=== Ende ==="
 } > "$BERICHT" 2>&1

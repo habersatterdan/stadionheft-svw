@@ -39,6 +39,7 @@ def _ersatz_app(fehler: StadionheftFehler) -> Flask:
     @app.route("/", endpoint="start", defaults={"pfad": ""})
     @app.route("/hilfe", endpoint="hilfe", defaults={"pfad": "hilfe"})
     @app.route("/fupa-test", endpoint="fupa_test", defaults={"pfad": "fupa-test"})
+    @app.route("/vorab", endpoint="vorab", defaults={"pfad": "vorab"})
     @app.route("/<path:pfad>")
     def einrichtung(pfad: str):
         return render_template(

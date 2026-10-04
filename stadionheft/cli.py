@@ -39,45 +39,18 @@ def _konfiguration(args) -> Konfiguration:
 # ---------------------------------------------------------------------------
 
 def befehl_pruefen(args) -> int:
-    """Konfiguration, Vorlagen und NAS pruefen, ohne etwas zu erzeugen."""
+    """Beantwortet: Wenn ich jetzt auf den Knopf druecke -- was kommt heraus?
+
+    Der Rueckgabewert ist Absicht: 0 nur dann, wenn ein Lauf auch wirklich
+    Dateien erzeugen wuerde. Damit laesst sich die Pruefung in einem Skript
+    voranstellen.
+    """
+    from .vorabpruefung import als_text, vorab_pruefen
+
     k = _konfiguration(args)
-    print(f"Programmstand : {programmstand()}")
-    print(f"Konfiguration : {k.quelle}")
-    print(f"Verein        : {k.vereinsname}")
-    print(f"Saison        : {k.saison}")
-    print(f"Datenquelle   : {k.get('datenquelle.modus')} "
-          f"(Ersatz: {k.get('datenquelle.fallback_modus') or 'keine'})")
-    print()
-
-    print("Mannschaften:")
-    for m in k.mannschaften.values():
-        marke = "x" if m.aktiv else " "
-        slug = m.fupa_slug or "KEIN TEAM-BEZEICHNER"
-        print(f"  [{marke}] {m.schluessel:<10} {m.anzeigename:<12} "
-              f"{m.liga or '(keine Liga)':<28} {slug}")
-    print()
-
-    print("Ordner:")
-    for name, pfad in (("Eingaben", k.eingabe_ordner),
-                       ("Zwischenergebnisse", k.arbeits_ordner),
-                       ("Ausgaben", k.ausgabe_ordner)):
-        print(f"  {'OK ' if pfad.exists() else 'FEHLT'}  {name:<20} {pfad}")
-
-    logo = k.logo_pfad
-    print(f"  {'OK ' if logo.exists() else 'FEHLT'}  {'Vereinswappen':<20} {logo}")
-    print()
-
-    from .storage.nas import NasAblage
-    erreichbar, meldung = NasAblage(k).erreichbar()
-    print(f"NAS: {'OK' if erreichbar else 'PROBLEM'} – {meldung}")
-
-    if k.warnungen:
-        print("\nHinweise:")
-        for warnung in k.warnungen:
-            print(f"  - {warnung}")
-
-    print("\nKonfiguration ist gueltig.")
-    return 0
+    bericht = vorab_pruefen(k, probeseite=not args.schnell)
+    print(als_text(k, bericht))
+    return 0 if bericht.lauffaehig else 1
 
 
 def befehl_stand(args) -> int:
@@ -204,7 +177,11 @@ def parser_bauen() -> argparse.ArgumentParser:
     b.add_argument("--ueberschreiben", action="store_true")
     b.set_defaults(funktion=befehl_init)
 
-    b = unter.add_parser("pruefen", help="Konfiguration, Ordner und NAS pruefen")
+    b = unter.add_parser(
+        "pruefen",
+        help="Vorab-Pruefung: Was wuerde ein Lauf jetzt erzeugen?")
+    b.add_argument("--schnell", action="store_true",
+                   help="ohne Probeseite (schneller, prueft dafuer weniger)")
     b.set_defaults(funktion=befehl_pruefen)
 
     b = unter.add_parser("stand", help="welcher Programmstand laeuft hier?")

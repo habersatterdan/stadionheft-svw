@@ -38,7 +38,7 @@ def basis_daten(mannschaft: Mannschaft, quelle: str) -> MannschaftsDaten:
         anzeigename=mannschaft.anzeigename,
         gruppe=mannschaft.gruppe,
         untertitel=mannschaft.untertitel,
-        liga=mannschaft.liga,
+        liga=mannschaft.liga_anzeige,
         fupa_team_url=mannschaft.fupa_team_url,
         quelle=quelle,
     )

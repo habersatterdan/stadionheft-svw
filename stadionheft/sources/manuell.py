@@ -162,7 +162,7 @@ class ManuelleQuelle:
             spiele = [Spiel.aus_csv(z) for z in zeilen]
             for spiel in spiele:
                 if not spiel.wettbewerb:
-                    spiel.wettbewerb = mannschaft.liga
+                    spiel.wettbewerb = mannschaft.liga_anzeige
 
             # Der komplette Spielplan bleibt erhalten: aus ihm rechnet das
             # Programm Formkurve und Saisonbilanz.
@@ -218,7 +218,7 @@ class ManuelleQuelle:
         gegner = daten.naechstes_spiel.gegner if daten.naechstes_spiel else ""
         if not gegner:
             return
-        daten.gegner_daten = GegnerDaten(name=gegner, liga=mannschaft.liga)
+        daten.gegner_daten = GegnerDaten(name=gegner, liga=mannschaft.liga_anzeige)
 
         datei = self.ordner / f"{mannschaft.schluessel}_gegner_{_slug(gegner)}.csv"
         if datei.exists():
