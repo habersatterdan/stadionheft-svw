@@ -35,6 +35,12 @@ UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrom
 # Zum Ausprobieren laesst sich die Liste von aussen setzen:
 #   ADRESSEN="name|https://..." sh quellen_pruefen.sh
 ADRESSEN=${ADRESSEN:-"
+svw-ergebnisse-m1|https://www.sv-woernitzstein-berg.de/ergebnisse_1-mannschaft/
+svw-ergebnisse-m2|https://www.sv-woernitzstein-berg.de/ergebnisse_2-mannschaft/
+svw-ergebnisse-m3|https://www.sv-woernitzstein-berg.de/ergebnisse_3-mannschaft/
+svw-ergebnisse-d1|https://www.sv-woernitzstein-berg.de/ergebnisse_damen/
+svw-start|https://www.sv-woernitzstein-berg.de/
+svw-robots|https://www.sv-woernitzstein-berg.de/robots.txt
 fupa-team|https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27
 fupa-robots|https://api.fupa.net/robots.txt
 fupa-www-robots|https://www.fupa.net/robots.txt
@@ -86,6 +92,41 @@ pruefe() {
         return
     fi
 
+    # Ausgeschriebene Tabellen: Das ist die Form, in der eine Vereinsseite
+    # ihre Zahlen liefert -- und die beste von allen, weil sie ohne
+    # Nachladen auskommt und niemand sie sperren kann.
+    TABELLEN=$(grep -o -i "<table" "$DATEI" 2>/dev/null | wc -l)
+    if [ "$TABELLEN" -gt 0 ]; then
+        ZELLEN=$(grep -o -i "<t[dh][ >]" "$DATEI" 2>/dev/null | wc -l)
+        echo "  *** $TABELLEN HTML-Tabellen mit $ZELLEN Zellen ***"
+        echo "  Die erste Kopfzeile:"
+        tr '<' '\n' < "$DATEI" | sed -n 's|^th[^>]*>||p' | sed -n '1,12p' \
+            | tr '\n' '|' | sed 's/^/      /'
+        echo
+    fi
+
+    # Eingebundene Widgets: Dann stehen die Zahlen eine Adresse weiter.
+    RAHMEN=$(grep -o -i "<iframe[^>]*src=[\"'][^\"']*" "$DATEI" 2>/dev/null \
+             | sed "s/.*src=[\"']//" | sort -u)
+    if [ -n "$RAHMEN" ]; then
+        echo "  eingebundene Seiten (<iframe>):"
+        echo "$RAHMEN" | sed -n '1,8p' | sed 's/^/      /'
+    fi
+
+    # Welche bekannten Verpackungen fuer eingebettete Daten kommen vor?
+    for MARKE in __NEXT_DATA__ __next_f __NUXT__ application/ld+json \
+                 application/json window.__ __INITIAL_STATE__ apollo; do
+        N=$(grep -c -- "$MARKE" "$DATEI" 2>/dev/null) || N=0
+        [ "$N" -gt 0 ] && echo "  enthaelt $MARKE ($N x)"
+    done
+
+    if [ "$GROESSE" -lt 4000 ]; then
+        echo "  Inhalt (bis 40 Zeilen):"
+        sed -n '1,40p' "$DATEI" | sed 's/^/      /'
+        echo
+        return
+    fi
+
     # Reiner Text (robots.txt, Fehlerseiten) wird gezeigt statt ausgewertet:
     # Der Inhalt selbst steht schneller da als jede Zusammenfassung. Die
     # Groesse entscheidet hier nicht -- www.fupa.net/robots.txt hat ueber
@@ -98,20 +139,6 @@ pruefe() {
             return
             ;;
     esac
-
-    if [ "$GROESSE" -lt 4000 ]; then
-        echo "  Inhalt (bis 40 Zeilen):"
-        sed -n '1,40p' "$DATEI" | sed 's/^/      /'
-        echo
-        return
-    fi
-
-    # Welche bekannten Verpackungen fuer eingebettete Daten kommen vor?
-    for MARKE in __NEXT_DATA__ __next_f __NUXT__ application/ld+json \
-                 application/json window.__ __INITIAL_STATE__ apollo; do
-        N=$(grep -c -- "$MARKE" "$DATEI" 2>/dev/null) || N=0
-        [ "$N" -gt 0 ] && echo "  enthaelt $MARKE ($N x)"
-    done
 
     # Stehen Begriffe aus dem Spielbetrieb ueberhaupt im Text? Wenn ja,
     # sind die Daten in der Seite. Wenn nein, holt sie der Browser nach.
@@ -132,6 +159,13 @@ pruefe() {
   echo "=== Ende ==="
   echo
   echo "Worauf es ankommt:"
+  echo "  - Steht bei einer svw-Zeile 'HTML-Tabellen', ist die eigene"
+  echo "    Vereinsseite die Quelle der Wahl: ohne Erlaubnis Dritter, ohne"
+  echo "    Nachladen, und niemand kann sie sperren. Die Adresse gehoert"
+  echo "    dann in die config.yaml unter mannschaften.<x>.zusatz_urls."
+  echo "  - Steht dort stattdessen 'eingebundene Seiten (<iframe>)', liegen"
+  echo "    die Zahlen eine Adresse weiter. Das Programm folgt dem von"
+  echo "    selbst - die genannte Adresse ist trotzdem gut zu wissen."
   echo "  - Steht bei einer ics-Zeile 'KALENDER gefunden', ist der Weg frei."
   echo "    Diese Adresse gehoert dann in die Konfiguration unter"
   echo "    datenquelle.fupa.zusatz_adressen."

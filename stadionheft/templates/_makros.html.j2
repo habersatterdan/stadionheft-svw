@@ -17,7 +17,8 @@
       Stand: {{ daten.abgerufen_lesbar or '—' }}
       {%- if daten.quelle == 'demo' %} &middot; <strong>Beispieldaten</strong>
       {%- elif daten.quelle == 'manuell' %} &middot; manuelle Eingabe
-      {%- elif daten.quelle == 'api' %} &middot; Quelle: fupa.net
+      {%- elif daten.quelle == 'api' %} &middot; Quelle:
+        {{- ' ' }}{{ daten.herkunft | join(', ') if daten.herkunft else 'fupa.net' }}
       {%- endif %}
     {%- endif %}
   </p>

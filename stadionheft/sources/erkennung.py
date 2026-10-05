@@ -45,7 +45,10 @@ def _normal(name: str) -> str:
 
 #: Synonyme je Feld. Reihenfolge = Vorrang.
 FELDER: dict[str, tuple[str, ...]] = {
-    "platz":        ("place", "position", "rank", "platz", "pos", "rang", "nr"),
+    # Die kurzen deutschen Spaltenkuerzel stammen von Vereinsseiten: Dort
+    # heisst die Spalte "Pl.", nicht "position". Nach _normal bleibt "pl".
+    "platz":        ("place", "position", "rank", "platz", "pos", "rang", "nr",
+                     "pl"),
     "mannschaft":   ("teamname", "clubname", "team", "club", "mannschaft",
                      "verein", "name"),
     "spiele":       ("matches", "games", "played", "appearances", "spiele",
@@ -55,8 +58,9 @@ FELDER: dict[str, tuple[str, ...]] = {
     "niederlagen":  ("losses", "lost", "niederlagen", "n", "defeats"),
     "tore":         ("goals", "goalsfor", "goalsscored", "tore", "torejeschossen",
                      "scored", "goalsshot"),
-    "gegentore":    ("goalsagainst", "goalsconceded", "gegentore", "conceded"),
-    "punkte":       ("points", "punkte", "pts", "totalpoints"),
+    "gegentore":    ("goalsagainst", "goalsconceded", "gegentore", "conceded",
+                     "gt"),
+    "punkte":       ("points", "punkte", "pts", "totalpoints", "pkt"),
     "spieler":      ("playername", "player", "spieler", "name", "fullname",
                      "displayname"),
     "vorlagen":     ("assists", "vorlagen", "assist"),
@@ -147,14 +151,22 @@ def _zahl_aus(wert: Any) -> int | None:
     if isinstance(wert, float):
         return int(wert)
     if isinstance(wert, str):
-        treffer = re.fullmatch(r"\s*(-?\d+)\s*", wert)
+        # "9." in einer Platzspalte, "+14" in einer Differenzspalte: Auf
+        # einer Vereinsseite stehen Zahlen so, wie man sie liest.
+        treffer = re.fullmatch(r"\s*([+-]?\d+)\s*\.?\s*", wert)
         if treffer:
-            return int(treffer.group(1))
+            return int(treffer.group(1).lstrip("+"))
     if isinstance(wert, dict):
         for schluessel in ("value", "count", "total"):
             if schluessel in wert:
                 return _zahl_aus(wert[schluessel])
     return None
+
+
+#: "18:4" -- Tore und Gegentore in einer Spalte.
+_TORPAAR = re.compile(r"\s*(\d{1,3})\s*[:\-]\s*(\d{1,3})\s*")
+#: "3-1-3" -- Siege, Unentschieden, Niederlagen in einer Spalte.
+_SUN = re.compile(r"\s*(\d{1,2})\s*[-/:]\s*(\d{1,2})\s*[-/:]\s*(\d{1,2})\s*")
 
 
 class Zeile:
@@ -168,6 +180,7 @@ class Zeile:
         self.roh = roh
         self.flach: dict[str, Any] = {}
         self._einsammeln(roh, "", 0)
+        self._zusammengesetzte_spalten_trennen()
 
     def _einsammeln(self, knoten: Any, praefix: str, tiefe: int) -> None:
         if tiefe > 3 or not isinstance(knoten, dict):
@@ -178,6 +191,39 @@ class Zeile:
             if isinstance(wert, dict):
                 self.flach.setdefault(_normal(schluessel), wert)
                 self._einsammeln(wert, f"{schluessel}", tiefe + 1)
+
+    def _zusammengesetzte_spalten_trennen(self) -> None:
+        """'18:4' und '3-1-3' in einzelne Werte zerlegen.
+
+        Gedruckte Tabellen fassen zusammen, was zusammengehoert: eine Spalte
+        "Tore" mit ``18:4`` statt zweier Spalten, eine Spalte "S-U-N" mit
+        ``3-1-3``. Eine JSON-Schnittstelle macht das nie -- eine
+        Vereinsseite fast immer.
+
+        Die Trennung steht hier und nicht im HTML-Leser, weil sie nichts mit
+        HTML zu tun hat: Es ist eine Schreibweise von Werten, und die kann
+        aus jeder Quelle kommen.
+        """
+        for name in FELDER["tore"]:
+            treffer = _TORPAAR.fullmatch(str(self.flach.get(name, "")))
+            if treffer:
+                self.flach[name] = treffer.group(1)
+                self.flach.setdefault("gegentore", treffer.group(2))
+                break
+
+        for name, wert in list(self.flach.items()):
+            if not isinstance(wert, str):
+                continue
+            # Nur Spalten, deren Name nach "S-U-N" aussieht -- sonst wuerde
+            # ein Datum wie "3-1-2026" zur Bilanz.
+            if name not in ("sun", "suns", "bilanz", "snu"):
+                continue
+            treffer = _SUN.fullmatch(wert)
+            if treffer:
+                self.flach.setdefault("siege", treffer.group(1))
+                self.flach.setdefault("unentschieden", treffer.group(2))
+                self.flach.setdefault("niederlagen", treffer.group(3))
+                break
 
     def hat(self, feld: str) -> bool:
         return any(name in self.flach for name in FELDER.get(feld, ()))

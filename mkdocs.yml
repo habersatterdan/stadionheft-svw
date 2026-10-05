@@ -54,6 +54,7 @@ nav:
       - Im Homelab betreiben: homelab.md
       - Ordner auf der NAS: NAS_ORDNERSTRUKTUR.md
       - Zugriff von unterwegs: VPN_EINRICHTEN.md
+      - Eigene Vereinsseite als Quelle: vereinsseite.md
       - FuPa-Anbindung: fupa.md
       - CSV-Reserve: csv-reserve.md
   - Hintergrund:

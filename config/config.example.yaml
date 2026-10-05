@@ -97,6 +97,10 @@ datenquelle:
     # einem haengenden FuPa so lange dauern, dass der Webserver vorher
     # abbricht - und dann entsteht gar nichts. 0 = keine Grenze.
     zeitbudget_sekunden: 120
+    # Bindet eine Seite Tabelle oder Spielplan als Widget ein (<iframe>),
+    # folgt das Programm der eingebundenen Adresse. So macht es eine
+    # Vereinsseite. Hoechstens so vielen Rahmenseiten je Mannschaft.
+    rahmenseiten_hoechstens: 4
     # Bitte eine erreichbare Kontaktadresse eintragen - faires Verhalten
     # gegenueber dem Betreiber und im Zweifel der Unterschied zwischen
     # "geduldet" und "gesperrt".
@@ -137,11 +141,18 @@ mannschaften:
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m1-2026-27"
     aktiv: true
     # Eigene Adressen nur fuer diese Mannschaft. Sie werden vor allen
-    # anderen probiert. Damit laesst sich jede Quelle anbinden - eine
-    # Kalenderdatei, eine BFV-Seite, eine selbst gepflegte JSON-Datei.
-    # Die Erkennung arbeitet ueber die Struktur der Daten und fragt nicht,
-    # von welchem Anbieter sie stammen.
-    zusatz_urls: []
+    # anderen probiert. Damit laesst sich jede Quelle anbinden - die eigene
+    # Vereinsseite, eine Kalenderdatei, eine BFV-Seite, eine selbst
+    # gepflegte JSON-Datei. Die Erkennung arbeitet ueber die Struktur der
+    # Daten und fragt nicht, von welchem Anbieter sie stammen.
+    #
+    # Die EIGENE Vereinsseite zuerst: Sie braucht keine Erlaubnis von
+    # Dritten, sie kann niemand sperren, und was dort steht, hat der Verein
+    # selbst eingetragen. Gelesen werden ausgeschriebene HTML-Tabellen
+    # (Tabelle, Spielplan, Torschuetzen) ebenso wie eingebettetes JSON;
+    # steckt die Tabelle in einem Widget, folgt das Programm dem <iframe>.
+    zusatz_urls:
+      - "https://www.sv-woernitzstein-berg.de/ergebnisse_1-mannschaft/"
 
   herren2:
     anzeigename: "Herren 2"

@@ -37,6 +37,7 @@ Rechtliches siehe docs/KONZEPT.md, Abschnitt "Rechtliche Hinweise".
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
@@ -57,6 +58,7 @@ from .cache import DateiCache
 from .erkennung import (spiele_erkennen, spieler_erkennen, tabelle_erkennen,
                         torjaeger_erkennen)
 from .html_daten import json_aus_html
+from .html_tabellen import rahmenseiten_aus_html, tabellen_aus_html
 from .ics_daten import ist_kalender, spiele_aus_ics
 
 # ---------------------------------------------------------------------------
@@ -360,7 +362,10 @@ class FupaClient:
             try:
                 self._drosseln()
                 logger().debug("GET %s (Versuch %d)", url, versuch)
-                return self._sitzung().get(url, timeout=self.timeout, headers=kopf)
+                antwort = self._sitzung().get(url, timeout=self.timeout,
+                                              headers=kopf)
+                _zeichensatz_richtigstellen(antwort)
+                return antwort
             except requests.RequestException as fehler:
                 letzter_fehler = fehler
                 if versuch <= self.wiederholungen:
@@ -424,6 +429,81 @@ class FupaClient:
         return bloecke
 
 
+_META_ZEICHENSATZ = re.compile(
+    rb"""<meta[^>]+charset\s*=\s*["']?\s*([a-zA-Z0-9_\-]+)""", re.IGNORECASE)
+
+
+def _zeichensatz_richtigstellen(antwort: Any) -> None:
+    """Umlaute retten, wenn der Server den Zeichensatz verschweigt.
+
+    Sagt ein Server nur ``Content-Type: text/html`` ohne ``charset``,
+    nimmt die HTTP-Norm ISO-8859-1 an -- und ``requests`` haelt sich daran.
+    Aus "SV Wörnitzstein-Berg" wird dann "SV WÃ¶rnitzstein-Berg".
+
+    Das ist keine Kleinigkeit: Am Vereinsnamen erkennt das Programm die
+    eigene Mannschaft im Spielplan. Stimmt er nicht, sind Formkurve und
+    Saisonbilanz still falsch -- und das faellt erst im gedruckten Heft auf.
+
+    Viele Server von Vereinsseiten verschweigen den Zeichensatz. Wir lesen
+    ihn deshalb aus der Seite selbst und pruefen zur Sicherheit, ob sich
+    der Inhalt damit ueberhaupt lesen laesst.
+    """
+    try:
+        kopf = (antwort.headers.get("Content-Type") or "")
+        if "charset=" in kopf.lower():
+            return
+        roh = antwort.content or b""
+        if not roh:
+            return
+
+        kandidaten: list[str] = []
+        treffer = _META_ZEICHENSATZ.search(roh[:4096])
+        if treffer:
+            kandidaten.append(treffer.group(1).decode("ascii", "ignore"))
+        kandidaten.append("utf-8")
+
+        for name in kandidaten:
+            try:
+                roh.decode(name)
+            except (LookupError, UnicodeDecodeError):
+                continue
+            antwort.encoding = name
+            return
+    except Exception as fehler:        # noqa: BLE001 - nie den Abruf stoppen
+        logger().debug("Zeichensatz nicht bestimmbar: %s", fehler)
+
+
+#: Unter diesem Schluessel reicht _nutzlasten_aus die Adressen eingebetteter
+#: Rahmenseiten weiter. Kein Datenblock, sondern ein Wegweiser.
+RAHMEN_SCHLUESSEL = "_rahmenseiten"
+
+
+def _herkunft_merken(fund: Any, adresse: str) -> None:
+    """Welcher Rechner hat das geliefert?
+
+    Im Heft steht unter jeder Seite eine Quellenangabe. Stand dort pauschal
+    "fupa.net", war das falsch, sobald die Zahlen von der Vereinsseite kamen
+    -- eine Falschangabe im Druck.
+    """
+    host = urlparse(adresse).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host and host not in fund.herkunft:
+        fund.herkunft.append(host)
+
+
+def _ist_wegweiser(block: Any) -> bool:
+    return isinstance(block, dict) and set(block) == {RAHMEN_SCHLUESSEL}
+
+
+def _rahmen_aus(bloecke: list[Any]) -> list[str]:
+    adressen: list[str] = []
+    for block in bloecke:
+        if _ist_wegweiser(block):
+            adressen.extend(str(a) for a in block[RAHMEN_SCHLUESSEL])
+    return adressen
+
+
 def _nutzlasten_aus(antwort: Any) -> list[Any]:
     """Zerlegt eine HTTP-Antwort in das, was an Daten darin steckt."""
     typ = (antwort.headers.get("Content-Type") or "").lower()
@@ -450,7 +530,22 @@ def _nutzlasten_aus(antwort: Any) -> list[Any]:
             return [json.loads(text)]
         except (json.JSONDecodeError, ValueError):
             pass
-    return json_aus_html(text)
+
+    # Eingebettetes JSON **und** ausgeschriebene Tabellen. Portale liefern
+    # das eine, eine Vereinsseite das andere -- und manche Seite beides.
+    # Welche Form etwas hat, entscheidet nicht darueber, ob es uns
+    # interessiert.
+    bloecke: list[Any] = list(json_aus_html(text))
+    bloecke.extend(tabellen_aus_html(text))
+
+    # Bindet die Seite ein Widget per <iframe> ein, stehen die Zahlen nicht
+    # hier, sondern eine Adresse weiter. Genau so machen es Vereinsseiten mit
+    # Tabelle und Spielplan. Die Adressen werden mitgegeben, damit der Abruf
+    # ihnen folgen kann -- ein eigener Block, den keine Erkennung anfasst.
+    rahmen = rahmenseiten_aus_html(text, getattr(antwort, "url", "") or "")
+    if rahmen:
+        bloecke.append({RAHMEN_SCHLUESSEL: rahmen})
+    return bloecke
 
 
 # ---------------------------------------------------------------------------
@@ -570,6 +665,9 @@ class Fund:
     spiele: list[Spiel] = field(default_factory=list)
     abrufe: int = 0
     netzfehler: Exception | None = None
+    #: Die Rechnernamen, von denen tatsaechlich etwas Verwertbares kam.
+    #: Im Heft steht darunter die Quellenangabe -- und die muss stimmen.
+    herkunft: list[str] = field(default_factory=list)
 
     @property
     def vollstaendig(self) -> bool:
@@ -627,6 +725,12 @@ class FupaApiQuelle:
             konfiguration.get("datenquelle.fupa.zeitbudget_sekunden", 120))
         self._frist = time.monotonic() + self.zeitbudget if self.zeitbudget > 0 else 0.0
         self._budget_gemeldet = False
+        #: Wie vielen eingebundenen Rahmenseiten je Mannschaft gefolgt wird.
+        #: Eine Vereinsseite bindet typischerweise zwei ein (Tabelle und
+        #: Spielplan); die Grenze verhindert, dass eine Seite voller Werbe-
+        #: Rahmen den Abruf auffrisst.
+        self.rahmen_hoechstens = int(
+            konfiguration.get("datenquelle.fupa.rahmenseiten_hoechstens", 4))
         self.gegner_abrufen = bool(
             konfiguration.get("datenquelle.fupa.gegner_abrufen", True))
         #: Von Hand hinterlegte Gegneradressen, falls der Spielplan keinen
@@ -674,6 +778,7 @@ class FupaApiQuelle:
         daten.spiele = fund.spiele
         daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(fund.spiele)
         daten.liga = daten.liga or fund.liga
+        daten.herkunft = list(fund.herkunft)
         daten.abgerufen_am = datetime.now().isoformat(timespec="seconds")
         daten.veraltet = self.client.veraltet_genutzt
 
@@ -719,8 +824,15 @@ class FupaApiQuelle:
         """Adressen der Reihe nach abklappern und alles Erkannte sammeln."""
         fund = Fund()
         fehlschlaege = 0
+        warteschlange = list(self._sortieren(adressen, kennung))
+        erledigt: set[str] = set()
+        rahmen_gefolgt = 0
 
-        for adresse in self._sortieren(adressen, kennung):
+        while warteschlange:
+            adresse = warteschlange.pop(0)
+            if adresse in erledigt:
+                continue
+            erledigt.add(adresse)
             if fund.abrufe >= hoechstens or fund.vollstaendig:
                 break
             if self._zeit_abgelaufen():
@@ -751,6 +863,23 @@ class FupaApiQuelle:
 
             fund.abrufe += 1
             muster = self._muster(adresse, kennung)
+
+            # Einem eingebundenen Widget folgen. Eine Vereinsseite zeigt
+            # Tabelle und Spielplan oft als Rahmenseite eines Portals -- auf
+            # der Seite selbst steht dann nichts. Die eingebundene Adresse
+            # kommt gleich an die Reihe, noch vor den geratenen.
+            nachschub = _rahmen_aus(bloecke)
+            if nachschub and rahmen_gefolgt < self.rahmen_hoechstens:
+                neu = [a for a in nachschub if a not in erledigt]
+                rahmen_gefolgt += len(neu)
+                for a in reversed(neu):
+                    logger().info("Folge eingebundener Seite: %s", _kurz(a))
+                    warteschlange.insert(0, a)
+
+            # Nur Wegweiser sind keine Daten: Eine Seite, die ausser einem
+            # Widget nichts enthaelt, gilt weiter als leer.
+            bloecke = [b for b in bloecke if not _ist_wegweiser(b)]
+
             if bloecke:
                 self._auswerten(bloecke, fund, vereinsname, adresse)
                 if muster not in self._gute_muster:
@@ -783,24 +912,28 @@ class FupaApiQuelle:
             gefunden = tabelle_erkennen(block, vereinsname)
             if len(gefunden) > len(fund.tabelle):
                 fund.tabelle = gefunden
+                _herkunft_merken(fund, adresse)
                 logger().info("Tabelle erkannt (%d Zeilen) auf %s",
                               len(gefunden), _kurz(adresse))
 
             schuetzen = torjaeger_erkennen(block, vereinsname)
             if len(schuetzen) > len(fund.torjaeger):
                 fund.torjaeger = schuetzen
+                _herkunft_merken(fund, adresse)
                 logger().info("Torschuetzenliste erkannt (%d Zeilen) auf %s",
                               len(schuetzen), _kurz(adresse))
 
             kader = spieler_erkennen(block)
             if len(kader) > len(fund.spieler):
                 fund.spieler = kader
+                _herkunft_merken(fund, adresse)
                 logger().info("Spielerstatistik erkannt (%d Zeilen) auf %s",
                               len(kader), _kurz(adresse))
 
             spielplan = spiele_erkennen(block, vereinsname)
             if len(spielplan) > len(fund.spiele):
                 fund.spiele = spielplan
+                _herkunft_merken(fund, adresse)
                 logger().info("Spielplan erkannt (%d Partien) auf %s",
                               len(spielplan), _kurz(adresse))
 

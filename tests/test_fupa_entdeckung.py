@@ -123,13 +123,31 @@ def herren1(konfiguration: Konfiguration):
 # Adressliste
 # ---------------------------------------------------------------------------
 
-def test_adressliste_beginnt_mit_konfigurierten_endpunkten(
+def test_adressliste_beginnt_mit_der_eigenen_quelle(
         konfiguration: Konfiguration, herren1):
+    """Was der Verein selbst eintraegt, wird zuerst probiert.
+
+    Die eigene Vereinsseite steht in der Beispielkonfiguration unter
+    zusatz_urls. Sie braucht keine Erlaubnis von Dritten und kann niemand
+    sperren -- deshalb gehoert sie vor jede geratene Adresse.
+    """
     from stadionheft.sources.fupa_api import FupaClient
 
     adressen = adressen_fuer(FupaClient(konfiguration), herren1)
-    assert adressen[0].startswith("https://api.fupa.net/v1/teams/")
+    assert adressen[0] == herren1.zusatz_urls[0]
+    assert "sv-woernitzstein-berg.de" in adressen[0]
+    # Danach erst die konfigurierten Endpunkte
+    assert any(a.startswith("https://api.fupa.net/v1/teams/") for a in adressen)
     assert herren1.fupa_team_url in adressen
+
+
+def test_ohne_eigene_quelle_kommen_die_endpunkte_zuerst(
+        konfiguration: Konfiguration, herren1):
+    from stadionheft.sources.fupa_api import FupaClient
+
+    herren1.zusatz_urls = []
+    adressen = adressen_fuer(FupaClient(konfiguration), herren1)
+    assert adressen[0].startswith("https://api.fupa.net/v1/teams/")
     # Jede Standardadresse ist enthalten, keine doppelt
     for muster in KANDIDATEN:
         assert muster.format(slug=herren1.fupa_slug) in adressen
@@ -791,3 +809,131 @@ def test_ohne_zeitbudget_laeuft_alles_durch(konfiguration: Konfiguration, herren
 
     assert quelle._frist == 0.0
     assert quelle._zeit_abgelaufen() is False
+
+
+# ---------------------------------------------------------------------------
+# Die eigene Vereinsseite
+# ---------------------------------------------------------------------------
+
+VEREINSSEITE = """<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+<title>Ergebnisse 1. Mannschaft</title></head><body>
+<table>
+ <tr><th>Pl.</th><th>Mannschaft</th><th>Sp.</th><th>S</th><th>U</th><th>N</th>
+     <th>Tore</th><th>Pkt.</th></tr>
+ <tr><td>1.</td><td>TSV Meitingen</td><td>11</td><td>8</td><td>2</td><td>1</td>
+     <td>28:9</td><td>26</td></tr>
+ <tr><td>4.</td><td>SV Wörnitzstein-Berg</td><td>11</td><td>5</td><td>3</td>
+     <td>3</td><td>19:15</td><td>18</td></tr>
+ <tr><td>6.</td><td>VfL Ecknach</td><td>11</td><td>1</td><td>1</td><td>9</td>
+     <td>8:31</td><td>4</td></tr>
+</table>
+<table>
+ <tr><th>Datum</th><th>Heim</th><th>Gast</th><th>Ergebnis</th></tr>
+ <tr><td>27.09.2026<br>15:00</td><td>SV Wörnitzstein-Berg</td>
+     <td>VfL Ecknach</td><td>4:0</td></tr>
+ <tr><td>11.10.2026<br>14:00</td><td>SG Alerheim</td>
+     <td>SV Wörnitzstein-Berg</td><td></td></tr>
+</table>
+</body></html>"""
+
+
+def test_eigene_vereinsseite_liefert_tabelle_und_spielplan(
+        konfiguration: Konfiguration, herren1):
+    """Die eigene Seite braucht keine Erlaubnis von Dritten.
+
+    Sie liefert kein eingebettetes JSON, sondern eine ausgeschriebene
+    Tabelle -- bis hierher die einzige Quelle, die das Programm nicht lesen
+    konnte.
+    """
+    adresse = "https://www.sv-woernitzstein-berg.de/ergebnisse_1-mannschaft/"
+    mannschaft = konfiguration.mannschaft("herren1")
+    mannschaft.zusatz_urls = [adresse]
+    quelle = _quelle(konfiguration, {adresse: Antwort(VEREINSSEITE)})
+
+    daten = quelle.hole(mannschaft)
+
+    assert daten.tabellenplatz is not None
+    assert daten.tabellenplatz.platz == 4
+    assert (daten.tabellenplatz.tore, daten.tabellenplatz.gegentore) == (19, 15)
+    assert daten.naechstes_spiel is not None
+    assert daten.naechstes_spiel.gegner == "SG Alerheim"
+    assert daten.naechstes_spiel.heimspiel is False
+    assert daten.letztes_spiel.ergebnis == "4:0"
+
+
+def test_umlaute_ueberleben_einen_server_ohne_zeichensatz(
+        konfiguration: Konfiguration, herren1):
+    """Ohne 'charset' im Kopf nimmt HTTP ISO-8859-1 an.
+
+    Aus "SV Wörnitzstein-Berg" wird dann "SV WÃ¶rnitzstein-Berg" -- und das
+    Programm erkennt die eigene Mannschaft im Spielplan nicht mehr wieder.
+    Formkurve und Bilanz waeren still falsch.
+    """
+    import requests
+
+    from stadionheft.sources.fupa_api import _zeichensatz_richtigstellen
+
+    antwort = requests.Response()
+    antwort._content = VEREINSSEITE.encode("utf-8")
+    antwort.headers["Content-Type"] = "text/html"       # ohne charset
+    antwort.encoding = "ISO-8859-1"                     # was requests annimmt
+
+    assert "WÃ¶rnitzstein" in antwort.text               # das Problem
+    _zeichensatz_richtigstellen(antwort)
+    assert "Wörnitzstein" in antwort.text                # die Loesung
+
+
+def test_zeichensatz_aus_dem_kopf_wird_nicht_ueberschrieben():
+    """Sagt der Server etwas, gilt das -- wir wissen es nicht besser."""
+    import requests
+
+    from stadionheft.sources.fupa_api import _zeichensatz_richtigstellen
+
+    antwort = requests.Response()
+    antwort._content = "Wörnitzstein".encode("iso-8859-1")
+    antwort.headers["Content-Type"] = "text/html; charset=iso-8859-1"
+    antwort.encoding = "iso-8859-1"
+
+    _zeichensatz_richtigstellen(antwort)
+
+    assert antwort.encoding == "iso-8859-1"
+    assert antwort.text == "Wörnitzstein"
+
+
+def test_eingebundenem_widget_wird_gefolgt(konfiguration: Konfiguration, herren1):
+    """Steht auf der Seite nur ein Widget, liegen die Zahlen eine Adresse weiter."""
+    seite = ('<html><body><h1>Tabelle</h1>'
+             '<iframe src="https://widget.example.invalid/tabelle"></iframe>'
+             '</body></html>')
+    adresse = "https://www.sv-woernitzstein-berg.de/tabelle/"
+    mannschaft = konfiguration.mannschaft("herren1")
+    mannschaft.zusatz_urls = [adresse]
+
+    gesehen: list[str] = []
+    quelle = _quelle(konfiguration, {
+        adresse: Antwort(seite),
+        "https://widget.example.invalid/tabelle": Antwort(VEREINSSEITE),
+    }, protokoll=gesehen)
+
+    daten = quelle.hole(mannschaft)
+
+    assert "https://widget.example.invalid/tabelle" in gesehen
+    assert daten.tabellenplatz is not None
+    assert daten.tabellenplatz.platz == 4
+
+
+def test_quellenangabe_nennt_den_wirklichen_rechner(konfiguration: Konfiguration,
+                                                    herren1):
+    """Im Heft steht unter jeder Seite, woher die Zahlen stammen.
+
+    Pauschal "fupa.net" war falsch, sobald sie von der Vereinsseite kamen --
+    eine Falschangabe im gedruckten Heft.
+    """
+    adresse = "https://www.sv-woernitzstein-berg.de/ergebnisse_1-mannschaft/"
+    mannschaft = konfiguration.mannschaft("herren1")
+    mannschaft.zusatz_urls = [adresse]
+    quelle = _quelle(konfiguration, {adresse: Antwort(VEREINSSEITE)})
+
+    daten = quelle.hole(mannschaft)
+
+    assert daten.herkunft == ["sv-woernitzstein-berg.de"]

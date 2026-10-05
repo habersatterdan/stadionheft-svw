@@ -85,7 +85,15 @@ Der **nächste Gegner wird automatisch ermittelt**: Das Programm schaut in den
 Spielplan und nimmt die Partie, die als nächste ansteht. Nichts muss von Hand
 umgestellt werden.
 
-Ist FuPa einmal nicht erreichbar, greift das Programm auf hinterlegte
-CSV-Dateien zurück und sagt das deutlich.
+Die Zahlen kommen aus drei Quellen, in dieser Reihenfolge:
 
+1. **Die eigene Vereinsseite** – braucht keine Erlaubnis von Dritten und
+   kann niemand sperren. Dort stehen Tabelle, Spielplan und Ergebnisse
+   ohnehin schon.
+2. **FuPa** – Spielplan über die Kalenderdatei, die FuPa ausdrücklich
+   freigibt.
+3. **CSV-Dateien** – wenn beides nicht trägt, und das Programm sagt es
+   deutlich.
+
+[→ Eigene Vereinsseite als Quelle](vereinsseite.md) ·
 [→ Details zur FuPa-Anbindung](fupa.md)

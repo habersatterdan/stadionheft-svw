@@ -636,6 +636,11 @@ class MannschaftsDaten(_Basis):
 
     #: Woher stammen die Daten? "api" | "manuell" | "demo"
     quelle: str = ""
+    #: Die Rechnernamen, von denen die Zahlen tatsaechlich kamen, etwa
+    #: ["sv-woernitzstein-berg.de"]. Daraus entsteht die Quellenangabe auf
+    #: jeder Seite -- pauschal "fupa.net" waere falsch, sobald die Daten von
+    #: woanders stammen.
+    herkunft: list[str] = field(default_factory=list)
     #: Wann wurden sie geholt? ISO-Zeitstempel. Steht auf jeder Seite.
     abgerufen_am: str = ""
     #: Kamen sie aus dem Zwischenspeicher, obwohl der abgelaufen war?
@@ -705,6 +710,7 @@ class MannschaftsDaten(_Basis):
             "letztes_spiel": self.letztes_spiel.to_dict() if self.letztes_spiel else None,
             "gegner_daten": self.gegner_daten.to_dict() if self.gegner_daten else None,
             "quelle": self.quelle,
+            "herkunft": list(self.herkunft),
             "abgerufen_am": self.abgerufen_am,
             "veraltet": self.veraltet,
             "warnungen": list(self.warnungen),
@@ -731,6 +737,7 @@ class MannschaftsDaten(_Basis):
             gegner_daten=(GegnerDaten.from_dict(daten["gegner_daten"])
                           if daten.get("gegner_daten") else None),
             quelle=daten.get("quelle", ""),
+            herkunft=list(daten.get("herkunft", [])),
             abgerufen_am=daten.get("abgerufen_am", ""),
             veraltet=bool(daten.get("veraltet", False)),
             warnungen=list(daten.get("warnungen", [])),
