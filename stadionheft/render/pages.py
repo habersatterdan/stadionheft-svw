@@ -16,7 +16,7 @@ Warum HTML/CSS und nicht InDesign fernsteuern?
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -26,7 +26,7 @@ from markupsafe import Markup
 from ..config import Konfiguration
 from ..errors import RenderFehler
 from ..logging_setup import logger
-from ..models import MannschaftsDaten, Spiel
+from ..models import MannschaftsDaten, Spiel, SpielerZeile
 
 TEMPLATE_ORDNER = Path(__file__).resolve().parent.parent / "templates"
 STATIC_ORDNER = Path(__file__).resolve().parent.parent / "static"
@@ -39,7 +39,6 @@ SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
     "torjaeger":        ("torjaeger.html.j2", "Torschützenliste"),
     "spielerstatistik": ("spielerstatistik.html.j2", "Spielerstatistik"),
     "gegner":           ("gegner.html.j2", "Der Gegner"),
-    "bilanz":           ("bilanz.html.j2", "Saisonbilanz"),
     # Nur noetig, wenn der Gegner in einer anderen Liga spielt (Pokal).
     "tabelle_gegner":   ("tabelle.html.j2", "Tabelle des Gegners"),
     "torjaeger_gegner": ("torjaeger.html.j2", "Torschützen des Gegners"),
@@ -51,8 +50,25 @@ SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
 #: verlassen kann.
 STANDARD_SEITEN: tuple[str, ...] = (
     "trenner", "vergleich", "tabelle", "torjaeger",
-    "spielerstatistik", "gegner", "bilanz",
+    "spielerstatistik", "gegner",
 )
+
+#: So viele Zeilen passen auf eine A5-Seite. Was darueber hinausgeht, wuerde
+#: auf eine zweite Seite umbrechen oder abgeschnitten.
+HOECHSTENS_ZEILEN = 22
+
+
+def spieler_rangfolge(spieler: list[SpielerZeile],
+                      hoechstens: int = HOECHSTENS_ZEILEN) -> list[SpielerZeile]:
+    """Die Spieler mit den meisten Einsaetzen zuerst, bei Gleichstand die mit
+    mehr Minuten -- und nur so viele, wie auf die Seite passen.
+
+    Die Plaetze werden neu durchgezaehlt. Die Daten selbst bleiben unberuehrt
+    (Snapshot), es wird nur eine sortierte Kopie gedruckt.
+    """
+    sortiert = sorted(spieler, key=lambda z: (-z.spiele, -z.minuten))
+    return [replace(z, platz=nr)
+            for nr, z in enumerate(sortiert[:hoechstens], 1)]
 
 
 def _css_sauber(wert: str) -> str:
@@ -232,16 +248,20 @@ def _seiten_kontext(art: str, daten: MannschaftsDaten) -> dict:
         return {"zeilen": daten.tabelle, "liga": daten.liga,
                 "hervorheben": markieren}
     if art == "torjaeger":
-        return {"zeilen": daten.torjaeger, "liga": daten.liga,
+        return {"zeilen": daten.torjaeger[:HOECHSTENS_ZEILEN], "liga": daten.liga,
                 "hervorheben": markieren}
     if art == "tabelle_gegner":
         return {"zeilen": gegner.tabelle if gegner else [],
                 "liga": (gegner.liga if gegner else "") or daten.gegner,
                 "hervorheben": markieren}
     if art == "torjaeger_gegner":
-        return {"zeilen": gegner.torjaeger if gegner else [],
+        return {"zeilen": (gegner.torjaeger if gegner else [])[:HOECHSTENS_ZEILEN],
                 "liga": (gegner.liga if gegner else "") or daten.gegner,
                 "hervorheben": markieren}
+    if art == "spielerstatistik":
+        return {"spieler": spieler_rangfolge(daten.spieler)}
+    if art == "gegner":
+        return {"spieler": spieler_rangfolge(gegner.spieler if gegner else [])}
     if art == "vergleich":
         return {"letzte_duelle": letzte_duelle(daten)}
     return {}

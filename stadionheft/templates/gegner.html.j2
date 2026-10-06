@@ -27,8 +27,8 @@
       </p>
     {% endif %}
 
-    {% if gegner and gegner.spieler %}
-      {{ m.spielertabelle(gegner.spieler) }}
+    {% if spieler %}
+      {{ m.spielertabelle(spieler) }}
       {{ m.stand(daten) }}
     {% else %}
       {{ m.leer("Zu " ~ daten.gegner ~ " konnten keine Spielerdaten geholt werden. "

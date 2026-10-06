@@ -4,8 +4,8 @@
 {% block inhalt %}
   <p class="unterzeile">{{ daten.anzeigename }}{% if daten.liga %} &middot; {{ daten.liga }}{% endif %}</p>
 
-  {% if daten.spieler %}
-    {{ m.spielertabelle(daten.spieler) }}
+  {% if spieler %}
+    {{ m.spielertabelle(spieler) }}
     {{ m.stand(daten) }}
   {% else %}
     {{ m.leer("Für " ~ daten.anzeigename ~ " liegt derzeit keine Spielerstatistik vor.") }}

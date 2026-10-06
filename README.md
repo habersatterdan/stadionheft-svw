@@ -22,17 +22,16 @@ Schnittmarken), mit korrekt ermitteltem nächsten Gegner.
 Die kommen weiterhin von Hand – sie ändern sich kaum und stecken nicht in
 FuPa.
 
-Je Mannschaft entstehen sieben Seiten:
+Je Mannschaft entstehen sechs Seiten:
 
 | # | Seite |
 |---|---|
 | 1 | Trennseite mit Mannschaftsname und Liga |
 | 2 | Das nächste Spiel – Gegenüberstellung beider Mannschaften mit Form |
 | 3 | Liga-Tabelle, eigene Mannschaft und Gegner hervorgehoben |
-| 4 | Liga-Torschützenliste |
-| 5 | Spielerstatistik der eigenen Mannschaft |
-| 6 | Der Gegner mit seinem Kader |
-| 7 | Saisonbilanz beider Mannschaften in Zahlen |
+| 4 | Liga-Torschützenliste (die besten 22) |
+| 5 | Spielerstatistik der eigenen Mannschaft, nach Einsätzen und Minuten (höchstens 22) |
+| 6 | Der Gegner mit seinem Kader, ebenso sortiert |
 
 Bei einem Pokalgegner aus einer anderen Liga kommen dessen Tabelle und
 Torschützenliste dazu.

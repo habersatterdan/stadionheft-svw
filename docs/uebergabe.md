@@ -46,16 +46,16 @@ bestehenden Werbeseiten** – so, wie die bisherigen InDesign-Seiten es taten.
 
 ## Was in jeder Datei steckt
 
-Immer dieselben sieben Seiten, in dieser Reihenfolge:
+Immer dieselben sechs Seiten, in dieser Reihenfolge:
 
 1. **Trennseite** – Mannschaftsname und Liga, ganzseitig
 2. **Das nächste Spiel** – Paarung, Anstoß, Ort und die Gegenüberstellung
    beider Mannschaften (Platz, Punkte, Tore, Form)
 3. **Tabelle** – die Liga-Tabelle, eigene Mannschaft rot, Gegner grau
-4. **Torschützenliste** – die Liga-Torschützen
-5. **Spielerstatistik** – der eigene Kader
-6. **Der Gegner** – Kader des Gegners mit kurzer Einordnung
-7. **Saisonbilanz** – Kennzahlen beider Mannschaften nebeneinander
+4. **Torschützenliste** – die besten 22 Liga-Torschützen
+5. **Spielerstatistik** – der eigene Kader, die 22 mit den meisten Einsätzen
+   (bei Gleichstand mehr Minuten) zuerst
+6. **Der Gegner** – Kader des Gegners mit kurzer Einordnung, ebenso sortiert
 
 Bei einem Pokalgegner aus einer anderen Liga kommen zwei Seiten dazu (Tabelle
 und Torschützen der fremden Liga). Die `UEBERSICHT.txt` sagt es dir.
