@@ -345,12 +345,16 @@ class FupaClient:
         JSON zurueckkommt: Die oeffentlichen FuPa-Seiten liefern HTML, in dem
         die Daten eingebettet sind. Der Accept-Kopf laesst deshalb beides zu.
         """
+        # Dieselbe Fehlerart wie in hole_json: Ein Verbot ist eine Auskunft
+        # ueber diese eine Adresse, kein Netzausfall. Als Netzfehler gemeldet,
+        # haben drei gesperrte api.fupa.net-Adressen am Anfang der Liste den
+        # ganzen Abruf beendet -- bevor die erlaubte Teamseite dran war.
         if not self._robots_erlaubt(url):
-            raise DatenquelleNichtErreichbarFehler(
+            raise AdresseGesperrtFehler(
                 f"robots.txt verbietet den Abruf von {url}.",
                 benutzer_text="FuPa erlaubt den automatischen Abruf dieser Seite nicht.",
-                hinweis=("Bitte in der Konfiguration auf den Modus 'manuell' "
-                         "umstellen und die Daten als CSV bereitstellen."),
+                hinweis=("Diese Adresse wird uebersprungen. Andere Adressen "
+                         "werden weiter probiert."),
             )
 
         import requests
@@ -504,6 +508,76 @@ def _rahmen_aus(bloecke: list[Any]) -> list[str]:
     return adressen
 
 
+#: Ligaseiten, die zu einer Mannschaft gehoeren. Ohne Saisonangabe zeigt
+#: FuPa die laufende Saison (mit Saison folgt nur eine Weiterleitung dorthin).
+LIGA_SEITEN: tuple[str, ...] = (
+    "https://www.fupa.net/league/{liga}/standing",
+    "https://www.fupa.net/league/{liga}/scorers",
+)
+
+_LIGA_KENNUNG = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def _liga_aus(bloecke: list[Any]) -> str:
+    """Die Liga, in der eine Mannschaft spielt -- aus ihrer Teamseite.
+
+    Die Teamseite fuehrt Tabelle und Torjaegerliste nicht selbst, nennt aber
+    ihren Wettbewerb (``competition.slug``). Auf der Spielplanseite steht
+    zusaetzlich jeder Pokal; deshalb gewinnt ein Wettbewerb, der sich als
+    Liga ausweist, sonst der zuerst genannte.
+    """
+    gefunden: list[tuple[str, bool]] = []
+
+    def suchen(knoten: Any, tiefe: int) -> None:
+        if tiefe > 6:
+            return
+        if isinstance(knoten, dict):
+            wettbewerb = knoten.get("competition")
+            if isinstance(wettbewerb, dict):
+                kennung = wettbewerb.get("slug")
+                if isinstance(kennung, str) and _LIGA_KENNUNG.fullmatch(kennung):
+                    art = wettbewerb.get("category")
+                    ist_liga = (isinstance(art, dict)
+                                and str(art.get("name", "")).lower() == "liga")
+                    gefunden.append((kennung, ist_liga))
+            for wert in knoten.values():
+                suchen(wert, tiefe + 1)
+        elif isinstance(knoten, list):
+            for wert in knoten[:60]:
+                suchen(wert, tiefe + 1)
+
+    for block in bloecke:
+        suchen(block, 0)
+    for kennung, ist_liga in gefunden:
+        if ist_liga:
+            return kennung
+    return gefunden[0][0] if gefunden else ""
+
+
+_TEAMSEITE = re.compile(r"/team/[a-z0-9-]+/?")
+
+
+def liga_adressen(bloecke: list[Any], adresse: str) -> list[str]:
+    """Folgeseiten einer FuPa-Teamseite: Tabelle, Torjaeger, Spielplan.
+
+    Die Ligaseiten zuerst: Bis die Torjaegerliste der Liga da ist, steht nur
+    der Kader als Ersatz bereit -- und sobald alle vier Teile beisammen sind,
+    hoert der Abruf auf. Der Spielplan der Teamseite (``/matches``) kommt vor
+    dem Kalender: Er fuehrt die Team-Bezeichner beider Vereine -- ohne sie
+    lassen sich die Zahlen des Gegners nicht holen -- und keine Testspiele.
+    """
+    teile = urlparse(adresse)
+    if not bloecke or "fupa.net" not in teile.netloc:
+        return []
+    folge: list[str] = []
+    liga = _liga_aus(bloecke)
+    if liga:
+        folge.extend(muster.format(liga=liga) for muster in LIGA_SEITEN)
+    if _TEAMSEITE.fullmatch(teile.path):
+        folge.append(adresse.rstrip("/") + "/matches")
+    return folge
+
+
 def _nutzlasten_aus(antwort: Any) -> list[Any]:
     """Zerlegt eine HTTP-Antwort in das, was an Daten darin steckt."""
     typ = (antwort.headers.get("Content-Type") or "").lower()
@@ -573,7 +647,8 @@ KANDIDATEN: tuple[str, ...] = (
     "https://api.fupa.net/v1/teams/{slug}/kalender.ics",
     "https://www.fupa.net/team/{slug}/kalender.ics",
     "https://www.fupa.net/team/{slug}.ics",
-    # Die oeffentliche Teamseite -- geprueft, antwortet
+    # Die oeffentliche Teamseite -- geprueft, antwortet (Kader mit
+    # Einsaetzen und Toren, dazu die Liga der Mannschaft)
     "https://www.fupa.net/team/{slug}",
     # Unterseiten: im Probelauf 404, aber billig mitzunehmen, falls FuPa sie
     # wieder einfuehrt. Nach dem ersten Fehlschlag werden sie im Lauf
@@ -582,6 +657,10 @@ KANDIDATEN: tuple[str, ...] = (
     "https://www.fupa.net/team/{slug}/spielplan",
     "https://www.fupa.net/team/{slug}/kader",
     "https://www.fupa.net/team/{slug}/statistiken",
+    # Alle Partien der Saison mit Anstoss und Ergebnis -- geprueft, antwortet.
+    # Hinter den Unterseiten, damit eine von Hand gepflegte Adresse dort
+    # nicht ueber max_abrufe hinausrutscht.
+    "https://www.fupa.net/team/{slug}/matches",
     # Moegliche JSON-Schnittstellen. Derzeit per robots.txt gesperrt; sie
     # bleiben stehen, weil sich das aendern kann -- gesperrte Adressen kosten
     # keinen Abruf, nur einen Blick in die gemerkte robots.txt.
@@ -655,6 +734,21 @@ def _kurz(adresse: str) -> str:
     return adresse.replace("https://", "").replace("www.", "")
 
 
+def _besserer_spielplan(neu: list[Spiel], bisher: list[Spiel]) -> bool:
+    """Ein Spielplan mit Team-Bezeichnern schlaegt einen laengeren ohne.
+
+    Nur mit Bezeichner lassen sich die Zahlen des Gegners holen. Der
+    FuPa-Kalender ist laenger (er fuehrt auch Testspiele), nennt aber nur
+    Vereinsnamen.
+    """
+    def mit_kennung(spiele: list[Spiel]) -> bool:
+        return any(s.heim_kennung or s.gast_kennung for s in spiele)
+
+    if neu and bisher and mit_kennung(neu) != mit_kennung(bisher):
+        return mit_kennung(neu)
+    return len(neu) > len(bisher)
+
+
 @dataclass
 class Fund:
     """Was beim Abklappern einer Adressliste zusammengekommen ist."""
@@ -679,10 +773,13 @@ class Fund:
 
     @property
     def liga(self) -> str:
+        # Der haeufigste Wettbewerb, nicht der erste: Steht ein Pokalspiel am
+        # Saisonanfang, hiesse sonst die ganze Liga "Bezirkspokal".
+        zaehler: dict[str, int] = {}
         for spiel in self.spiele:
             if spiel.wettbewerb:
-                return spiel.wettbewerb
-        return ""
+                zaehler[spiel.wettbewerb] = zaehler.get(spiel.wettbewerb, 0) + 1
+        return max(zaehler, key=zaehler.__getitem__) if zaehler else ""
 
 
 class FupaApiQuelle:
@@ -876,6 +973,17 @@ class FupaApiQuelle:
                     logger().info("Folge eingebundener Seite: %s", _kurz(a))
                     warteschlange.insert(0, a)
 
+            # Der Teamseite folgen: Sie nennt ihren Wettbewerb, fuehrt
+            # Tabelle, Torjaeger und Spielplan aber nicht selbst. Diese Seiten
+            # kommen gleich dran -- vor den geratenen Unterseiten, die ohnehin
+            # 404 liefern.
+            for a in reversed(liga_adressen(bloecke, adresse)):
+                if a not in erledigt:
+                    if a in warteschlange:          # weiter hinten geraten
+                        warteschlange.remove(a)
+                    logger().info("Folge der Teamseite: %s", _kurz(a))
+                    warteschlange.insert(0, a)
+
             # Nur Wegweiser sind keine Daten: Eine Seite, die ausser einem
             # Widget nichts enthaelt, gilt weiter als leer.
             bloecke = [b for b in bloecke if not _ist_wegweiser(b)]
@@ -931,7 +1039,7 @@ class FupaApiQuelle:
                               len(kader), _kurz(adresse))
 
             spielplan = spiele_erkennen(block, vereinsname)
-            if len(spielplan) > len(fund.spiele):
+            if _besserer_spielplan(spielplan, fund.spiele):
                 fund.spiele = spielplan
                 _herkunft_merken(fund, adresse)
                 logger().info("Spielplan erkannt (%d Partien) auf %s",

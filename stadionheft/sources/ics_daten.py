@@ -93,7 +93,14 @@ def _zeitpunkt(wert: str, parameter: str) -> str:
         return ""
 
 
+#: Alles vor dem ersten Buchstaben oder der ersten Ziffer: Symbole, Emoji.
+_VORSPANN = re.compile(r"^[^\w]+")
+
+
 def _paarung(summary: str) -> tuple[str, str]:
+    # FuPa stellt jedem Termin ein Symbol voran ("⚽️ TSV Pöttmes - ...").
+    # Es gehoert nicht zum Vereinsnamen -- und landete sonst im Dateinamen.
+    summary = _VORSPANN.sub("", summary)
     for trenner in TRENNER:
         if trenner in summary:
             heim, _, gast = summary.partition(trenner)
