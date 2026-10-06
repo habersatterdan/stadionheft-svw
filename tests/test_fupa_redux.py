@@ -88,6 +88,29 @@ SPIELPLANSEITE = {"dataHistory": [{
     ], "nextUrl": None, "isFetching": False},
 }]}
 
+#: Was hinter "?pointer=prev" steht: die frueheren Partien, neueste zuerst --
+#: das letzte Spiel ist auf beiden Seiten. Dazu ein Testspiel.
+FRUEHERE_SEITE = {"dataHistory": [{
+    "key": "undefined",
+    "TeamPage": TEAMSEITE["dataHistory"][0]["TeamPage"],
+    "TeamMatchesPage": {"items": [
+        SPIELPLANSEITE["dataHistory"][0]["TeamMatchesPage"]["items"][0],
+        {"homeTeam": _verein("SpVgg Joshofen-Bergheim", "spvgg-joshofen-bergheim"),
+         "awayTeam": _verein(SVW, "sv-woernitzstein-berg"),
+         "kickoff": "2026-09-27T15:00:00+02:00", "homeGoal": 4, "awayGoal": 1,
+         "competition": WETTBEWERB},
+        {"homeTeam": _verein(SVW, "sv-woernitzstein-berg"),
+         "awayTeam": _verein("TSV Dinkelscherben", "tsv-dinkelscherben"),
+         "kickoff": "2026-09-18T19:00:00+02:00", "homeGoal": 3, "awayGoal": 1,
+         "competition": WETTBEWERB},
+        {"homeTeam": _verein("TSV Pöttmes", "tsv-poettmes"),
+         "awayTeam": _verein(SVW, "sv-woernitzstein-berg"),
+         "kickoff": "2026-07-02T19:00:00+02:00", "homeGoal": 1, "awayGoal": 2,
+         "competition": {"slug": "testspiele", "name": "Testspiele",
+                         "category": {"name": "Testspiel"}}},
+    ], "nextUrl": None, "isFetching": False},
+}]}
+
 TABELLENSEITE = {"dataHistory": [{
     "key": "undefined",
     "LeagueStandingPage": {"total": [
@@ -222,7 +245,7 @@ def test_pokal_verdraengt_die_liga_nicht():
     }]})
     # Erste genannte Partie umdrehen: Pokal zuerst
     bloecke[0]["dataHistory"][0]["TeamMatchesPage"]["items"].reverse()
-    assert liga_adressen(bloecke, "https://www.fupa.net/team/x/matches") == [
+    assert liga_adressen(bloecke, "https://www.fupa.net/team/x/matches")[:2] == [
         f"https://www.fupa.net/league/{LIGA}/standing",
         f"https://www.fupa.net/league/{LIGA}/scorers"]
 
@@ -230,6 +253,22 @@ def test_pokal_verdraengt_die_liga_nicht():
 def test_keine_folgeseiten_ohne_daten():
     """Eine 404-Teamseite kostet sonst gleich noch einen Abruf mehr."""
     assert liga_adressen([], "https://www.fupa.net/team/x") == []
+
+
+def test_spielplanseite_fuehrt_zu_den_frueheren_spielen():
+    assert liga_adressen(_bloecke(SPIELPLANSEITE),
+                         "https://www.fupa.net/team/x/matches")[-1] == (
+        "https://www.fupa.net/team/x/matches?pointer=prev")
+    # ... aber nicht weiter: Die fruehere Seite verweist nicht noch einmal
+    assert not any("pointer" in a for a in liga_adressen(
+        _bloecke(FRUEHERE_SEITE),
+        "https://www.fupa.net/team/x/matches?pointer=prev"))
+
+
+def test_testspiele_fallen_aus_dem_spielplan():
+    spiele = _erste(spiele_erkennen, FRUEHERE_SEITE, SVW)
+    assert len(spiele) == 3
+    assert all(s.wettbewerb != "Testspiele" for s in spiele)
 
 
 def test_ligaseiten_nur_bei_fupa():
@@ -341,6 +380,7 @@ def test_gesperrte_api_haelt_die_teamseite_nicht_auf(konfiguration: Konfiguratio
         f"{team}/matches": _html(SPIELPLANSEITE),
         f"https://www.fupa.net/league/{LIGA}/standing": _html(TABELLENSEITE),
         f"https://www.fupa.net/league/{LIGA}/scorers": _html(TORJAEGERSEITE),
+        f"{team}/matches?pointer=prev": _html(FRUEHERE_SEITE),
     })
 
     daten = quelle.hole(herren1)
@@ -348,10 +388,17 @@ def test_gesperrte_api_haelt_die_teamseite_nicht_auf(konfiguration: Konfiguratio
     assert len(daten.spieler) == 4
     assert len(daten.tabelle) == 3
     assert [t.tore for t in daten.torjaeger] == [12, 11, 5]
-    assert len(daten.spiele) == 2
-    # Alle Folgeseiten kamen von der Teamseite, keine wurde geraten
-    assert sitzung.abgerufen[:4] == [
+    # Zwei Partien ab dem letzten Spiel + zwei fruehere (das letzte steht auf
+    # beiden Seiten, das Testspiel faellt weg) -- nach Anstoss sortiert
+    assert [s.anstoss[:10] for s in daten.spiele] == [
+        "2026-09-18", "2026-09-27", "2026-10-02", "2026-10-11"]
+    assert "".join(f.ausgang for f in daten.form) == "SNS"
+    assert daten.letztes_spiel.gast == "FC Horgau"
+    # Alle Folgeseiten kamen von der Teamseite, keine wurde geraten -- und
+    # sie wurden geholt, obwohl nach /matches schon alles beisammen war
+    assert sitzung.abgerufen[:5] == [
         team,
         f"https://www.fupa.net/league/{LIGA}/standing",
         f"https://www.fupa.net/league/{LIGA}/scorers",
-        f"{team}/matches"]
+        f"{team}/matches",
+        f"{team}/matches?pointer=prev"]

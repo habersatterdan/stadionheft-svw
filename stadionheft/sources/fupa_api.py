@@ -555,6 +555,10 @@ def _liga_aus(bloecke: list[Any]) -> str:
 
 
 _TEAMSEITE = re.compile(r"/team/[a-z0-9-]+/?")
+_SPIELPLANSEITE = re.compile(r"/team/[a-z0-9-]+/matches/?")
+#: Die Spielplanseite zeigt nur die Partien ab dem letzten Spiel; die
+#: frueheren stehen hinter diesem Verweis (so verlinkt FuPa selbst).
+FRUEHERE_SPIELE = "?pointer=prev"
 
 
 def liga_adressen(bloecke: list[Any], adresse: str) -> list[str]:
@@ -575,6 +579,9 @@ def liga_adressen(bloecke: list[Any], adresse: str) -> list[str]:
         folge.extend(muster.format(liga=liga) for muster in LIGA_SEITEN)
     if _TEAMSEITE.fullmatch(teile.path):
         folge.append(adresse.rstrip("/") + "/matches")
+    elif _SPIELPLANSEITE.fullmatch(teile.path) and not teile.query:
+        # Ohne die frueheren Partien zaehlte die Formkurve nur das letzte Spiel
+        folge.append(adresse.rstrip("/") + FRUEHERE_SPIELE)
     return folge
 
 
@@ -747,6 +754,40 @@ def _besserer_spielplan(neu: list[Spiel], bisher: list[Spiel]) -> bool:
     if neu and bisher and mit_kennung(neu) != mit_kennung(bisher):
         return mit_kennung(neu)
     return len(neu) > len(bisher)
+
+
+def _schluessel(spiel: Spiel) -> tuple[str, str, str]:
+    return (spiel.anstoss[:10], spiel.heim_kennung, spiel.gast_kennung)
+
+
+def _ergaenzt(neu: list[Spiel], bisher: list[Spiel]) -> bool:
+    """Zwei Teile desselben Spielplans -- etwa die Seite ab dem letzten Spiel
+    und die mit den frueheren Partien?
+
+    Zusammengefuehrt wird nur, wenn beide Teile Team-Bezeichner fuehren: Nur
+    daran laesst sich dieselbe Partie sicher wiedererkennen. Der Kalender
+    schreibt "TSV Nördlingen", die Teamseite "TSV Nördlingen II" -- ueber
+    Namen gaebe es doppelte Spiele.
+    """
+    def alle_mit_kennung(spiele: list[Spiel]) -> bool:
+        return bool(spiele) and all(s.heim_kennung and s.gast_kennung
+                                    for s in spiele)
+
+    if not (alle_mit_kennung(neu) and alle_mit_kennung(bisher)):
+        return False
+    vorhanden = {_schluessel(s) for s in bisher}
+    return any(_schluessel(s) not in vorhanden for s in neu)
+
+
+def _zusammen(bisher: list[Spiel], neu: list[Spiel]) -> list[Spiel]:
+    """Beide Teile, jede Partie einmal, nach Anstoss sortiert."""
+    gesehen: dict[tuple[str, str, str], Spiel] = {}
+    for spiel in (*bisher, *neu):
+        alt = gesehen.get(_schluessel(spiel))
+        # Ein nachgetragenes Ergebnis gewinnt gegen den Stand ohne
+        if alt is None or (spiel.ergebnis and not alt.ergebnis):
+            gesehen[_schluessel(spiel)] = spiel
+    return sorted(gesehen.values(), key=lambda s: s.anstoss)
 
 
 @dataclass
@@ -923,6 +964,11 @@ class FupaApiQuelle:
         fehlschlaege = 0
         warteschlange = list(self._sortieren(adressen, kennung))
         erledigt: set[str] = set()
+        #: Von einer Teamseite abgeleitete Seiten. Sie werden auch dann noch
+        #: geholt, wenn schon alle vier Teile beisammen sind: Erst sie bringen
+        #: die Torjaegerliste der Liga statt des Kaders und die frueheren
+        #: Spiele zum Spielplan.
+        gefolgt: set[str] = set()
         rahmen_gefolgt = 0
 
         while warteschlange:
@@ -930,7 +976,9 @@ class FupaApiQuelle:
             if adresse in erledigt:
                 continue
             erledigt.add(adresse)
-            if fund.abrufe >= hoechstens or fund.vollstaendig:
+            if fund.abrufe >= hoechstens:
+                break
+            if fund.vollstaendig and adresse not in gefolgt:
                 break
             if self._zeit_abgelaufen():
                 break
@@ -983,6 +1031,7 @@ class FupaApiQuelle:
                         warteschlange.remove(a)
                     logger().info("Folge der Teamseite: %s", _kurz(a))
                     warteschlange.insert(0, a)
+                    gefolgt.add(a)
 
             # Nur Wegweiser sind keine Daten: Eine Seite, die ausser einem
             # Widget nichts enthaelt, gilt weiter als leer.
@@ -1039,7 +1088,12 @@ class FupaApiQuelle:
                               len(kader), _kurz(adresse))
 
             spielplan = spiele_erkennen(block, vereinsname)
-            if _besserer_spielplan(spielplan, fund.spiele):
+            if _ergaenzt(spielplan, fund.spiele):
+                fund.spiele = _zusammen(fund.spiele, spielplan)
+                _herkunft_merken(fund, adresse)
+                logger().info("Spielplan ergaenzt (%d Partien) auf %s",
+                              len(fund.spiele), _kurz(adresse))
+            elif _besserer_spielplan(spielplan, fund.spiele):
                 fund.spiele = spielplan
                 _herkunft_merken(fund, adresse)
                 logger().info("Spielplan erkannt (%d Partien) auf %s",

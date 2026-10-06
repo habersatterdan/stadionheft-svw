@@ -520,6 +520,8 @@ def spiele_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Spiel]:
     kern = _vereinskern(eigener_verein)
     ergebnis: list[Spiel] = []
     for z in zeilen:
+        if _ist_testspiel(z):
+            continue
         heim, gast = z.text("heim"), z.text("gast")
         ergebnis.append(Spiel(
             heim=heim,
@@ -539,6 +541,16 @@ def spiele_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Spiel]:
 # ---------------------------------------------------------------------------
 # Kleinkram
 # ---------------------------------------------------------------------------
+
+def _ist_testspiel(z: Zeile) -> bool:
+    """Testspiele gehoeren nicht ins Heft: nicht in die Formkurve, nicht als
+    "Zuletzt gespielt" und nicht als naechster Gegner. FuPa fuehrt sie als
+    Wettbewerb "Testspiele" (Kategorie "Testspiel"), der Kalender ebenso."""
+    art = " ".join((z.text("wettbewerb"),
+                    _text_aus(z.flach.get("competitioncategory")),
+                    _text_aus(z.flach.get("category")))).lower()
+    return "testspiel" in art
+
 
 def _vereinskern(name: str) -> str:
     """'SV Wörnitzstein-Berg' -> 'wörnitzstein' (zum Wiedererkennen)."""
