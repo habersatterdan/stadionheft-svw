@@ -111,6 +111,26 @@ FRUEHERE_SEITE = {"dataHistory": [{
     ], "nextUrl": None, "isFetching": False},
 }]}
 
+#: /team/<slug>/playerstats -- die volle Statistik, nur Spieler mit Einsatz
+STATISTIKSEITE = {"dataHistory": [{
+    "key": "undefined",
+    "TeamPage": TEAMSEITE["dataHistory"][0]["TeamPage"],
+    "TeamPlayerStatsPage": {"season": {"isFetching": False, "error": None,
+                                       "players": [
+        {"firstName": "Florian", "lastName": "Moll",
+         "image": {"path": "https://image.fupa.net/player/abc/", "svg": False},
+         "matches": 12, "goals": 4, "assists": 6, "penaltiesTotal": 2,
+         "penaltiesHit": 1, "yellowCards": 3, "yellowRedCards": 0,
+         "redCards": 0, "substitutesIn": 1, "substitutesOut": 2,
+         "minutesPlayed": 1010},
+        {"firstName": "Julian", "lastName": "Schmidbaur",
+         "matches": 12, "goals": 5, "assists": 1, "penaltiesTotal": 0,
+         "penaltiesHit": 0, "yellowCards": 0, "yellowRedCards": 0,
+         "redCards": 0, "substitutesIn": 0, "substitutesOut": 0,
+         "minutesPlayed": 1080},
+    ]}},
+}]}
+
 TABELLENSEITE = {"dataHistory": [{
     "key": "undefined",
     "LeagueStandingPage": {"total": [
@@ -191,6 +211,36 @@ def test_kader_ohne_jedes_tor_ist_keine_torjaegerliste():
     assert len(_erste(spieler_erkennen, kader)) == 4
 
 
+def test_volle_spielerstatistik_mit_minuten_karten_wechseln():
+    moll, schmidbaur = _erste(spieler_erkennen, STATISTIKSEITE)
+    assert (moll.spieler, moll.minuten, moll.gelb, moll.eingewechselt,
+            moll.ausgewechselt, moll.elfmeter_getroffen,
+            moll.elfmeter_gesamt) == ("Florian Moll", 1010, 3, 1, 2, 1, 2)
+    assert schmidbaur.minuten == 1080
+
+
+def test_statistik_mit_minuten_schlaegt_laengeren_kader():
+    from stadionheft.sources.fupa_api import _bessere_spielerliste
+    kader = _erste(spieler_erkennen, TEAMSEITE)          # 4, ohne Minuten
+    statistik = _erste(spieler_erkennen, STATISTIKSEITE)  # 2, mit Minuten
+    assert _bessere_spielerliste(statistik, kader) is True
+    assert _bessere_spielerliste(kader, statistik) is False
+
+
+def test_torjaeger_mit_bildadresse_aber_ohne_vereinswappen():
+    seite = json.loads(json.dumps(TORJAEGERSEITE))
+    scorer = seite["dataHistory"][0]["LeagueScorersPage"]["scorers"]
+    scorer[0]["player"]["image"] = {"path": "https://image.fupa.net/player/p1/",
+                                    "svg": False}
+    for z in scorer:
+        z["team"]["image"] = {"path": "https://image.fupa.net/club/wappen/",
+                              "svg": False}
+    schuetzen = _erste(torjaeger_erkennen, seite, SVW)
+    assert schuetzen[0].bild == "https://image.fupa.net/player/p1/64x80.jpeg"
+    # Ohne eigenes Spielerbild bleibt es leer -- kein Vereinswappen statt Foto
+    assert schuetzen[1].bild == ""
+
+
 def test_ligaweite_torjaegerliste_mit_statistik_unterobjekt():
     schuetzen = _erste(torjaeger_erkennen, TORJAEGERSEITE, SVW)
     assert [(t.spieler, t.mannschaft, t.tore) for t in schuetzen] == [
@@ -235,7 +285,8 @@ def test_folgeseiten_der_teamseite():
                          "https://www.fupa.net/team/x") == [
         f"https://www.fupa.net/league/{LIGA}/standing",
         f"https://www.fupa.net/league/{LIGA}/scorers",
-        "https://www.fupa.net/team/x/matches"]
+        "https://www.fupa.net/team/x/matches",
+        "https://www.fupa.net/team/x/playerstats"]
 
 
 def test_pokal_verdraengt_die_liga_nicht():
@@ -303,6 +354,44 @@ def test_kalender_ohne_symbol_vor_dem_heimverein():
            "END:VEVENT\r\nEND:VCALENDAR\r\n")
     spiele = spiele_aus_ics(ics)
     assert spiele and spiele[0]["heim"] == "BC Rinnenthal"
+
+
+def test_bilder_werden_eingebettet_und_aufbewahrt(konfiguration: Konfiguration,
+                                                  tmp_path):
+    from stadionheft.models import TorjaegerZeile
+
+    quelle = FupaApiQuelle(konfiguration)
+    quelle.BILD_PAUSE_SEKUNDEN = 0
+    _client_mit_fupa_robots(quelle.client, {})
+    quelle.client._robots["image.fupa.net"] = _robots("User-agent: Googlebot\nAllow: /")
+    abgerufen: list[str] = []
+
+    class Bildantwort:
+        status_code = 200
+        headers = {"Content-Type": "image/jpeg"}
+        content = b"\xff\xd8bild"
+
+    class Bilder:
+        def get(self, url, **_):
+            abgerufen.append(url)
+            if "kaputt" in url:
+                raise OSError("weg")
+            return Bildantwort()
+
+    quelle.client._session = Bilder()
+    url = "https://image.fupa.net/player/p1/64x80.jpeg"
+    zeilen = [TorjaegerZeile(spieler="A", bild=url),
+              TorjaegerZeile(spieler="B", bild="https://image.fupa.net/kaputt/64x80.jpeg"),
+              TorjaegerZeile(spieler="C")]
+    quelle._bilder_einbetten(zeilen)
+    assert zeilen[0].bild.startswith("data:image/jpeg;base64,")
+    assert zeilen[1].bild == "" and zeilen[2].bild == ""
+
+    # Zweiter Lauf: aus der Ablage, ohne neuen Abruf
+    nochmal = [TorjaegerZeile(spieler="A", bild=url)]
+    quelle._bilder_einbetten(nochmal)
+    assert nochmal[0].bild == zeilen[0].bild
+    assert abgerufen.count(url) == 1
 
 
 # ---------------------------------------------------------------------------

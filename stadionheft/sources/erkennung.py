@@ -71,9 +71,10 @@ FELDER: dict[str, tuple[str, ...]] = {
     "gelb_rot":     ("yellowredcards", "yellowredcard", "yellowred", "gelbrot",
                      "secondyellow"),
     "rot":          ("redcards", "red", "rot", "redcard"),
-    "eingewechselt": ("substitutedin", "substitutein", "subin", "in",
+    "eingewechselt": ("substitutedin", "substitutein", "substitutesin", "subin", "in",
                       "eingewechselt", "comeon"),
-    "ausgewechselt": ("substitutedout", "substituteout", "subout", "out",
+    "ausgewechselt": ("substitutedout", "substituteout", "substitutesout", "subout",
+                      "out",
                       "ausgewechselt"),
     "elfmeter":     ("penalties", "penalty", "elfmeter", "11m"),
     "heim":         ("hometeam", "home", "hometeamname", "heim", "heimmannschaft"),
@@ -456,8 +457,33 @@ def torjaeger_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Torjaege
             vorlagen=z.zahl("vorlagen"),
             spiele=z.zahl("spiele"),
             eigene=bool(kern) and kern in verein.lower(),
+            bild=_bild_aus(z),
         ))
     return _als_rangliste(ergebnis)
+
+
+#: Bildgroesse fuer die Torjaegerliste. FuPa liefert jedes Spielerbild in
+#: festen Groessen unter ``<path><breite>x<hoehe>.jpeg``; 64x80 ist die
+#: kleinste und reicht fuer ein Bild von 4 mm Breite.
+BILD_GROESSE = "64x80.jpeg"
+
+
+def _bild_aus(z: Zeile) -> str:
+    """Adresse des Spielerbilds, soweit die Quelle eins nennt.
+
+    In einer Torjaegerliste steckt das Spielerbild unter ``player.image``, im
+    Kader direkt unter ``image``. ``image`` allein nur dann, wenn die Zeile
+    selbst der Spieler ist -- sonst koennte es das Vereinswappen sein.
+    """
+    kandidaten = [z.flach.get("playerimage")]
+    if "firstName" in z.roh or "lastName" in z.roh:
+        kandidaten.append(z.roh.get("image"))
+    for bild in kandidaten:
+        if isinstance(bild, dict) and not bild.get("svg"):
+            pfad = bild.get("path")
+            if isinstance(pfad, str) and pfad.startswith("https://") and pfad.endswith("/"):
+                return pfad + BILD_GROESSE
+    return ""
 
 
 def _als_rangliste(zeilen: list[TorjaegerZeile]) -> list[TorjaegerZeile]:
@@ -562,6 +588,10 @@ def _vereinskern(name: str) -> str:
 
 
 def _elfmeter(z: Zeile) -> tuple[int, int]:
+    # FuPa: getrennt in verwandelt und geschossen
+    if "penaltieshit" in z.flach and "penaltiestotal" in z.flach:
+        return (_zahl_aus(z.flach["penaltieshit"]) or 0,
+                _zahl_aus(z.flach["penaltiestotal"]) or 0)
     for name in FELDER["elfmeter"]:
         if name in z.flach:
             wert = z.flach[name]

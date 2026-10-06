@@ -36,6 +36,8 @@ Rechtliches siehe docs/KONZEPT.md, Abschnitt "Rechtliche Hinweise".
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import re
 import time
@@ -183,6 +185,10 @@ class FupaClient:
                 "User-Agent": self.user_agent,
                 "Accept": "application/json",
                 "Accept-Language": "de-DE,de;q=0.9",
+                # Ohne Brotli: FuPas CDN haelt je Kodierung eine eigene Kopie
+                # vor, und die br-Kopie der Spielerstatistik war eine leere
+                # Fassung (gesehen 06.10.2026) -- gzip lieferte die Zahlen.
+                "Accept-Encoding": "gzip, deflate",
             })
         return self._session
 
@@ -432,6 +438,34 @@ class FupaClient:
         self.cache.schreiben(schluessel, bloecke)
         return bloecke
 
+    def ohne_kompression(self, url: str) -> list[Any]:
+        """Dieselbe Seite noch einmal, unkomprimiert angefordert.
+
+        FuPas CDN haelt je Kodierung eine eigene Kopie vor. Ist eine davon
+        eine leere Fassung (gesehen bei der Spielerstatistik), liefert die
+        unkomprimierte Kopie meist die Zahlen. Ein Fehlschlag ist hier kein
+        Fehler -- es bleibt dann beim ersten Ergebnis.
+        """
+        if not self._robots_erlaubt(url):
+            return []
+        import requests
+
+        try:
+            self._drosseln()
+            antwort = self._sitzung().get(
+                url, timeout=self.timeout,
+                headers={"Accept": "text/html,application/xhtml+xml",
+                         "Accept-Encoding": "identity"})
+        except requests.RequestException as fehler:
+            logger().debug("Zweiter Abruf von %s gescheitert: %s", url, fehler)
+            return []
+        if not antwort.ok:
+            return []
+        bloecke = _nutzlasten_aus(antwort)
+        if bloecke:
+            self.cache.schreiben(f"bloecke|{url}", bloecke)
+        return bloecke
+
 
 _META_ZEICHENSATZ = re.compile(
     rb"""<meta[^>]+charset\s*=\s*["']?\s*([a-zA-Z0-9_\-]+)""", re.IGNORECASE)
@@ -579,6 +613,9 @@ def liga_adressen(bloecke: list[Any], adresse: str) -> list[str]:
         folge.extend(muster.format(liga=liga) for muster in LIGA_SEITEN)
     if _TEAMSEITE.fullmatch(teile.path):
         folge.append(adresse.rstrip("/") + "/matches")
+        # Die volle Spielerstatistik (Minuten, Karten, Wechsel) -- der Kader
+        # auf der Teamseite fuehrt nur Einsaetze, Tore und Vorlagen.
+        folge.append(adresse.rstrip("/") + "/playerstats")
     elif _SPIELPLANSEITE.fullmatch(teile.path) and not teile.query:
         # Ohne die frueheren Partien zaehlte die Formkurve nur das letzte Spiel
         folge.append(adresse.rstrip("/") + FRUEHERE_SPIELE)
@@ -756,6 +793,21 @@ def _besserer_spielplan(neu: list[Spiel], bisher: list[Spiel]) -> bool:
     return len(neu) > len(bisher)
 
 
+def _bessere_spielerliste(neu: list[SpielerZeile],
+                          bisher: list[SpielerZeile]) -> bool:
+    """Eine Statistik mit Spielminuten schlaegt eine laengere ohne.
+
+    Der Kader fuehrt auch Spieler ohne Einsatz und ist deshalb laenger; nach
+    Einsaetzen *und Minuten* sortieren laesst sich aber nur die Statistik.
+    """
+    def mit_minuten(spieler: list[SpielerZeile]) -> bool:
+        return any(z.minuten for z in spieler)
+
+    if neu and bisher and mit_minuten(neu) != mit_minuten(bisher):
+        return mit_minuten(neu)
+    return len(neu) > len(bisher)
+
+
 def _schluessel(spiel: Spiel) -> tuple[str, str, str]:
     return (spiel.anstoss[:10], spiel.heim_kennung, spiel.gast_kennung)
 
@@ -912,6 +964,7 @@ class FupaApiQuelle:
 
         daten.tabelle = fund.tabelle
         daten.torjaeger = fund.torjaeger
+        self._bilder_einbetten(daten.torjaeger)
         daten.spieler = fund.spieler
         daten.spiele = fund.spiele
         daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(fund.spiele)
@@ -925,6 +978,49 @@ class FupaApiQuelle:
 
         self._melden(daten)
         return daten
+
+    # -- Spielerbilder -------------------------------------------------------
+
+    #: Mehr als auf die Seite passen, braucht es nicht (siehe render.pages).
+    BILDER_HOECHSTENS = 22
+    #: Bilder kommen von einem Bildserver, nicht von den Seiten selbst; eine
+    #: kurze Pause genuegt. Ein Bild wird nur einmal geholt und dann auf
+    #: Dauer aufbewahrt -- Spielerfotos aendern sich kaum.
+    BILD_PAUSE_SEKUNDEN = 0.2
+
+    def _bilder_einbetten(self, zeilen: list[TorjaegerZeile]) -> None:
+        """Ersetzt die Bildadressen durch eingebettete Bilder.
+
+        Ein Bild, das nicht kommt, faellt still weg: Die Zeile bleibt, nur
+        ohne Foto. Wegen eines Bilds soll kein Heft scheitern.
+        """
+        ordner = Path(self.client.cache.ordner) / "spielerbilder"
+        for z in zeilen[:self.BILDER_HOECHSTENS]:
+            if z.bild.startswith("https://"):
+                z.bild = self._bild(z.bild, ordner)
+        for z in zeilen[self.BILDER_HOECHSTENS:]:
+            if z.bild.startswith("https://"):
+                z.bild = ""
+
+    def _bild(self, url: str, ordner: Path) -> str:
+        datei = ordner / (hashlib.sha1(url.encode("utf-8")).hexdigest() + ".jpeg")
+        try:
+            if not datei.exists():
+                if not self.client._robots_erlaubt(url):
+                    return ""
+                time.sleep(self.BILD_PAUSE_SEKUNDEN)
+                antwort = self.client._sitzung().get(url, timeout=self.client.timeout)
+                typ = (antwort.headers.get("Content-Type") or "").lower()
+                if antwort.status_code != 200 or not typ.startswith("image/jpeg"):
+                    logger().debug("Kein Bild unter %s (%s)", url, antwort.status_code)
+                    return ""
+                ordner.mkdir(parents=True, exist_ok=True)
+                datei.write_bytes(antwort.content)
+            return ("data:image/jpeg;base64,"
+                    + base64.b64encode(datei.read_bytes()).decode("ascii"))
+        except Exception as fehler:                           # noqa: BLE001
+            logger().debug("Bild %s nicht geladen: %s", url, fehler)
+            return ""
 
     # -- Suchen und erkennen ------------------------------------------------
 
@@ -1006,6 +1102,15 @@ class FupaApiQuelle:
                 logger().debug("%s nicht verwertbar: %s", adresse, fehler)
                 continue
 
+            # Leere Spielerstatistik: ein zweites Mal unkomprimiert fragen --
+            # nur wenn die Seite geantwortet hat, ihr aber die Zahlen fehlen.
+            if (bloecke
+                    and urlparse(adresse).path.rstrip("/").endswith("/playerstats")
+                    and not any(spieler_erkennen(b) for b in bloecke)):
+                logger().info("Spielerstatistik leer, frage unkomprimiert nach: %s",
+                              _kurz(adresse))
+                bloecke = self.client.ohne_kompression(adresse) or bloecke
+
             fund.abrufe += 1
             muster = self._muster(adresse, kennung)
 
@@ -1081,7 +1186,7 @@ class FupaApiQuelle:
                               len(schuetzen), _kurz(adresse))
 
             kader = spieler_erkennen(block)
-            if len(kader) > len(fund.spieler):
+            if _bessere_spielerliste(kader, fund.spieler):
                 fund.spieler = kader
                 _herkunft_merken(fund, adresse)
                 logger().info("Spielerstatistik erkannt (%d Zeilen) auf %s",
@@ -1136,6 +1241,7 @@ class FupaApiQuelle:
 
         gegner.tabelle = fund.tabelle
         gegner.torjaeger = fund.torjaeger
+        self._bilder_einbetten(gegner.torjaeger)
         gegner.spieler = fund.spieler
         gegner.spiele = fund.spiele
         gegner.liga = fund.liga
