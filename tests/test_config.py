@@ -94,8 +94,14 @@ def test_unbekannter_eintrag_ist_nur_ein_hinweis():
 
 
 def test_todo_liga_wird_nicht_gedruckt():
-    """'TODO: Liga eintragen' darf nie in einem PDF landen."""
+    """'TODO: Liga eintragen' darf nie in einem PDF landen.
+
+    Der Platzhalter wird hier ausdruecklich gesetzt: In der Vorlage stehen
+    inzwischen alle Ligen, und ein Test, der sich darauf verlaesst, prueft
+    irgendwann nichts mehr.
+    """
     daten = yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8"))
+    daten["mannschaften"]["herren2"]["liga"] = "TODO: Liga eintragen"
     k = Konfiguration(daten)
 
     m = k.mannschaft("herren2")
@@ -113,8 +119,21 @@ def test_unbekannter_datenquellen_modus():
 
 def test_fehlende_liga_ist_nur_warnung(konfiguration: Konfiguration):
     daten = yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8"))
+    daten["mannschaften"]["herren2"]["liga"] = ""
     k = Konfiguration(daten)
     assert any("Liga" in w for w in k.warnungen)
+
+
+def test_vorlage_hat_fuer_jede_mannschaft_eine_liga():
+    """Was im Homelab eingetragen ist, muss auch die NAS bekommen.
+
+    Die Ligen standen zwischenzeitlich nur in der Ansible-Rolle. Auf der NAS
+    haette man sie von Hand nachtragen muessen -- und ohne Liga steht auf der
+    Trennseite nichts.
+    """
+    k = Konfiguration(yaml.safe_load(BEISPIEL_CONFIG.read_text(encoding="utf-8")))
+    ohne = [m.schluessel for m in k.aktive_mannschaften() if m.liga_fehlt]
+    assert not ohne, ohne
 
 
 def test_unbekannte_mannschaft_meldet_bekannte(konfiguration: Konfiguration):

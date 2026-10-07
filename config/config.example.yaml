@@ -96,7 +96,7 @@ datenquelle:
     # auf die Ersatzquelle gewechselt. Ohne diese Grenze kann ein Lauf bei
     # einem haengenden FuPa so lange dauern, dass der Webserver vorher
     # abbricht - und dann entsteht gar nichts. 0 = keine Grenze.
-    zeitbudget_sekunden: 120
+    zeitbudget_sekunden: 240
     # Bindet eine Seite Tabelle oder Spielplan als Widget ein (<iframe>),
     # folgt das Programm der eingebundenen Adresse. So macht es eine
     # Vereinsseite. Hoechstens so vielen Rahmenseiten je Mannschaft.
@@ -158,7 +158,7 @@ mannschaften:
     anzeigename: "Herren 2"
     gruppe: "Herren"
     untertitel: "2. Mannschaft"
-    liga: "TODO: Liga eintragen"       # TODO
+    liga: "Kreisklasse Nord 2"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m2-2026-27"
     aktiv: true
 
@@ -166,7 +166,7 @@ mannschaften:
     anzeigename: "Herren 3"
     gruppe: "Herren"
     untertitel: "3. Mannschaft"
-    liga: "TODO: Liga eintragen"       # TODO
+    liga: "Kreisklasse Nord 2 Res."
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-m3-2026-27"
     aktiv: true
 
@@ -174,7 +174,7 @@ mannschaften:
     anzeigename: "Damen 1"
     gruppe: "Damen"
     untertitel: "1. Mannschaft"
-    liga: "TODO: Liga eintragen"       # TODO
+    liga: "Frauen-Bezirksliga Nord"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w1-2026-27"
     aktiv: true
 
@@ -182,7 +182,7 @@ mannschaften:
     anzeigename: "Damen 2"
     gruppe: "Damen"
     untertitel: "2. Mannschaft"
-    liga: "TODO: Liga eintragen"       # TODO
+    liga: "Frauen-Kreisliga 4 Schwaben"
     fupa_team_url: "https://www.fupa.net/team/sv-woernitzstein-berg-w2-2026-27"
     aktiv: true
 

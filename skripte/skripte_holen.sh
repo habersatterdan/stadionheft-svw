@@ -21,7 +21,7 @@
 set -u
 
 WURZEL=${WURZEL:-/volume1/SVW/Stadionheft/_Programm}
-ZWEIG=${ZWEIG:-claude/stadionheft-fupa-automation-lvyt1e}
+ZWEIG=${ZWEIG:-main}
 QUELLE="https://raw.githubusercontent.com/habersatterdan/stadionheft-svw/$ZWEIG/skripte"
 
 ZIEL="$WURZEL/skripte"
@@ -70,7 +70,7 @@ mkdir -p "$ZIEL" "$WURZEL/99_Logs"
       echo
       echo "Moegliche Gruende:"
       echo "  - Der Zweig heisst inzwischen anders. Oben im Skript unter"
-      echo "    ZWEIG=... anpassen (nach dem Zusammenfuehren: 'main')."
+      echo "    ZWEIG=... anpassen."
       echo "  - Die NAS kommt nicht ins Internet."
   fi
 

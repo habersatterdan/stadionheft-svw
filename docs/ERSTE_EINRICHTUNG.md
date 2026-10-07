@@ -95,10 +95,9 @@ keine Konfiguration – die liegen alle auf der NAS.
     Wer sich nicht mit Paketsichtbarkeit befassen will, lässt die NAS das
     Image selbst bauen. Dann entfällt Schritt 4 komplett.
 
-    1. Auf GitHub den Branch öffnen → **Code** → **Download ZIP**
+    1. Auf GitHub → **Code** → **Download ZIP**
     2. Das ZIP in der File Station nach `_Programm/docker/` hochladen und dort
-       entpacken. Es entsteht ein Ordner
-       `stadionheft-svw-claude-stadionheft-fupa-automation-lvyt1e`.
+       entpacken. Es entsteht ein Ordner `stadionheft-svw-main`.
     3. In **diesem** Ordner die `docker-compose.yml` ersetzen: die Zeile
        `image: ghcr.io/...` löschen und stattdessen `build: .` eintragen.
     4. Im Container Manager diesen entpackten Ordner als Projektpfad wählen.
