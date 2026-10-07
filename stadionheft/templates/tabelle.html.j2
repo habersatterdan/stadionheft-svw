@@ -6,10 +6,6 @@
 
   {% if zeilen %}
     {{ m.ligatabelle(zeilen, hervorheben) }}
-    {% if hervorheben %}
-      <p class="legende">Hervorgehoben: {{ daten.anzeigename }} und der nächste
-        Gegner {{ daten.gegner }}.</p>
-    {% endif %}
     {{ m.stand(daten) }}
   {% else %}
     {{ m.leer("Für " ~ (liga or daten.anzeigename) ~ " liegt derzeit keine Tabelle vor.") }}

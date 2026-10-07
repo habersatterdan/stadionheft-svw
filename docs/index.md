@@ -55,17 +55,16 @@ Werbung, Kontaktlisten und Impressum, die weiterhin von Hand kommen.
 
 ## Was in einer Mannschaftsdatei steht
 
-Jede Datei hat sieben Seiten, immer in derselben Reihenfolge:
+Jede Datei hat sechs Seiten, immer in derselben Reihenfolge:
 
 | # | Seite | Inhalt |
 |---|---|---|
 | 1 | Trennseite | Mannschaftsname und Liga |
 | 2 | Das nächste Spiel | Gegenüberstellung beider Mannschaften: Platz, Punkte, Tore, Form |
 | 3 | Tabelle | Liga-Tabelle, eigene Mannschaft und Gegner hervorgehoben |
-| 4 | Torschützenliste | Liga-Torschützen, beide Vereine hervorgehoben |
-| 5 | Spielerstatistik | Der eigene Kader mit allen Werten |
-| 6 | Der Gegner | Kader des nächsten Gegners |
-| 7 | Saisonbilanz | Heim/Auswärts, Tore pro Spiel, Serien – für beide Mannschaften |
+| 4 | Torschützenliste | Die besten 22 Liga-Torschützen, beide Vereine hervorgehoben |
+| 5 | Spielerstatistik | Der eigene Kader, nach Einsätzen und Minuten sortiert (höchstens 22) |
+| 6 | Der Gegner | Kader des nächsten Gegners, ebenso sortiert |
 
 Spielt der Gegner ausnahmsweise in einer anderen Liga (Pokal), kommen dessen
 Tabelle und Torschützenliste als zusätzliche Seiten dazu.

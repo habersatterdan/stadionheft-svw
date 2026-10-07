@@ -98,7 +98,8 @@ def test_archiv_enthaelt_alle_dateien_und_eine_uebersicht(
     for datei in ergebnis.dateien:
         assert datei.pdf.name in namen
     # Die Uebersicht muss erklaeren, was in welcher Reihenfolge drinsteht
-    assert "Trennseite" in text and "Saisonbilanz" in text
+    assert "Trennseite" in text and "Der Gegner" in text
+    assert "Saisonbilanz" not in text
     assert "Herren 1" in text
 
 
@@ -302,3 +303,23 @@ def test_kein_todo_platzhalter_im_pdf(konfiguration: Konfiguration):
     text = " ".join(s.extract_text()
                     for s in PdfReader(str(ergebnis.dateien[0].pdf)).pages)
     assert "TODO" not in text
+
+
+def test_spielerstatistik_nach_einsaetzen_und_minuten_hoechstens_22():
+    from stadionheft.models import SpielerZeile
+    from stadionheft.render.pages import spieler_rangfolge
+
+    kader = [SpielerZeile(platz=nr, spieler=f"S{nr}", spiele=nr % 5,
+                          minuten=nr * 10) for nr in range(1, 31)]
+    gedruckt = spieler_rangfolge(kader)
+
+    assert len(gedruckt) == 22
+    assert [z.platz for z in gedruckt] == list(range(1, 23))
+    reihenfolge = [(z.spiele, z.minuten) for z in gedruckt]
+    assert reihenfolge == sorted(reihenfolge, reverse=True)
+    # Die Daten selbst (Snapshot) bleiben, wie sie waren
+    assert [z.platz for z in kader] == list(range(1, 31))
+
+
+def test_saisonbilanz_ist_keine_seite_mehr():
+    assert "bilanz" not in STANDARD_SEITEN

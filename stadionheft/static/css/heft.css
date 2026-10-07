@@ -210,6 +210,26 @@ table.daten.schmal { width: auto; min-width: 60mm; }
 
 td.platz { width: 7mm; color: var(--grau); text-align: left; }
 td.name  { max-width: 45mm; overflow: hidden; text-overflow: ellipsis; }
+
+/* Torjaegerliste: kleines Spielerbild und eigene Vereinsspalte */
+/* Mit Bild wird jede Zeile hoeher -- etwas weniger Luft, damit 22 Zeilen
+   weiter auf die Seite passen. */
+table.daten.mit-bild tbody td { padding-top: 0.45mm; padding-bottom: 0.45mm; }
+td.bild { width: 3.6mm; padding-right: 0.6mm !important; padding-left: 0 !important; }
+td.bild img {
+    display: block;
+    width: 3.2mm;
+    height: 4mm;
+    object-fit: cover;
+    border-radius: 0.6mm;
+}
+td.vereinsspalte {
+    max-width: 38mm;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--grau);
+    font-size: 6.4pt;
+}
 td.ergebnis { font-weight: 700; }
 td.verein {
     font-size: 5.6pt;

@@ -56,20 +56,26 @@ FELDER: dict[str, tuple[str, ...]] = {
     "siege":        ("wins", "won", "siege", "s", "victories"),
     "unentschieden": ("draws", "drawn", "unentschieden", "u", "ties"),
     "niederlagen":  ("losses", "lost", "niederlagen", "n", "defeats"),
+    # "owngoals" zuletzt: FuPa meint damit in der Tabelle die selbst
+    # geschossenen Tore, anderswo heisst so das Eigentor.
     "tore":         ("goals", "goalsfor", "goalsscored", "tore", "torejeschossen",
-                     "scored", "goalsshot"),
+                     "scored", "goalsshot", "owngoals"),
     "gegentore":    ("goalsagainst", "goalsconceded", "gegentore", "conceded",
-                     "gt"),
+                     "gt", "againstgoals"),
     "punkte":       ("points", "punkte", "pts", "totalpoints", "pkt"),
     "spieler":      ("playername", "player", "spieler", "name", "fullname",
                      "displayname"),
     "vorlagen":     ("assists", "vorlagen", "assist"),
     "minuten":      ("minutes", "minutesplayed", "minuten", "min"),
     "gelb":         ("yellowcards", "yellow", "gelb", "yellowcard"),
-    "gelb_rot":     ("yellowredcards", "yellowred", "gelbrot", "secondyellow"),
+    "gelb_rot":     ("yellowredcards", "yellowredcard", "yellowred", "gelbrot",
+                     "secondyellow"),
     "rot":          ("redcards", "red", "rot", "redcard"),
-    "eingewechselt": ("substitutedin", "subin", "in", "eingewechselt", "comeon"),
-    "ausgewechselt": ("substitutedout", "subout", "out", "ausgewechselt"),
+    "eingewechselt": ("substitutedin", "substitutein", "substitutesin", "subin", "in",
+                      "eingewechselt", "comeon"),
+    "ausgewechselt": ("substitutedout", "substituteout", "substitutesout", "subout",
+                      "out",
+                      "ausgewechselt"),
     "elfmeter":     ("penalties", "penalty", "elfmeter", "11m"),
     "heim":         ("hometeam", "home", "hometeamname", "heim", "heimmannschaft"),
     "gast":         ("awayteam", "away", "awayteamname", "gast", "gastmannschaft",
@@ -92,8 +98,10 @@ def _text_aus(wert: Any) -> str:
     if isinstance(wert, (int, float)):
         return str(wert)
     if isinstance(wert, dict):
-        for schluessel in ("name", "displayName", "fullName", "shortName",
-                           "title", "clubName", "teamName"):
+        # "full"/"middle": FuPa fuehrt Vereinsnamen als
+        # {"full": "SV Wörnitzstein-Berg", "middle": ..., "short": ...}.
+        for schluessel in ("name", "displayName", "fullName", "full", "middle",
+                           "shortName", "title", "clubName", "teamName"):
             if schluessel in wert:
                 return _text_aus(wert[schluessel])
         # Vor- und Nachname getrennt?
@@ -169,6 +177,14 @@ _TORPAAR = re.compile(r"\s*(\d{1,3})\s*[:\-]\s*(\d{1,3})\s*")
 _SUN = re.compile(r"\s*(\d{1,2})\s*[-/:]\s*(\d{1,2})\s*[-/:]\s*(\d{1,2})\s*")
 
 
+#: Unterobjekte, deren Inhalt fachlich zur Zeile selbst gehoert: FuPa fuehrt
+#: Tore und Einsaetze eines Spielers unter ``statistics.goals`` statt
+#: ``goals``. Bewusst eine feste Liste -- wuerde jedes Unterobjekt so
+#: behandelt, laege bei einer Partie ``homeTeam.name`` unter ``name``.
+STATISTIK_BEHAELTER: tuple[str, ...] = ("statistics", "stats", "statistik",
+                                        "statistiken")
+
+
 class Zeile:
     """Ein flach durchsuchbarer Blick auf ein JSON-Objekt.
 
@@ -180,6 +196,7 @@ class Zeile:
         self.roh = roh
         self.flach: dict[str, Any] = {}
         self._einsammeln(roh, "", 0)
+        self._namen_zusammensetzen()
         self._zusammengesetzte_spalten_trennen()
 
     def _einsammeln(self, knoten: Any, praefix: str, tiefe: int) -> None:
@@ -191,6 +208,22 @@ class Zeile:
             if isinstance(wert, dict):
                 self.flach.setdefault(_normal(schluessel), wert)
                 self._einsammeln(wert, f"{schluessel}", tiefe + 1)
+                if _normal(schluessel) in STATISTIK_BEHAELTER:
+                    # Nachrangig: Ein gleichnamiges Feld der Zeile gewinnt.
+                    for name, inhalt in wert.items():
+                        self.flach.setdefault(_normal(name), inhalt)
+
+    def _namen_zusammensetzen(self) -> None:
+        """Vor- und Nachname direkt in der Zeile -> ``fullname``.
+
+        Ein Kader bei FuPa fuehrt ``firstName``/``lastName`` und kein
+        gemeinsames Namensfeld. Ohne Namen gilt die Liste nicht als
+        Spielerliste -- mit allen Einsaetzen und Toren darin.
+        """
+        vor = self.roh.get("firstName") or self.roh.get("vorname") or ""
+        nach = self.roh.get("lastName") or self.roh.get("nachname") or ""
+        if isinstance(vor, str) and isinstance(nach, str) and (vor or nach):
+            self.flach.setdefault("fullname", f"{vor} {nach}".strip())
 
     def _zusammengesetzte_spalten_trennen(self) -> None:
         """'18:4' und '3-1-3' in einzelne Werte zerlegen.
@@ -315,6 +348,11 @@ def _punkte_torjaeger(zeilen: list[Zeile]) -> float:
     tore = anteil(lambda z: z.zahl_oder_nichts("tore") is not None)
     if spieler < 0.6 or tore < 0.6:
         return 0.0
+    # Eine Tabellenzeile hat Punkte, ein Torschuetze nicht. Ohne diese
+    # Sperre waere eine FuPa-Tabelle (Vereinsname + ownGoals) eine
+    # Torjaegerliste mit den Vereinen als "Spielern".
+    if anteil(lambda z: z.hat("punkte")) >= 0.6:
+        return 0.0
     verein = anteil(lambda z: bool(z.text("mannschaft")))
     # Eine Torschuetzenliste ist nach Toren sortiert und hat kaum Nullen
     mit_toren = anteil(lambda z: z.zahl("tore") > 0)
@@ -327,6 +365,19 @@ def _punkte_spieler(zeilen: list[Zeile]) -> float:
     anteil = lambda pruef: sum(1 for z in zeilen if pruef(z)) / len(zeilen)
     spieler = anteil(lambda z: bool(z.text("spieler")))
     if spieler < 0.6:
+        return 0.0
+    # Punkte hat eine Tabellenzeile, kein Spieler. Seit Vereinsnamen auch aus
+    # FuPas {"full": ...}-Objekten gelesen werden, saehe eine Ligatabelle
+    # sonst wie ein Kader aus (Name + Spiele).
+    if anteil(lambda z: z.hat("punkte")) >= 0.6:
+        return 0.0
+    # Ein Kader gehoert zu genau einer Mannschaft. Eine Liste ueber mehrere
+    # Vereine ist eine ligaweite Torjaegerliste -- als Spielerstatistik der
+    # eigenen Mannschaft waere sie falsch. Steht nur ein einziges "name"-Feld
+    # in der Zeile, liefert es Spieler und Verein zugleich; das zaehlt nicht.
+    vereine = {z.text("mannschaft") for z in zeilen
+               if z.text("mannschaft") and z.text("mannschaft") != z.text("spieler")}
+    if len(vereine) > 1:
         return 0.0
     einsatz = anteil(lambda z: z.hat("spiele") or z.hat("minuten"))
     karten = anteil(lambda z: z.hat("gelb") or z.hat("rot"))
@@ -406,8 +457,56 @@ def torjaeger_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Torjaege
             vorlagen=z.zahl("vorlagen"),
             spiele=z.zahl("spiele"),
             eigene=bool(kern) and kern in verein.lower(),
+            bild=_bild_aus(z),
         ))
-    return ergebnis
+    return _als_rangliste(ergebnis)
+
+
+#: Bildgroesse fuer die Torjaegerliste. FuPa liefert jedes Spielerbild in
+#: festen Groessen unter ``<path><breite>x<hoehe>.jpeg``; 64x80 ist die
+#: kleinste und reicht fuer ein Bild von 4 mm Breite.
+BILD_GROESSE = "64x80.jpeg"
+
+
+def _bild_aus(z: Zeile) -> str:
+    """Adresse des Spielerbilds, soweit die Quelle eins nennt.
+
+    In einer Torjaegerliste steckt das Spielerbild unter ``player.image``, im
+    Kader direkt unter ``image``. ``image`` allein nur dann, wenn die Zeile
+    selbst der Spieler ist -- sonst koennte es das Vereinswappen sein.
+    """
+    kandidaten = [z.flach.get("playerimage")]
+    if "firstName" in z.roh or "lastName" in z.roh:
+        kandidaten.append(z.roh.get("image"))
+    for bild in kandidaten:
+        if isinstance(bild, dict) and not bild.get("svg"):
+            pfad = bild.get("path")
+            if isinstance(pfad, str) and pfad.startswith("https://") and pfad.endswith("/"):
+                return pfad + BILD_GROESSE
+    return ""
+
+
+def _als_rangliste(zeilen: list[TorjaegerZeile]) -> list[TorjaegerZeile]:
+    """Ein Kader ist keine Torschuetzenliste -- er wird erst zu einer.
+
+    Eine echte Torjaegerliste ist bereits nach Toren sortiert und bleibt
+    unangetastet (samt geteilter Plaetze). Ein Kader mit Toren steht dagegen
+    in Trikot- oder Positionsfolge und fuehrt jeden ohne Treffer mit: Dann
+    fallen die Nullen heraus und es wird nach Toren neu durchgezaehlt.
+    """
+    if not any(z.tore > 0 for z in zeilen):
+        # Eine "Torjaegerliste" ganz ohne Tore ist ein Kader, in dem FuPa
+        # keine Tore fuehrt (bei den Damen gesehen). Sie wuerde mit ihrer
+        # Laenge die echte Ligaliste verdraengen.
+        return []
+    sortiert = all(a.tore >= b.tore for a, b in zip(zeilen, zeilen[1:]))
+    if sortiert and all(z.tore > 0 for z in zeilen):
+        return zeilen
+    mit_toren = sorted((z for z in zeilen if z.tore > 0),
+                       key=lambda z: z.tore, reverse=True)
+    for nr, z in enumerate(mit_toren, 1):
+        z.platz = nr
+    return mit_toren
 
 
 def spieler_erkennen(nutzlast: Any) -> list[SpielerZeile]:
@@ -447,6 +546,8 @@ def spiele_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Spiel]:
     kern = _vereinskern(eigener_verein)
     ergebnis: list[Spiel] = []
     for z in zeilen:
+        if _ist_testspiel(z):
+            continue
         heim, gast = z.text("heim"), z.text("gast")
         ergebnis.append(Spiel(
             heim=heim,
@@ -467,6 +568,16 @@ def spiele_erkennen(nutzlast: Any, eigener_verein: str = "") -> list[Spiel]:
 # Kleinkram
 # ---------------------------------------------------------------------------
 
+def _ist_testspiel(z: Zeile) -> bool:
+    """Testspiele gehoeren nicht ins Heft: nicht in die Formkurve, nicht als
+    "Zuletzt gespielt" und nicht als naechster Gegner. FuPa fuehrt sie als
+    Wettbewerb "Testspiele" (Kategorie "Testspiel"), der Kalender ebenso."""
+    art = " ".join((z.text("wettbewerb"),
+                    _text_aus(z.flach.get("competitioncategory")),
+                    _text_aus(z.flach.get("category")))).lower()
+    return "testspiel" in art
+
+
 def _vereinskern(name: str) -> str:
     """'SV Wörnitzstein-Berg' -> 'wörnitzstein' (zum Wiedererkennen)."""
     kern = (name or "").replace("e.V.", "")
@@ -477,6 +588,10 @@ def _vereinskern(name: str) -> str:
 
 
 def _elfmeter(z: Zeile) -> tuple[int, int]:
+    # FuPa: getrennt in verwandelt und geschossen
+    if "penaltieshit" in z.flach and "penaltiestotal" in z.flach:
+        return (_zahl_aus(z.flach["penaltieshit"]) or 0,
+                _zahl_aus(z.flach["penaltiestotal"]) or 0)
     for name in FELDER["elfmeter"]:
         if name in z.flach:
             wert = z.flach[name]
@@ -498,9 +613,11 @@ def _ergebnis(z: Zeile) -> str:
     heim = None
     gast = None
     for name, wert in z.flach.items():
-        if name in ("homegoals", "goalshome", "resulthome", "hometeamgoals"):
+        if name in ("homegoals", "homegoal", "goalshome", "resulthome",
+                    "hometeamgoals"):
             heim = _zahl_aus(wert)
-        elif name in ("awaygoals", "goalsaway", "resultaway", "awayteamgoals"):
+        elif name in ("awaygoals", "awaygoal", "goalsaway", "resultaway",
+                      "awayteamgoals"):
             gast = _zahl_aus(wert)
     if heim is not None and gast is not None:
         return f"{heim}:{gast}"

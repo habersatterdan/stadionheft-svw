@@ -106,6 +106,10 @@ class TorjaegerZeile(_Basis):
     vorlagen: int = 0
     spiele: int = 0
     eigene: bool = False
+    #: Spielerbild: zuerst die Adresse bei der Quelle, nach dem Abruf das
+    #: eingebettete Bild (data:-URI) -- damit die PDF ohne Netz entsteht und
+    #: ein Snapshot sie genau so wieder bauen kann.
+    bild: str = ""
 
     @classmethod
     def aus_csv(cls, zeile: dict, eigener_name: str = "") -> "TorjaegerZeile":

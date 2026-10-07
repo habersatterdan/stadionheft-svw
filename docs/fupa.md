@@ -55,8 +55,7 @@ Uhrzeit, Paarung, Spielort – und bei manchen Vereinen auch das nachgetragene
 Ergebnis. Daraus ergeben sich:
 
 * der **nächste Gegner** samt Anstoß und Spielort,
-* die **Formkurve** der letzten fünf Spiele,
-* die **Saisonbilanz** in Zahlen.
+* die **Formkurve** der letzten fünf Spiele.
 
 Das Programm erkennt eine Kalenderdatei am Inhalt (`BEGIN:VCALENDAR`) und
 liest sie ohne Zusatzbibliothek (`stadionheft/sources/ics_daten.py`). Der

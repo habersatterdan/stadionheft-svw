@@ -70,7 +70,7 @@ def test_kompletter_durchlauf_ueber_die_oberflaeche(konfiguration: Konfiguration
     dateien = zustand["ergebnis"]["dateien"]
     assert len(dateien) == 1
     assert dateien[0]["mannschaft"] == "Herren 1"
-    assert dateien[0]["seitenzahl"] == 7
+    assert dateien[0]["seitenzahl"] == 6
     assert zustand["ergebnis"]["stand"]
     assert any("Herren 1" in z["text"] for z in zustand["protokoll"])
 

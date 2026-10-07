@@ -36,6 +36,8 @@ Rechtliches siehe docs/KONZEPT.md, Abschnitt "Rechtliche Hinweise".
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import re
 import time
@@ -183,6 +185,10 @@ class FupaClient:
                 "User-Agent": self.user_agent,
                 "Accept": "application/json",
                 "Accept-Language": "de-DE,de;q=0.9",
+                # Ohne Brotli: FuPas CDN haelt je Kodierung eine eigene Kopie
+                # vor, und die br-Kopie der Spielerstatistik war eine leere
+                # Fassung (gesehen 06.10.2026) -- gzip lieferte die Zahlen.
+                "Accept-Encoding": "gzip, deflate",
             })
         return self._session
 
@@ -345,12 +351,16 @@ class FupaClient:
         JSON zurueckkommt: Die oeffentlichen FuPa-Seiten liefern HTML, in dem
         die Daten eingebettet sind. Der Accept-Kopf laesst deshalb beides zu.
         """
+        # Dieselbe Fehlerart wie in hole_json: Ein Verbot ist eine Auskunft
+        # ueber diese eine Adresse, kein Netzausfall. Als Netzfehler gemeldet,
+        # haben drei gesperrte api.fupa.net-Adressen am Anfang der Liste den
+        # ganzen Abruf beendet -- bevor die erlaubte Teamseite dran war.
         if not self._robots_erlaubt(url):
-            raise DatenquelleNichtErreichbarFehler(
+            raise AdresseGesperrtFehler(
                 f"robots.txt verbietet den Abruf von {url}.",
                 benutzer_text="FuPa erlaubt den automatischen Abruf dieser Seite nicht.",
-                hinweis=("Bitte in der Konfiguration auf den Modus 'manuell' "
-                         "umstellen und die Daten als CSV bereitstellen."),
+                hinweis=("Diese Adresse wird uebersprungen. Andere Adressen "
+                         "werden weiter probiert."),
             )
 
         import requests
@@ -426,6 +436,34 @@ class FupaClient:
 
         bloecke = _nutzlasten_aus(antwort)
         self.cache.schreiben(schluessel, bloecke)
+        return bloecke
+
+    def ohne_kompression(self, url: str) -> list[Any]:
+        """Dieselbe Seite noch einmal, unkomprimiert angefordert.
+
+        FuPas CDN haelt je Kodierung eine eigene Kopie vor. Ist eine davon
+        eine leere Fassung (gesehen bei der Spielerstatistik), liefert die
+        unkomprimierte Kopie meist die Zahlen. Ein Fehlschlag ist hier kein
+        Fehler -- es bleibt dann beim ersten Ergebnis.
+        """
+        if not self._robots_erlaubt(url):
+            return []
+        import requests
+
+        try:
+            self._drosseln()
+            antwort = self._sitzung().get(
+                url, timeout=self.timeout,
+                headers={"Accept": "text/html,application/xhtml+xml",
+                         "Accept-Encoding": "identity"})
+        except requests.RequestException as fehler:
+            logger().debug("Zweiter Abruf von %s gescheitert: %s", url, fehler)
+            return []
+        if not antwort.ok:
+            return []
+        bloecke = _nutzlasten_aus(antwort)
+        if bloecke:
+            self.cache.schreiben(f"bloecke|{url}", bloecke)
         return bloecke
 
 
@@ -504,6 +542,86 @@ def _rahmen_aus(bloecke: list[Any]) -> list[str]:
     return adressen
 
 
+#: Ligaseiten, die zu einer Mannschaft gehoeren. Ohne Saisonangabe zeigt
+#: FuPa die laufende Saison (mit Saison folgt nur eine Weiterleitung dorthin).
+LIGA_SEITEN: tuple[str, ...] = (
+    "https://www.fupa.net/league/{liga}/standing",
+    "https://www.fupa.net/league/{liga}/scorers",
+)
+
+_LIGA_KENNUNG = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def _liga_aus(bloecke: list[Any]) -> str:
+    """Die Liga, in der eine Mannschaft spielt -- aus ihrer Teamseite.
+
+    Die Teamseite fuehrt Tabelle und Torjaegerliste nicht selbst, nennt aber
+    ihren Wettbewerb (``competition.slug``). Auf der Spielplanseite steht
+    zusaetzlich jeder Pokal; deshalb gewinnt ein Wettbewerb, der sich als
+    Liga ausweist, sonst der zuerst genannte.
+    """
+    gefunden: list[tuple[str, bool]] = []
+
+    def suchen(knoten: Any, tiefe: int) -> None:
+        if tiefe > 6:
+            return
+        if isinstance(knoten, dict):
+            wettbewerb = knoten.get("competition")
+            if isinstance(wettbewerb, dict):
+                kennung = wettbewerb.get("slug")
+                if isinstance(kennung, str) and _LIGA_KENNUNG.fullmatch(kennung):
+                    art = wettbewerb.get("category")
+                    ist_liga = (isinstance(art, dict)
+                                and str(art.get("name", "")).lower() == "liga")
+                    gefunden.append((kennung, ist_liga))
+            for wert in knoten.values():
+                suchen(wert, tiefe + 1)
+        elif isinstance(knoten, list):
+            for wert in knoten[:60]:
+                suchen(wert, tiefe + 1)
+
+    for block in bloecke:
+        suchen(block, 0)
+    for kennung, ist_liga in gefunden:
+        if ist_liga:
+            return kennung
+    return gefunden[0][0] if gefunden else ""
+
+
+_TEAMSEITE = re.compile(r"/team/[a-z0-9-]+/?")
+_SPIELPLANSEITE = re.compile(r"/team/[a-z0-9-]+/matches/?")
+#: Die Spielplanseite zeigt nur die Partien ab dem letzten Spiel; die
+#: frueheren stehen hinter diesem Verweis (so verlinkt FuPa selbst).
+FRUEHERE_SPIELE = "?pointer=prev"
+
+
+def liga_adressen(bloecke: list[Any], adresse: str) -> list[str]:
+    """Folgeseiten einer FuPa-Teamseite: Tabelle, Torjaeger, Spielplan.
+
+    Die Ligaseiten zuerst: Bis die Torjaegerliste der Liga da ist, steht nur
+    der Kader als Ersatz bereit -- und sobald alle vier Teile beisammen sind,
+    hoert der Abruf auf. Der Spielplan der Teamseite (``/matches``) kommt vor
+    dem Kalender: Er fuehrt die Team-Bezeichner beider Vereine -- ohne sie
+    lassen sich die Zahlen des Gegners nicht holen -- und keine Testspiele.
+    """
+    teile = urlparse(adresse)
+    if not bloecke or "fupa.net" not in teile.netloc:
+        return []
+    folge: list[str] = []
+    liga = _liga_aus(bloecke)
+    if liga:
+        folge.extend(muster.format(liga=liga) for muster in LIGA_SEITEN)
+    if _TEAMSEITE.fullmatch(teile.path):
+        folge.append(adresse.rstrip("/") + "/matches")
+        # Die volle Spielerstatistik (Minuten, Karten, Wechsel) -- der Kader
+        # auf der Teamseite fuehrt nur Einsaetze, Tore und Vorlagen.
+        folge.append(adresse.rstrip("/") + "/playerstats")
+    elif _SPIELPLANSEITE.fullmatch(teile.path) and not teile.query:
+        # Ohne die frueheren Partien zaehlte die Formkurve nur das letzte Spiel
+        folge.append(adresse.rstrip("/") + FRUEHERE_SPIELE)
+    return folge
+
+
 def _nutzlasten_aus(antwort: Any) -> list[Any]:
     """Zerlegt eine HTTP-Antwort in das, was an Daten darin steckt."""
     typ = (antwort.headers.get("Content-Type") or "").lower()
@@ -573,7 +691,8 @@ KANDIDATEN: tuple[str, ...] = (
     "https://api.fupa.net/v1/teams/{slug}/kalender.ics",
     "https://www.fupa.net/team/{slug}/kalender.ics",
     "https://www.fupa.net/team/{slug}.ics",
-    # Die oeffentliche Teamseite -- geprueft, antwortet
+    # Die oeffentliche Teamseite -- geprueft, antwortet (Kader mit
+    # Einsaetzen und Toren, dazu die Liga der Mannschaft)
     "https://www.fupa.net/team/{slug}",
     # Unterseiten: im Probelauf 404, aber billig mitzunehmen, falls FuPa sie
     # wieder einfuehrt. Nach dem ersten Fehlschlag werden sie im Lauf
@@ -582,6 +701,10 @@ KANDIDATEN: tuple[str, ...] = (
     "https://www.fupa.net/team/{slug}/spielplan",
     "https://www.fupa.net/team/{slug}/kader",
     "https://www.fupa.net/team/{slug}/statistiken",
+    # Alle Partien der Saison mit Anstoss und Ergebnis -- geprueft, antwortet.
+    # Hinter den Unterseiten, damit eine von Hand gepflegte Adresse dort
+    # nicht ueber max_abrufe hinausrutscht.
+    "https://www.fupa.net/team/{slug}/matches",
     # Moegliche JSON-Schnittstellen. Derzeit per robots.txt gesperrt; sie
     # bleiben stehen, weil sich das aendern kann -- gesperrte Adressen kosten
     # keinen Abruf, nur einen Blick in die gemerkte robots.txt.
@@ -655,6 +778,70 @@ def _kurz(adresse: str) -> str:
     return adresse.replace("https://", "").replace("www.", "")
 
 
+def _besserer_spielplan(neu: list[Spiel], bisher: list[Spiel]) -> bool:
+    """Ein Spielplan mit Team-Bezeichnern schlaegt einen laengeren ohne.
+
+    Nur mit Bezeichner lassen sich die Zahlen des Gegners holen. Der
+    FuPa-Kalender ist laenger (er fuehrt auch Testspiele), nennt aber nur
+    Vereinsnamen.
+    """
+    def mit_kennung(spiele: list[Spiel]) -> bool:
+        return any(s.heim_kennung or s.gast_kennung for s in spiele)
+
+    if neu and bisher and mit_kennung(neu) != mit_kennung(bisher):
+        return mit_kennung(neu)
+    return len(neu) > len(bisher)
+
+
+def _bessere_spielerliste(neu: list[SpielerZeile],
+                          bisher: list[SpielerZeile]) -> bool:
+    """Eine Statistik mit Spielminuten schlaegt eine laengere ohne.
+
+    Der Kader fuehrt auch Spieler ohne Einsatz und ist deshalb laenger; nach
+    Einsaetzen *und Minuten* sortieren laesst sich aber nur die Statistik.
+    """
+    def mit_minuten(spieler: list[SpielerZeile]) -> bool:
+        return any(z.minuten for z in spieler)
+
+    if neu and bisher and mit_minuten(neu) != mit_minuten(bisher):
+        return mit_minuten(neu)
+    return len(neu) > len(bisher)
+
+
+def _schluessel(spiel: Spiel) -> tuple[str, str, str]:
+    return (spiel.anstoss[:10], spiel.heim_kennung, spiel.gast_kennung)
+
+
+def _ergaenzt(neu: list[Spiel], bisher: list[Spiel]) -> bool:
+    """Zwei Teile desselben Spielplans -- etwa die Seite ab dem letzten Spiel
+    und die mit den frueheren Partien?
+
+    Zusammengefuehrt wird nur, wenn beide Teile Team-Bezeichner fuehren: Nur
+    daran laesst sich dieselbe Partie sicher wiedererkennen. Der Kalender
+    schreibt "TSV Nördlingen", die Teamseite "TSV Nördlingen II" -- ueber
+    Namen gaebe es doppelte Spiele.
+    """
+    def alle_mit_kennung(spiele: list[Spiel]) -> bool:
+        return bool(spiele) and all(s.heim_kennung and s.gast_kennung
+                                    for s in spiele)
+
+    if not (alle_mit_kennung(neu) and alle_mit_kennung(bisher)):
+        return False
+    vorhanden = {_schluessel(s) for s in bisher}
+    return any(_schluessel(s) not in vorhanden for s in neu)
+
+
+def _zusammen(bisher: list[Spiel], neu: list[Spiel]) -> list[Spiel]:
+    """Beide Teile, jede Partie einmal, nach Anstoss sortiert."""
+    gesehen: dict[tuple[str, str, str], Spiel] = {}
+    for spiel in (*bisher, *neu):
+        alt = gesehen.get(_schluessel(spiel))
+        # Ein nachgetragenes Ergebnis gewinnt gegen den Stand ohne
+        if alt is None or (spiel.ergebnis and not alt.ergebnis):
+            gesehen[_schluessel(spiel)] = spiel
+    return sorted(gesehen.values(), key=lambda s: s.anstoss)
+
+
 @dataclass
 class Fund:
     """Was beim Abklappern einer Adressliste zusammengekommen ist."""
@@ -679,10 +866,13 @@ class Fund:
 
     @property
     def liga(self) -> str:
+        # Der haeufigste Wettbewerb, nicht der erste: Steht ein Pokalspiel am
+        # Saisonanfang, hiesse sonst die ganze Liga "Bezirkspokal".
+        zaehler: dict[str, int] = {}
         for spiel in self.spiele:
             if spiel.wettbewerb:
-                return spiel.wettbewerb
-        return ""
+                zaehler[spiel.wettbewerb] = zaehler.get(spiel.wettbewerb, 0) + 1
+        return max(zaehler, key=zaehler.__getitem__) if zaehler else ""
 
 
 class FupaApiQuelle:
@@ -774,6 +964,7 @@ class FupaApiQuelle:
 
         daten.tabelle = fund.tabelle
         daten.torjaeger = fund.torjaeger
+        self._bilder_einbetten(daten.torjaeger)
         daten.spieler = fund.spieler
         daten.spiele = fund.spiele
         daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(fund.spiele)
@@ -787,6 +978,49 @@ class FupaApiQuelle:
 
         self._melden(daten)
         return daten
+
+    # -- Spielerbilder -------------------------------------------------------
+
+    #: Mehr als auf die Seite passen, braucht es nicht (siehe render.pages).
+    BILDER_HOECHSTENS = 22
+    #: Bilder kommen von einem Bildserver, nicht von den Seiten selbst; eine
+    #: kurze Pause genuegt. Ein Bild wird nur einmal geholt und dann auf
+    #: Dauer aufbewahrt -- Spielerfotos aendern sich kaum.
+    BILD_PAUSE_SEKUNDEN = 0.2
+
+    def _bilder_einbetten(self, zeilen: list[TorjaegerZeile]) -> None:
+        """Ersetzt die Bildadressen durch eingebettete Bilder.
+
+        Ein Bild, das nicht kommt, faellt still weg: Die Zeile bleibt, nur
+        ohne Foto. Wegen eines Bilds soll kein Heft scheitern.
+        """
+        ordner = Path(self.client.cache.ordner) / "spielerbilder"
+        for z in zeilen[:self.BILDER_HOECHSTENS]:
+            if z.bild.startswith("https://"):
+                z.bild = self._bild(z.bild, ordner)
+        for z in zeilen[self.BILDER_HOECHSTENS:]:
+            if z.bild.startswith("https://"):
+                z.bild = ""
+
+    def _bild(self, url: str, ordner: Path) -> str:
+        datei = ordner / (hashlib.sha1(url.encode("utf-8")).hexdigest() + ".jpeg")
+        try:
+            if not datei.exists():
+                if not self.client._robots_erlaubt(url):
+                    return ""
+                time.sleep(self.BILD_PAUSE_SEKUNDEN)
+                antwort = self.client._sitzung().get(url, timeout=self.client.timeout)
+                typ = (antwort.headers.get("Content-Type") or "").lower()
+                if antwort.status_code != 200 or not typ.startswith("image/jpeg"):
+                    logger().debug("Kein Bild unter %s (%s)", url, antwort.status_code)
+                    return ""
+                ordner.mkdir(parents=True, exist_ok=True)
+                datei.write_bytes(antwort.content)
+            return ("data:image/jpeg;base64,"
+                    + base64.b64encode(datei.read_bytes()).decode("ascii"))
+        except Exception as fehler:                           # noqa: BLE001
+            logger().debug("Bild %s nicht geladen: %s", url, fehler)
+            return ""
 
     # -- Suchen und erkennen ------------------------------------------------
 
@@ -826,6 +1060,11 @@ class FupaApiQuelle:
         fehlschlaege = 0
         warteschlange = list(self._sortieren(adressen, kennung))
         erledigt: set[str] = set()
+        #: Von einer Teamseite abgeleitete Seiten. Sie werden auch dann noch
+        #: geholt, wenn schon alle vier Teile beisammen sind: Erst sie bringen
+        #: die Torjaegerliste der Liga statt des Kaders und die frueheren
+        #: Spiele zum Spielplan.
+        gefolgt: set[str] = set()
         rahmen_gefolgt = 0
 
         while warteschlange:
@@ -833,7 +1072,9 @@ class FupaApiQuelle:
             if adresse in erledigt:
                 continue
             erledigt.add(adresse)
-            if fund.abrufe >= hoechstens or fund.vollstaendig:
+            if fund.abrufe >= hoechstens:
+                break
+            if fund.vollstaendig and adresse not in gefolgt:
                 break
             if self._zeit_abgelaufen():
                 break
@@ -861,6 +1102,15 @@ class FupaApiQuelle:
                 logger().debug("%s nicht verwertbar: %s", adresse, fehler)
                 continue
 
+            # Leere Spielerstatistik: ein zweites Mal unkomprimiert fragen --
+            # nur wenn die Seite geantwortet hat, ihr aber die Zahlen fehlen.
+            if (bloecke
+                    and urlparse(adresse).path.rstrip("/").endswith("/playerstats")
+                    and not any(spieler_erkennen(b) for b in bloecke)):
+                logger().info("Spielerstatistik leer, frage unkomprimiert nach: %s",
+                              _kurz(adresse))
+                bloecke = self.client.ohne_kompression(adresse) or bloecke
+
             fund.abrufe += 1
             muster = self._muster(adresse, kennung)
 
@@ -875,6 +1125,18 @@ class FupaApiQuelle:
                 for a in reversed(neu):
                     logger().info("Folge eingebundener Seite: %s", _kurz(a))
                     warteschlange.insert(0, a)
+
+            # Der Teamseite folgen: Sie nennt ihren Wettbewerb, fuehrt
+            # Tabelle, Torjaeger und Spielplan aber nicht selbst. Diese Seiten
+            # kommen gleich dran -- vor den geratenen Unterseiten, die ohnehin
+            # 404 liefern.
+            for a in reversed(liga_adressen(bloecke, adresse)):
+                if a not in erledigt:
+                    if a in warteschlange:          # weiter hinten geraten
+                        warteschlange.remove(a)
+                    logger().info("Folge der Teamseite: %s", _kurz(a))
+                    warteschlange.insert(0, a)
+                    gefolgt.add(a)
 
             # Nur Wegweiser sind keine Daten: Eine Seite, die ausser einem
             # Widget nichts enthaelt, gilt weiter als leer.
@@ -924,14 +1186,19 @@ class FupaApiQuelle:
                               len(schuetzen), _kurz(adresse))
 
             kader = spieler_erkennen(block)
-            if len(kader) > len(fund.spieler):
+            if _bessere_spielerliste(kader, fund.spieler):
                 fund.spieler = kader
                 _herkunft_merken(fund, adresse)
                 logger().info("Spielerstatistik erkannt (%d Zeilen) auf %s",
                               len(kader), _kurz(adresse))
 
             spielplan = spiele_erkennen(block, vereinsname)
-            if len(spielplan) > len(fund.spiele):
+            if _ergaenzt(spielplan, fund.spiele):
+                fund.spiele = _zusammen(fund.spiele, spielplan)
+                _herkunft_merken(fund, adresse)
+                logger().info("Spielplan ergaenzt (%d Partien) auf %s",
+                              len(fund.spiele), _kurz(adresse))
+            elif _besserer_spielplan(spielplan, fund.spiele):
                 fund.spiele = spielplan
                 _herkunft_merken(fund, adresse)
                 logger().info("Spielplan erkannt (%d Partien) auf %s",
@@ -974,6 +1241,7 @@ class FupaApiQuelle:
 
         gegner.tabelle = fund.tabelle
         gegner.torjaeger = fund.torjaeger
+        self._bilder_einbetten(gegner.torjaeger)
         gegner.spieler = fund.spieler
         gegner.spiele = fund.spiele
         gegner.liga = fund.liga

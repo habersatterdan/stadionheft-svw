@@ -510,7 +510,6 @@ SEITENNAMEN = {
     "torjaeger": "Torschützenliste der Liga",
     "spielerstatistik": "Spielerstatistik der eigenen Mannschaft",
     "gegner": "Der Gegner mit seinem Kader",
-    "bilanz": "Saisonbilanz in Zahlen",
     "tabelle_gegner": "Tabelle der Liga des Gegners",
     "torjaeger_gegner": "Torschützenliste der Liga des Gegners",
 }
