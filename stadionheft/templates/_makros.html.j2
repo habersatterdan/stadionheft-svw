@@ -102,10 +102,11 @@
 {# Tabelle der Spielerstatistik - wird fuer die eigene Mannschaft und
    fuer den Gegner identisch verwendet. #}
 {% macro spielertabelle(zeilen) %}
-  <table class="daten">
+  <table class="daten mit-bild">
     <thead>
       <tr>
         <th class="links">Pl.</th>
+        <th></th>
         <th class="links">Spieler</th>
         <th>Spiele</th><th>Tore</th><th>Assists</th><th>11m</th>
         <th>Gelb</th><th>G/R</th><th>Rot</th>
@@ -116,6 +117,7 @@
       {% for z in zeilen %}
       <tr>
         <td class="platz">{{ z.platz }}.</td>
+        <td class="bild">{% if z.bild.startswith('data:image/') %}<img src="{{ z.bild }}" alt="">{% endif %}</td>
         <td class="links name">{{ z.spieler }}</td>
         <td>{{ z.spiele }}</td>
         <td>{{ z.tore }}</td>

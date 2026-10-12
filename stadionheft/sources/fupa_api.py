@@ -966,6 +966,9 @@ class FupaApiQuelle:
         daten.torjaeger = fund.torjaeger
         self._bilder_einbetten(daten.torjaeger)
         daten.spieler = fund.spieler
+        # Alle, nicht nur die ersten 22: Die Statistik wird erst beim Rendern
+        # sortiert und gekuerzt (render.pages.spieler_rangfolge).
+        self._bilder_einbetten(daten.spieler, hoechstens=len(daten.spieler))
         daten.spiele = fund.spiele
         daten.naechstes_spiel, daten.letztes_spiel = spiele_einordnen(fund.spiele)
         daten.liga = daten.liga or fund.liga
@@ -988,17 +991,19 @@ class FupaApiQuelle:
     #: Dauer aufbewahrt -- Spielerfotos aendern sich kaum.
     BILD_PAUSE_SEKUNDEN = 0.2
 
-    def _bilder_einbetten(self, zeilen: list[TorjaegerZeile]) -> None:
+    def _bilder_einbetten(self, zeilen: list[TorjaegerZeile] | list[SpielerZeile],
+                          hoechstens: int | None = None) -> None:
         """Ersetzt die Bildadressen durch eingebettete Bilder.
 
         Ein Bild, das nicht kommt, faellt still weg: Die Zeile bleibt, nur
         ohne Foto. Wegen eines Bilds soll kein Heft scheitern.
         """
         ordner = Path(self.client.cache.ordner) / "spielerbilder"
-        for z in zeilen[:self.BILDER_HOECHSTENS]:
+        grenze = self.BILDER_HOECHSTENS if hoechstens is None else hoechstens
+        for z in zeilen[:grenze]:
             if z.bild.startswith("https://"):
                 z.bild = self._bild(z.bild, ordner)
-        for z in zeilen[self.BILDER_HOECHSTENS:]:
+        for z in zeilen[grenze:]:
             if z.bild.startswith("https://"):
                 z.bild = ""
 
@@ -1243,6 +1248,7 @@ class FupaApiQuelle:
         gegner.torjaeger = fund.torjaeger
         self._bilder_einbetten(gegner.torjaeger)
         gegner.spieler = fund.spieler
+        self._bilder_einbetten(gegner.spieler, hoechstens=len(gegner.spieler))
         gegner.spiele = fund.spiele
         gegner.liga = fund.liga
         if not gegner.fupa_team_url and gegner.kennung:
