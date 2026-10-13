@@ -107,7 +107,11 @@
 
       {% if nas_aktiv %}
         <p class="hilfe" style="margin-top:1rem">
+          {% if konfiguration.get("nas.modus") == "filestation" %}
+          Nach dem Erzeugen lassen sich die Dateien per Knopf auf der NAS ablegen:
+          {% else %}
           Die fertigen Dateien werden zusätzlich auf der NAS abgelegt:
+          {% endif %}
           {% if nas_ok %}
             <span class="status ok">erreichbar</span>
           {% else %}
