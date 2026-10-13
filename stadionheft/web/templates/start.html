@@ -114,6 +114,9 @@
             <span class="status warn">Problem</span>
           {% endif %}
           {{ nas_meldung }}
+          {% if konfiguration.get("nas.modus") == "filestation" %}
+            &middot; <a href="{{ url_for('nas_ordner') }}">NAS-Ordner ansehen</a>
+          {% endif %}
         </p>
       {% endif %}
     </details>

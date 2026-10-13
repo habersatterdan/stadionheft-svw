@@ -532,6 +532,12 @@ dl.merkmale .form-zeichen {
 .titel .kasten .tag     { font-size: 8.5pt; font-weight: 700; }
 .titel .kasten .paarung { font-size: 9.5pt; font-weight: 700; }
 .titel .kasten .details { font-size: 8pt; color: #333333; }
+/* Deckblatt mit mehreren Heimspielen: Tag als Zwischenzeile, Spiele dicht. */
+.titel .kasten .tag { margin-top: 1.6mm; }
+.titel .kasten .gaeste + .tag { margin-top: 0; }
+.titel .kasten-voll .paarung { font-size: 8.5pt; }
+.titel .kasten-voll .details { font-size: 7pt; }
+.titel .kasten-voll .tag     { font-size: 7.5pt; margin-top: 1mm; }
 
 /* --------------------------------------------------------------------------
    Trennseite (voll rot, wie Seite 12 der Vorlage)
@@ -619,6 +625,7 @@ dl.merkmale .form-zeichen {
 .kontakte .eintrag { margin-bottom: 1.6mm; font-size: 7pt; }
 .kontakte .rolle { font-weight: 700; }
 .kontakte .kontaktdaten { color: #444444; }
+.ansprechpartner .eintrag { margin-bottom: 1.9mm; font-size: 7.2pt; line-height: 1.25; }
 
 /* --------------------------------------------------------------------------
    Impressum

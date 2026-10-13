@@ -27,6 +27,7 @@ GUELTIGE_MODI = {"api", "manuell", "demo"}
 FREIE_ABSCHNITTE = {
     "datenquelle.fupa.endpunkte",   # Name des Endpunkts ist frei
     "datenquelle.fupa.gegner",      # Schluessel ist der Vereinsname
+    "nas.filestation.mannschaftsordner",  # Schluessel = Mannschaft
 }
 
 _SLUG_MUSTER = re.compile(r"/team/([^/?#]+)")
@@ -286,8 +287,23 @@ class Konfiguration:
 
         if self.get("nas.aktiv"):
             nas_modus = str(self.get("nas.modus", "mount"))
-            if nas_modus not in ("mount", "smb"):
-                fehler.append(f"nas.modus ist '{nas_modus}', erlaubt: mount, smb.")
+            if nas_modus not in ("mount", "smb", "filestation"):
+                fehler.append(f"nas.modus ist '{nas_modus}', erlaubt: "
+                              f"mount, smb, filestation.")
+            if nas_modus == "filestation":
+                if not (self.get("nas.filestation.quickconnect_id")
+                        or self.get("nas.filestation.adresse")):
+                    fehler.append("nas.filestation: quickconnect_id oder "
+                                  "adresse eintragen.")
+                for schluessel in ("benutzer", "saison_ordner"):
+                    if not self.get(f"nas.filestation.{schluessel}"):
+                        fehler.append(f"nas.filestation.{schluessel} fehlt.")
+                var = self.get("nas.filestation.passwort_umgebungsvariable",
+                               "NAS_PASSWORT")
+                if var and not os.environ.get(str(var)):
+                    warnungen.append(
+                        f"Umgebungsvariable {var} (Passwort fuer die NAS) "
+                        f"ist nicht gesetzt.")
             if nas_modus == "mount" and not self.get("nas.mount.zielordner"):
                 fehler.append("nas.aktiv ist true, aber nas.mount.zielordner ist leer.")
             if nas_modus == "smb":

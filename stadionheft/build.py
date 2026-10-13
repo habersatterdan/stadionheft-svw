@@ -334,12 +334,26 @@ def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
         logger().info("%s: %s (%d Seiten)", daten.anzeigename, ziel.name,
                       montage.seitenzahl)
 
+    if konfiguration.get("deckblatt.aktiv", True) and ausgabe.mannschaften:
+        try:
+            deckblatt = _deckblatt_bauen(konfiguration, renderer, ausgabe,
+                                         ziel_ordner, arbeitsordner, start)
+            ergebnis.dateien.insert(0, deckblatt)
+            warnungen.extend(deckblatt.warnungen)
+        except StadionheftFehler as fehler:
+            # Ohne Deckblatt sind die Mannschaftsdateien trotzdem brauchbar.
+            logger().error("Deckblatt nicht erzeugt: %s", fehler.technisch)
+            warnungen.append(f"Deckblatt: {fehler.benutzer_text}")
+
     ergebnis.archiv = _archiv_schreiben(ergebnis.dateien, ziel_ordner,
                                         konfiguration, ausgabe, start)
     if konfiguration.get("ausgabe.snapshot_speichern", True):
         ergebnis.snapshot = _snapshot_schreiben(ziel_ordner, ausgabe, start)
 
-    if konfiguration.get("nas.aktiv", False):
+    # File Station (QuickConnect) legt erst auf Knopfdruck ab -- nach dem
+    # Ansehen, mit eigenem Ordnernamen. Siehe storage/filestation.py.
+    if (konfiguration.get("nas.aktiv", False)
+            and konfiguration.get("nas.modus", "mount") != "filestation"):
         try:
             ablage = NasAblage(konfiguration).ablegen_mehrere(
                 [d.pdf for d in ergebnis.dateien])
@@ -358,6 +372,48 @@ def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
     logger().info("Fertig: %d Dateien in %s (%.1f s)",
                   len(ergebnis.dateien), ziel_ordner, ergebnis.dauer_sekunden)
     return ergebnis
+
+
+#: Schluessel der Deckblatt-Datei in der Ergebnisliste. Leer heisst auch auf
+#: der NAS: in den Hauptordner der Ausgabe, nicht in einen Mannschaftsordner.
+DECKBLATT = ""
+
+
+def _deckblatt_bauen(konfiguration: Konfiguration, renderer: SeitenRenderer,
+                     ausgabe: Ausgabe, ziel_ordner: Path, arbeitsordner: Path,
+                     start: datetime) -> Mannschaftsdatei:
+    """Deckblatt (Titelbild + Heimspiele) und Ansprechpartner als eine Datei."""
+    warnungen: list[str] = []
+    titelbild = None
+    if (konfiguration.get("nas.aktiv", False)
+            and konfiguration.get("nas.modus") == "filestation"):
+        from .storage.filestation import titelbild_holen
+        titelbild = titelbild_holen(konfiguration, arbeitsordner)
+    if titelbild is None:
+        titelbild = next((p for p in sorted(konfiguration.eingabe_ordner.glob("*"))
+                          if p.stem.lower() == "titelbild"
+                          and p.suffix.lower() in (".jpg", ".jpeg", ".png")), None)
+    if titelbild is None:
+        warnungen.append("Kein Titelbild gefunden -- das Deckblatt zeigt einen "
+                         "Platzhalter.")
+
+    seiten = [Heftseite(renderer.deckblatt(ausgabe, titelbild), "Deckblatt")]
+    eintraege = [e for e in (konfiguration.get("deckblatt.ansprechpartner") or [])
+                 if isinstance(e, dict) and e.get("funktion")]
+    if eintraege:
+        seiten.append(Heftseite(renderer.ansprechpartner(eintraege),
+                                "Ansprechpartner"))
+
+    ziel = ziel_ordner / _sauberer_name(
+        f"{_ausgabe_ordner(ausgabe, start)[:10]}_Deckblatt.pdf")
+    montage = zusammenfuegen(seiten, ziel)
+    warnungen.extend(montage.warnungen)
+    logger().info("Deckblatt: %s (%d Seiten)", ziel.name, montage.seitenzahl)
+    return Mannschaftsdatei(
+        schluessel=DECKBLATT, anzeigename="Deckblatt", pdf=ziel,
+        seitenzahl=montage.seitenzahl,
+        seiten=["deckblatt"] + (["ansprechpartner"] if eintraege else []),
+        warnungen=warnungen)
 
 
 def seitenfolge(daten: MannschaftsDaten) -> list[str]:
@@ -512,6 +568,8 @@ SEITENNAMEN = {
     "gegner": "Der Gegner mit seinem Kader",
     "tabelle_gegner": "Tabelle der Liga des Gegners",
     "torjaeger_gegner": "Torschützenliste der Liga des Gegners",
+    "deckblatt": "Deckblatt mit Titelbild und Heimspielen",
+    "ansprechpartner": "Ansprechpartner",
 }
 
 

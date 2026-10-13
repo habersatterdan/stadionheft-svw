@@ -1,0 +1,54 @@
+{# Deckblatt einer Ausgabe: Titelbild und alle Heimspiele dieses Wochenendes.
+   Aufbau wie die fruehere Titelseite (Schraegen, weisser Kasten), nur dass der
+   Kasten mehrere Spiele nach Tagen gruppiert zeigt. #}
+{% extends "_basis.html.j2" %}
+
+{% block koerper %}
+<div class="seite titel">
+
+  <div class="kopfzeile">
+    <span>Saison {{ heft.saison }}</span>
+    <span>{{ kopfdatum }}</span>
+  </div>
+
+  {% if heft.logo_url %}
+    <img class="wappen-gross" src="{{ heft.logo_url }}" alt="">
+  {% endif %}
+
+  <div class="hefttitel">
+    <div class="zeile1">{{ heft.titel_zeile1 }}</div>
+    <div class="zeile2">{{ heft.titel_zeile2 }}</div>
+  </div>
+
+  {% if titelbild_url %}
+    <img class="bild" src="{{ titelbild_url }}" alt="">
+  {% else %}
+    <div class="bild-platzhalter">
+      Titelbild: <em>Titelbild.jpeg</em> in den Vorlage-Ordner der NAS
+      oder in den Eingabeordner legen
+    </div>
+  {% endif %}
+
+  <div class="schraege schraege-oben"></div>
+  <div class="schraege schraege-unten"></div>
+
+  <div class="kasten {{ 'kasten-voll' if anzahl_spiele > 3 }}">
+    <div class="gaeste">Wir begrüßen unsere Gäste:</div>
+    {% for tag in spieltage %}
+      <div class="tag">{{ tag.wochentag }}</div>
+      {% for spiel in tag.spiele %}
+        <div class="paarung">{{ spiel.paarung }}</div>
+        <div class="details">
+          {{ spiel.wettbewerb }}
+          {%- if spiel.datum %} &nbsp;&bull;&nbsp; {{ spiel.datum }}{% endif %}
+          {%- if spiel.uhrzeit %} {{ spiel.uhrzeit }}{% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="details" style="text-align:center">An diesem Wochenende
+        spielen alle Mannschaften auswärts.</div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

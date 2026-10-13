@@ -230,11 +230,15 @@ ausgabe:
 nas:
   aktiv: false
 
-  # mount = Der NAS-Ordner ist im Dateisystem eingebunden (Netzlaufwerk unter
-  #         Windows, Docker-Volume auf der NAS selbst). Das ist der einfachste
-  #         und stabilste Weg - Empfehlung.
-  # smb   = Direkter SMB-Upload ueber das Netzwerk (benoetigt zusaetzlich
-  #         das Paket "smbprotocol", siehe README).
+  # mount       = Der NAS-Ordner ist im Dateisystem eingebunden (Netzlaufwerk
+  #               unter Windows, Docker-Volume auf der NAS selbst). Das ist der
+  #               einfachste und stabilste Weg - Empfehlung.
+  # smb         = Direkter SMB-Upload ueber das Netzwerk (benoetigt zusaetzlich
+  #               das Paket "smbprotocol", siehe README).
+  # filestation = Ueber die File-Station-API der Synology, auch per
+  #               QuickConnect. Legt NICHT automatisch ab: Nach dem Ansehen
+  #               des Hefts gibt es einen Knopf "Auf NAS ablegen" mit
+  #               frei waehlbarem Ordnernamen (siehe nas.filestation).
   modus: "mount"
 
   mount:
@@ -253,8 +257,49 @@ nas:
     passwort_umgebungsvariable: "NAS_PASSWORT"
     domaene: "WORKGROUP"
 
+  filestation:
+    # Entweder die QuickConnect-ID (der Teil vor .quickconnect.to) ...
+    quickconnect_id: ""              # TODO, z. B. "meinverein"
+    # ... oder eine direkte Adresse, z. B. "https://192.168.178.20:5001".
+    # Ist sie gesetzt, wird QuickConnect nicht gefragt.
+    adresse: ""
+    # Eigener DSM-Benutzer nur fuer das Programm: kein Admin, nur File
+    # Station, nur Schreibrecht auf den Stadionheft-Ordner, ohne 2FA.
+    benutzer: "stadionheft"
+    # Das Passwort steht NIE hier, sondern in dieser Umgebungsvariablen:
+    passwort_umgebungsvariable: "NAS_PASSWORT"
+    # Hier entsteht je Ausgabe ein neuer Ordner.
+    saison_ordner: "/Verein/Stadionheft/Saison 26-27"    # TODO
+    # Unterordner von saison_ordner. Sein Inhalt wird in jede neue Ausgabe
+    # kopiert (z. B. Titelbild, Liga-Uebersichten). Liegt darin eine Datei
+    # "Titelbild.jpeg" (oder .jpg/.png), kommt sie aufs Deckblatt.
+    vorlage_ordner: "00 Vorlage"
+    # Vorschlag fuer den Ordnernamen. {nummer} = naechste laufende Nummer
+    # nach den vorhandenen "NN Ausgabe ..."-Ordnern, {datum} = erstes Spiel.
+    ordnername: "{nummer:02d} Ausgabe {datum:%d%m%y}"
+    # Unterordner je Mannschaft (Schluessel wie unter 'mannschaften').
+    # Wer hier fehlt, landet im Hauptordner der Ausgabe -- wie das Deckblatt.
+    mannschaftsordner:
+      herren1: "Herren 1"
+
   # Vorhandene Datei mit gleichem Namen ueberschreiben?
   ueberschreiben: false
+
+
+# ---------------------------------------------------------------------------
+# Deckblatt
+#
+# Eine eigene Datei vor den Mannschaftsdateien: Titelbild, "Wir begruessen
+# unsere Gaeste" mit allen Heimspielen der Ausgabe, dahinter die
+# Ansprechpartner des Vereins.
+# ---------------------------------------------------------------------------
+deckblatt:
+  aktiv: true
+  # Jede Zeile: Funktion, Name und eine Zeile Kontaktdaten.
+  ansprechpartner:
+    - funktion: "Vorstand"           # TODO
+      name: "Max Mustermann"
+      kontakt: "0123 / 456789 • vorstand@example.org"
 
 
 # ---------------------------------------------------------------------------

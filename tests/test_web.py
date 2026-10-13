@@ -175,3 +175,95 @@ def test_fupa_test_faengt_fehler_ab(konfiguration: Konfiguration, monkeypatch):
 
 def test_download_ohne_ergebnis_ist_404(konfiguration: Konfiguration):
     assert _client(konfiguration).get("/fupa-test/download").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Ablage auf der NAS per Knopf (File Station)
+# ---------------------------------------------------------------------------
+
+def _fertiger_lauf(client) -> str:
+    antwort = client.post("/erstellen", data={"mannschaften": ["herren1"]})
+    lauf_id = antwort.headers["Location"].rstrip("/").split("/")[-1]
+    for _ in range(120):
+        if client.get(f"/lauf/{lauf_id}/status").get_json()["fertig"]:
+            return lauf_id
+        time.sleep(0.5)
+    raise AssertionError("Lauf wurde nicht fertig")
+
+
+def _warten_auf_ablage(client, lauf_id: str) -> dict:
+    for _ in range(100):
+        zustand = client.get(f"/lauf/{lauf_id}/nas/status").get_json()
+        if zustand.get("fertig"):
+            return zustand
+        time.sleep(0.05)
+    raise AssertionError("Ablage wurde nicht fertig")
+
+
+def test_nas_knopf_nur_bei_filestation(konfiguration: Konfiguration):
+    client = _client(konfiguration)
+    lauf_id = _fertiger_lauf(client)
+    assert "Auf die NAS legen" not in client.get(f"/lauf/{lauf_id}").get_data(as_text=True)
+    assert client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "x"}).status_code == 404
+
+
+def test_nas_ablage_ueber_die_oberflaeche(konfiguration: Konfiguration, monkeypatch):
+    from stadionheft.storage import filestation
+
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    aufrufe: list[dict] = []
+    ergebnisse = [False, True]
+
+    def ablage(k, ordnername, dateien, fs=None, fortsetzen=False, melden=None):
+        aufrufe.append({"name": ordnername, "fortsetzen": fortsetzen,
+                        "dateien": [(s, p.name) for s, p in dateien]})
+        bericht = filestation.AblageBericht(ordner=f"/S/{ordnername}",
+                                            angelegt=True,
+                                            erfolgreich=ergebnisse.pop(0))
+        if not bericht.erfolgreich:
+            bericht.fehler = "Relay weg"
+        return bericht
+
+    monkeypatch.setattr(filestation, "ablage_ausfuehren", ablage)
+    client = _client(konfiguration)
+    lauf_id = _fertiger_lauf(client)
+    assert "Auf die NAS legen" in client.get(f"/lauf/{lauf_id}").get_data(as_text=True)
+
+    # Erster Versuch bricht ab ...
+    assert client.post(f"/lauf/{lauf_id}/nas",
+                       json={"ordnername": " 09  Ausgabe 301026"}).get_json()["gestartet"]
+    zustand = _warten_auf_ablage(client, lauf_id)
+    assert zustand["bericht"]["erfolgreich"] is False
+    assert aufrufe[0]["fortsetzen"] is False
+    assert aufrufe[0]["dateien"][0][0] == "herren1"
+
+    # ... der zweite mit demselben Namen setzt den Ordner fort
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe 301026"})
+    zustand = _warten_auf_ablage(client, lauf_id)
+    assert zustand["bericht"]["erfolgreich"] is True
+    assert aufrufe[1]["fortsetzen"] is True
+
+    # Ein drittes Mal gibt es nicht -- das Heft liegt schon dort
+    antwort = client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "10 Ausgabe"})
+    assert antwort.status_code == 409 and len(aufrufe) == 2
+
+
+def test_nas_ablage_anderer_name_setzt_nicht_fort(konfiguration: Konfiguration,
+                                                  monkeypatch):
+    from stadionheft.storage import filestation
+
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    aufrufe: list[bool] = []
+
+    def ablage(k, ordnername, dateien, fs=None, fortsetzen=False, melden=None):
+        aufrufe.append(fortsetzen)
+        return filestation.AblageBericht(angelegt=True, erfolgreich=False)
+
+    monkeypatch.setattr(filestation, "ablage_ausfuehren", ablage)
+    client = _client(konfiguration)
+    lauf_id = _fertiger_lauf(client)
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe"})
+    _warten_auf_ablage(client, lauf_id)
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe b"})
+    _warten_auf_ablage(client, lauf_id)
+    assert aufrufe == [False, False]
