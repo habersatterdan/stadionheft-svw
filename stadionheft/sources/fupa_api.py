@@ -42,6 +42,7 @@ import json
 import re
 import time
 import urllib.robotparser
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -438,33 +439,48 @@ class FupaClient:
         self.cache.schreiben(schluessel, bloecke)
         return bloecke
 
-    def ohne_kompression(self, url: str) -> list[Any]:
-        """Dieselbe Seite noch einmal, unkomprimiert angefordert.
+    #: So oft wird eine leere Spielerstatistik frisch nachgefragt.
+    NACHLADEN_VERSUCHE = 3
 
-        FuPas CDN haelt je Kodierung eine eigene Kopie vor. Ist eine davon
-        eine leere Fassung (gesehen bei der Spielerstatistik), liefert die
-        unkomprimierte Kopie meist die Zahlen. Ein Fehlschlag ist hier kein
-        Fehler -- es bleibt dann beim ersten Ergebnis.
+    def frisch_nachladen(self, url: str,
+                         vollstaendig: Callable[[list[Any]], bool]) -> list[Any]:
+        """Dieselbe Seite noch einmal, frisch vom FuPa-Server statt aus dem CDN.
+
+        FuPa rendert die Spielerstatistik beim ersten Aufruf nach einer Pause
+        oft ohne Zahlen (gesehen 13.10.2026: erste frische Antwort leer, ab der
+        zweiten vollstaendig -- bei Damen 1, Damen 2 und Gegnern gleichermassen).
+        Das CDN haelt diese leere Fassung dann fest. Ein wechselnder
+        Abfrageparameter umgeht das CDN; nach hoechstens
+        :attr:`NACHLADEN_VERSUCHE` Versuchen bleibt es beim ersten Ergebnis.
+        Erst eine vollstaendige Antwort ersetzt den Cache-Eintrag der Adresse.
         """
-        if not self._robots_erlaubt(url):
-            return []
         import requests
 
-        try:
-            self._drosseln()
-            antwort = self._sitzung().get(
-                url, timeout=self.timeout,
-                headers={"Accept": "text/html,application/xhtml+xml",
-                         "Accept-Encoding": "identity"})
-        except requests.RequestException as fehler:
-            logger().debug("Zweiter Abruf von %s gescheitert: %s", url, fehler)
-            return []
-        if not antwort.ok:
-            return []
-        bloecke = _nutzlasten_aus(antwort)
-        if bloecke:
-            self.cache.schreiben(f"bloecke|{url}", bloecke)
-        return bloecke
+        trenner = "&" if "?" in url else "?"
+        for versuch in range(1, self.NACHLADEN_VERSUCHE + 1):
+            frisch = f"{url}{trenner}_sh={time.time_ns()}"
+            if not self._robots_erlaubt(frisch):
+                return []
+            try:
+                self._drosseln()
+                antwort = self._sitzung().get(
+                    frisch, timeout=self.timeout,
+                    headers={"Accept": "text/html,application/xhtml+xml"})
+            except requests.RequestException as fehler:
+                logger().debug("Nachladen von %s gescheitert: %s", url, fehler)
+                continue
+            if not antwort.ok:
+                continue
+            _zeichensatz_richtigstellen(antwort)
+            bloecke = _nutzlasten_aus(antwort)
+            if vollstaendig(bloecke):
+                logger().info("Spielerstatistik beim %d. Nachladen vollstaendig: %s",
+                              versuch, url)
+                self.cache.schreiben(f"bloecke|{url}", bloecke)
+                return bloecke
+        logger().info("Spielerstatistik auch nach %d Versuchen ohne Minuten: %s",
+                      self.NACHLADEN_VERSUCHE, url)
+        return []
 
 
 _META_ZEICHENSATZ = re.compile(
@@ -793,6 +809,11 @@ def _besserer_spielplan(neu: list[Spiel], bisher: list[Spiel]) -> bool:
     return len(neu) > len(bisher)
 
 
+def _mit_minuten(bloecke: list[Any]) -> bool:
+    """Steckt in den Bloecken eine Spielerstatistik mit Spielminuten?"""
+    return any(any(z.minuten for z in spieler_erkennen(b)) for b in bloecke)
+
+
 def _bessere_spielerliste(neu: list[SpielerZeile],
                           bisher: list[SpielerZeile]) -> bool:
     """Eine Statistik mit Spielminuten schlaegt eine laengere ohne.
@@ -1107,14 +1128,15 @@ class FupaApiQuelle:
                 logger().debug("%s nicht verwertbar: %s", adresse, fehler)
                 continue
 
-            # Leere Spielerstatistik: ein zweites Mal unkomprimiert fragen --
-            # nur wenn die Seite geantwortet hat, ihr aber die Zahlen fehlen.
+            # Spielerstatistik ohne Minuten: frisch nachfragen -- nur wenn die
+            # Seite geantwortet hat, ihr aber die Zahlen fehlen. Auch eine
+            # leere Fassung aus dem eigenen Cache wird so wieder aufgefrischt.
             if (bloecke
                     and urlparse(adresse).path.rstrip("/").endswith("/playerstats")
-                    and not any(spieler_erkennen(b) for b in bloecke)):
-                logger().info("Spielerstatistik leer, frage unkomprimiert nach: %s",
+                    and not _mit_minuten(bloecke)):
+                logger().info("Spielerstatistik ohne Minuten, lade frisch nach: %s",
                               _kurz(adresse))
-                bloecke = self.client.ohne_kompression(adresse) or bloecke
+                bloecke = self.client.frisch_nachladen(adresse, _mit_minuten) or bloecke
 
             fund.abrufe += 1
             muster = self._muster(adresse, kennung)

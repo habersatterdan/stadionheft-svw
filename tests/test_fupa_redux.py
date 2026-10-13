@@ -453,7 +453,8 @@ def test_gesperrte_adresse_ist_kein_netzfehler(konfiguration: Konfiguration):
         client.abrufen("https://api.fupa.net/v1/teams/x/matches")
 
 
-def test_gesperrte_api_haelt_die_teamseite_nicht_auf(konfiguration: Konfiguration):
+def test_gesperrte_api_haelt_die_teamseite_nicht_auf(konfiguration: Konfiguration,
+                                                     stichtag_5_oktober):
     """Der Fehler aus dem Live-Lauf: 'Herren 1 uebersprungen: robots.txt ...'.
 
     Fuenf gesperrte Endpunkte stehen vor der Teamseite. Sie werden
@@ -491,3 +492,78 @@ def test_gesperrte_api_haelt_die_teamseite_nicht_auf(konfiguration: Konfiguratio
         f"https://www.fupa.net/league/{LIGA}/scorers",
         f"{team}/matches",
         f"{team}/matches?pointer=prev"]
+
+
+# ---------------------------------------------------------------------------
+# Leere Spielerstatistik frisch nachladen (13.10.2026)
+# ---------------------------------------------------------------------------
+# FuPa rendert /playerstats beim ersten frischen Aufruf oft ohne Zahlen, ab
+# dem zweiten mit. Ohne Nachladen fiel die Seite auf den Kader zurueck -- bei
+# Damen 2 und Gegnern fehlten deshalb alle Minuten.
+
+LEERE_STATISTIK = {"dataHistory": [{
+    "key": "undefined",
+    "TeamPage": TEAMSEITE["dataHistory"][0]["TeamPage"],
+    "TeamPlayerStatsPage": {"season": {"isFetching": True, "error": None,
+                                       "players": []}},
+}]}
+
+
+class _Folge(_Sitzung):
+    """Liefert fuer /playerstats nacheinander die vorgegebenen Seiten."""
+
+    def __init__(self, folge: list[str]) -> None:
+        super().__init__({})
+        self.folge = list(folge)
+
+    def get(self, url: str, **kwargs) -> _Antwort:
+        self.abgerufen.append(url)
+        return _Antwort(self.folge.pop(0) if self.folge else _html(LEERE_STATISTIK))
+
+
+def _hat_minuten(bloecke: list) -> bool:
+    from stadionheft.sources.fupa_api import _mit_minuten
+    return _mit_minuten(bloecke)
+
+
+def test_leere_statistik_wird_frisch_nachgeladen(konfiguration: Konfiguration):
+    client = FupaClient(konfiguration)
+    _client_mit_fupa_robots(client, {})
+    client.cache.aktiv = True
+    sitzung = _Folge([_html(LEERE_STATISTIK), _html(STATISTIKSEITE)])
+    client._session = sitzung
+    url = "https://www.fupa.net/team/x-m1-2026-27/playerstats"
+    client.cache.schreiben(f"bloecke|{url}", ["leer"])
+
+    bloecke = client.frisch_nachladen(url, _hat_minuten)
+
+    assert _hat_minuten(bloecke)
+    # Jeder Versuch mit eigenem Parameter -- sonst kaeme dieselbe leere
+    # Fassung aus dem CDN zurueck
+    assert len(sitzung.abgerufen) == 2
+    assert all(a.startswith(url + "?_sh=") for a in sitzung.abgerufen)
+    assert len(set(sitzung.abgerufen)) == 2
+    # Die vollstaendige Fassung ersetzt den leeren Cache-Eintrag
+    assert client.cache.lesen(f"bloecke|{url}") == bloecke
+
+
+def test_bleibt_die_statistik_leer_bleibt_der_cache(konfiguration: Konfiguration):
+    client = FupaClient(konfiguration)
+    _client_mit_fupa_robots(client, {})
+    client.cache.aktiv = True
+    sitzung = _Folge([])
+    client._session = sitzung
+    url = "https://www.fupa.net/team/x-m1-2026-27/playerstats?saison=1"
+    client.cache.schreiben(f"bloecke|{url}", ["alt"])
+
+    assert client.frisch_nachladen(url, _hat_minuten) == []
+    assert len(sitzung.abgerufen) == client.NACHLADEN_VERSUCHE
+    assert all("?saison=1&_sh=" in a for a in sitzung.abgerufen)
+    assert client.cache.lesen(f"bloecke|{url}") == ["alt"]
+
+
+def test_statistik_ohne_minuten_gilt_als_leer():
+    from stadionheft.sources.fupa_api import _mit_minuten
+    assert _mit_minuten(_bloecke(STATISTIKSEITE)) is True
+    assert _mit_minuten(_bloecke(LEERE_STATISTIK)) is False
+    assert _mit_minuten(_bloecke(TEAMSEITE)) is False   # Kader: keine Minuten
