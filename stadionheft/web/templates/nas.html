@@ -10,6 +10,23 @@
   <div class="fehlerkasten"><strong>{{ lage.fehler }}</strong></div>
 {% else %}
   <div class="erfolg">Verbunden über {{ lage.adresse }}</div>
+  {% if lage.saison_meldung == "ok" %}
+    <div class="erfolg">Saisonordner angelegt.</div>
+  {% elif lage.saison_meldung == "fehler" %}
+    <div class="fehlerkasten">{{ lage.saison_fehler }}</div>
+  {% endif %}
+  {% if lage.saison_fehlt %}
+    <div class="karte">
+      <h2 style="margin-top:0">Neue Saison {{ konfiguration.saison }}</h2>
+      <p>Den Saisonordner <code>{{ lage.saison_ordner }}</code> gibt es noch nicht.
+        Beim Anlegen werden der Vorlage-Ordner und „Allgemein“ (Werbung,
+        Ansprechpartner) aus der letzten Saison übernommen.</p>
+      <form method="post" action="{{ url_for('nas_saison_anlegen') }}"
+            onsubmit="return confirm('Saisonordner jetzt auf der NAS anlegen?')">
+        <button type="submit">Saisonordner anlegen</button>
+      </form>
+    </div>
+  {% endif %}
   <table class="info">
     <tr><td>Freigaben für den Benutzer</td><td>{{ lage.freigaben|join(', ') }}</td></tr>
     <tr><td>Saisonordner</td><td>{{ lage.saison_ordner }}</td></tr>

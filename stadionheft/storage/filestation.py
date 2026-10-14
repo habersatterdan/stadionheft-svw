@@ -290,7 +290,7 @@ class FileStation:
     def auflisten(self, ordner: str) -> list[dict]:
         daten = self._roh({"api": "SYNO.FileStation.List", "version": "2",
                            "method": "list", "folder_path": ordner,
-                           "additional": '["size"]'})
+                           "additional": '["size","time"]'})
         return list(daten.get("files") or [])
 
     def gibt_es(self, pfad: str) -> bool:
@@ -337,12 +337,67 @@ class FileStation:
         raise NasFehler(f"CopyMove {aufgabe} nach {warten}s nicht fertig.",
                         benutzer_text="Das Kopieren der Vorlage dauert zu lange.")
 
-    def hochladen(self, datei: Path, zielordner: str) -> None:
+    def hochladen(self, datei: Path, zielordner: str, name: str = "") -> None:
         with datei.open("rb") as strom:
             self._roh({"api": "SYNO.FileStation.Upload", "version": "2",
                        "method": "upload", "path": zielordner,
                        "create_parents": "true", "overwrite": "true"},
-                      dateien={"file": (datei.name, strom, "application/octet-stream")})
+                      dateien={"file": (name or datei.name, strom,
+                                        "application/octet-stream")})
+
+    def herunterladen(self, pfad: str, ziel: Path) -> Path:
+        """Laedt eine Datei herunter -- mit Wiederholung wie bei ``_roh``.
+
+        Ein Fehler kommt hier als kleines JSON mit Status 200 zurueck, nicht
+        als HTTP-Fehler; das wird erkannt und gemeldet.
+        """
+        import requests
+
+        letzter: Exception | None = None
+        for versuch in range(1, self.VERSUCHE + 1):
+            if not self._sid:
+                self.anmelden()
+            try:
+                antwort = self._sitzung().get(
+                    f"{self.adresse}/webapi/entry.cgi",
+                    params={"api": "SYNO.FileStation.Download", "version": "2",
+                            "method": "download", "mode": "download",
+                            "path": json.dumps([pfad], ensure_ascii=False),
+                            "_sid": self._sid},
+                    timeout=self.timeout)
+            except requests.RequestException as fehler:
+                letzter = fehler
+                time.sleep(2 * versuch)
+                continue
+            if antwort.status_code >= 500:
+                letzter = NasFehler(f"HTTP {antwort.status_code}")
+                logger().warning("NAS antwortet mit %d beim Laden von %s, Versuch %d.",
+                                 antwort.status_code, pfad, versuch)
+                time.sleep(2 * versuch)
+                continue
+            inhalt = antwort.content or b""
+            if inhalt[:1] == b"{" and b'"success":false' in inhalt[:200].replace(b" ", b""):
+                try:
+                    code = json.loads(inhalt).get("error", {}).get("code")
+                except ValueError:
+                    code = None
+                if code in SITZUNG_WEG and versuch < self.VERSUCHE:
+                    self._sid = ""
+                    continue
+                raise FileStationFehler(
+                    f"Download {pfad}: Fehler {code}", code=code,
+                    benutzer_text=f"'{pfad.rsplit('/', 1)[-1]}' konnte nicht von "
+                                  f"der NAS geladen werden "
+                                  f"({FEHLERTEXTE.get(code, f'Fehler {code}')})")
+            ziel.parent.mkdir(parents=True, exist_ok=True)
+            ziel.write_bytes(inhalt)
+            return ziel
+        raise NasFehler(
+            f"Download {pfad}: {letzter}",
+            benutzer_text=f"'{pfad.rsplit('/', 1)[-1]}' konnte nicht von der NAS "
+                          f"geladen werden.",
+            hinweis="QuickConnect ist gerade unzuverlässig -- bitte erneut versuchen.") \
+            from letzter
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +435,13 @@ def ordnername_vorschlagen(vorhandene: list[str], erster_spieltag: datetime | No
 
 
 def zielordner_fuer(k: Konfiguration, schluessel: str) -> str:
-    """Unterordner einer Mannschaft im Ausgabe-Ordner ('' = Hauptordner)."""
+    """Unterordner einer Mannschaft im Ausgabe-Ordner ('' = Hauptordner).
+
+    ``ordner:<name>`` steht fuer einen festen Unterordner, z. B.
+    ``ordner:_daten`` fuer die Spieldaten des Laufs.
+    """
+    if schluessel.startswith("ordner:"):
+        return schluessel[len("ordner:"):].strip("/")
     zuordnung = k.get("nas.filestation.mannschaftsordner", {}) or {}
     return str(zuordnung.get(schluessel, "") or "").strip("/")
 
@@ -408,7 +469,7 @@ def ablage_ausfuehren(k: Konfiguration, ordnername: str,
             melden(text)
 
     name = ordnername_pruefen(ordnername)
-    saison = str(k.get("nas.filestation.saison_ordner", "")).rstrip("/")
+    saison = k.nas_saison_ordner
     vorlage_name = str(k.get("nas.filestation.vorlage_ordner", "") or "").strip("/")
     if not saison:
         raise NasFehler("nas.filestation.saison_ordner fehlt",
@@ -509,7 +570,7 @@ def titelbild_holen(k: Konfiguration, ziel_ordner: Path) -> Path | None:
     ohnehin liegt. Klappt das nicht, nimmt das Deckblatt das Bild aus dem
     Eingabeordner.
     """
-    saison = str(k.get("nas.filestation.saison_ordner", "")).rstrip("/")
+    saison = k.nas_saison_ordner
     vorlage = str(k.get("nas.filestation.vorlage_ordner", "") or "").strip("/")
     if not saison or not vorlage:
         return None
@@ -542,3 +603,122 @@ def titelbild_holen(k: Konfiguration, ziel_ordner: Path) -> Path | None:
     except NasFehler as fehler:
         logger().warning("Titelbild von der NAS nicht geladen: %s", fehler.technisch)
         return None
+
+
+# ---------------------------------------------------------------------------
+# Ansprechpartner aus einer Textdatei auf der NAS
+# ---------------------------------------------------------------------------
+
+ANSPRECHPARTNER_KOPF = """\
+# Ansprechpartner fuer das Stadionheft (Deckblatt und Gesamtheft).
+#
+# Je Person ein Block aus zwei Zeilen, dazwischen eine Leerzeile:
+#   Funktion: Name
+#   Telefon • E-Mail
+# Zeilen mit # am Anfang werden nicht gedruckt.
+"""
+
+
+def ansprechpartner_lesen(text: str) -> list[dict]:
+    """``Funktion: Name`` + Kontaktzeile(n) je Block -> Eintraege."""
+    eintraege: list[dict] = []
+    zeilen = [z.rstrip() for z in text.replace("\r\n", "\n").split("\n")
+              if not z.lstrip().startswith("#")]
+    for block in re.split(r"\n\s*\n", "\n".join(zeilen)):
+        teile = [z.strip() for z in block.strip().split("\n") if z.strip()]
+        if not teile:
+            continue
+        funktion, _, name = teile[0].partition(":")
+        eintraege.append({"funktion": funktion.strip(), "name": name.strip(),
+                          "kontakt": " ".join(" ".join(teile[1:]).split())})
+    return [e for e in eintraege if e["funktion"]]
+
+
+def ansprechpartner_schreiben(eintraege: list[dict]) -> str:
+    bloecke = [f"{e.get('funktion', '')}: {e.get('name', '')}\n{e.get('kontakt', '')}"
+               for e in eintraege]
+    return ANSPRECHPARTNER_KOPF + "\n" + "\n\n".join(bloecke) + "\n"
+
+
+def text_dekodieren(daten: bytes) -> str:
+    """UTF-8 (auch mit BOM, so speichert der DSM-Texteditor), sonst Windows."""
+    try:
+        return daten.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return daten.decode("cp1252", errors="replace")
+
+
+def ansprechpartner_von_nas(k: Konfiguration, arbeitsordner: Path) -> list[dict] | None:
+    """Liest ``heft.ansprechpartner_datei`` aus dem Saisonordner.
+
+    ``None`` heisst: keine Datei (oder NAS nicht erreichbar) -- dann gilt
+    die Liste aus der Konfiguration.
+    """
+    datei = str(k.get("heft.ansprechpartner_datei", "") or "").strip("/")
+    saison = k.nas_saison_ordner
+    if not datei or not saison:
+        return None
+    try:
+        with FileStation.aus_konfiguration(k) as fs:
+            ziel = fs.herunterladen(f"{saison}/{datei}",
+                                    Path(arbeitsordner) / "ansprechpartner.txt")
+        eintraege = ansprechpartner_lesen(text_dekodieren(ziel.read_bytes()))
+        logger().info("Ansprechpartner von der NAS: %d Einträge (%s)",
+                      len(eintraege), datei)
+        return eintraege
+    except NasFehler as fehler:
+        logger().warning("Ansprechpartner nicht von der NAS: %s", fehler.technisch)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Neue Saison
+# ---------------------------------------------------------------------------
+
+def vorherige_saison(namen: list[str], aktuell: str) -> str:
+    """Der juengste andere 'Saison XX-YY'-Ordner (nach Startjahr)."""
+    kandidaten = []
+    for name in namen:
+        treffer = re.fullmatch(r"Saison\s*(\d{2})-(\d{2})", name.strip())
+        if treffer and name != aktuell:
+            kandidaten.append((int(treffer.group(1)), name))
+    return max(kandidaten)[1] if kandidaten else ""
+
+
+def saison_anlegen(k: Konfiguration, fs: FileStation | None = None) -> AblageBericht:
+    """Legt den Saisonordner an und kopiert Vorlage und 'Allgemein' (Werbung,
+    Ansprechpartner) aus der Vorsaison. Ein vorhandener Ordner bleibt
+    unangetastet."""
+    saison = k.nas_saison_ordner
+    eltern, _, name = saison.rpartition("/")
+    bericht = AblageBericht(ordner=saison)
+    client = fs or FileStation.aus_konfiguration(k)
+    try:
+        if fs is None:
+            client.anmelden()
+        namen = [f["name"] for f in client.auflisten(eltern or "/") if f.get("isdir")]
+        if name in namen:
+            raise NasFehler(f"{saison} existiert",
+                            benutzer_text=f"Den Saisonordner '{name}' gibt es schon.")
+        vorher = vorherige_saison(namen, name)
+        client.ordner_anlegen(eltern, name)
+        bericht.angelegt = True
+        bericht.schritte.append(Schritt(f"Saisonordner '{name}' angelegt"))
+        if vorher:
+            alt = {f["name"]: f["path"] for f in client.auflisten(f"{eltern}/{vorher}")}
+            mitnehmen = [n for n in (str(k.get("nas.filestation.vorlage_ordner", "") or ""),
+                                     "Allgemein") if n and n in alt]
+            if mitnehmen:
+                client.kopieren([alt[n] for n in mitnehmen], saison)
+                bericht.schritte.append(Schritt(
+                    f"Aus '{vorher}' übernommen: {', '.join(mitnehmen)}"))
+        else:
+            bericht.schritte.append(Schritt("Keine Vorsaison gefunden -- leer angelegt"))
+        bericht.erfolgreich = True
+    except NasFehler as fehler:
+        bericht.fehler = " ".join(t for t in (fehler.benutzer_text, fehler.hinweis) if t)
+        bericht.schritte.append(Schritt(fehler.benutzer_text, ok=False))
+    finally:
+        if fs is None:
+            client.abmelden()
+    return bericht

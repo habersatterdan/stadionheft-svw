@@ -385,10 +385,14 @@ def _deckblatt_bauen(konfiguration: Konfiguration, renderer: SeitenRenderer,
     """Deckblatt (Titelbild + Heimspiele) und Ansprechpartner als eine Datei."""
     warnungen: list[str] = []
     titelbild = None
+    von_nas: list[dict] | None = None
     if (konfiguration.get("nas.aktiv", False)
             and konfiguration.get("nas.modus") == "filestation"):
-        from .storage.filestation import titelbild_holen
+        from .storage.filestation import ansprechpartner_von_nas, titelbild_holen
         titelbild = titelbild_holen(konfiguration, arbeitsordner)
+        # Die Liste wird auf der NAS gepflegt (Allgemein/Ansprechpartner.txt);
+        # die Konfiguration ist nur der Rueckfall, wenn dort nichts liegt.
+        von_nas = ansprechpartner_von_nas(konfiguration, arbeitsordner)
     if titelbild is None:
         titelbild = next((p for p in sorted(konfiguration.eingabe_ordner.glob("*"))
                           if p.stem.lower() == "titelbild"
@@ -398,7 +402,8 @@ def _deckblatt_bauen(konfiguration: Konfiguration, renderer: SeitenRenderer,
                          "Platzhalter.")
 
     seiten = [Heftseite(renderer.deckblatt(ausgabe, titelbild), "Deckblatt")]
-    eintraege = [e for e in (konfiguration.get("deckblatt.ansprechpartner") or [])
+    eintraege = [e for e in (von_nas if von_nas is not None
+                             else konfiguration.get("deckblatt.ansprechpartner") or [])
                  if isinstance(e, dict) and e.get("funktion")]
     if eintraege:
         seiten.append(Heftseite(renderer.ansprechpartner(eintraege),

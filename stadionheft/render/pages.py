@@ -260,6 +260,27 @@ class SeitenRenderer:
         return self._pdf(html, "00_ansprechpartner")
 
 
+    # -- Gesamtheft --------------------------------------------------------
+
+    def freitextseite(self, titel: str, text: str, name: str,
+                      quelle: str = "") -> Path:
+        """Text (Vorwort, Bericht als .txt) -- darf auf Folgeseiten weiterlaufen."""
+        html = self._html("freitext.html.j2", seitentitel=titel, fliessend=True,
+                          absaetze=text_zu_absaetzen(text), quelle=quelle)
+        return self._pdf(html, name)
+
+    def bildseite(self, bild: Path, titel: str, name: str) -> Path:
+        html = self._html("bildseite.html.j2", seitentitel=titel, fliessend=False,
+                          bild_url=bild.as_uri())
+        return self._pdf(html, name)
+
+    def vollbildseite(self, bild: Path | None, name: str) -> Path:
+        """Ganze Seite ohne Balken -- fuer Anzeigen als Bild und Leerseiten."""
+        html = self._html("vollbild.html.j2", seitentitel="", fliessend=False,
+                          bild_url=bild.as_uri() if bild else "")
+        return self._pdf(html, name)
+
+
 def deckblatt_spieltage(ausgabe: Ausgabe, kurzname: str = "") -> list[dict]:
     """Die Heimspiele aller Mannschaften, nach Tagen gruppiert.
 

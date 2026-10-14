@@ -66,7 +66,10 @@
     </fieldset>
   </div>
 
-  <p><button type="submit">Seiten jetzt erzeugen</button></p>
+  <p><button type="submit">Seiten jetzt erzeugen</button>
+  {% if gesamtheft_aktiv %}
+    &nbsp; <a class="knopf-zweit" href="{{ url_for('heft_seite') }}">Gesamtes Heft bauen …</a>
+  {% endif %}</p>
 
   <div class="karte">
     <details>

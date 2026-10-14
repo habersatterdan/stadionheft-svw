@@ -267,3 +267,22 @@ def test_nas_ablage_anderer_name_setzt_nicht_fort(konfiguration: Konfiguration,
     client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe b"})
     _warten_auf_ablage(client, lauf_id)
     assert aufrufe == [False, False]
+
+
+def test_gesamtheft_knopf_nur_wenn_eingeschaltet(konfiguration: Konfiguration):
+    client = _client(konfiguration)
+    assert client.get("/heft").status_code == 404
+    assert "Gesamtes Heft bauen" not in client.get("/").get_data(as_text=True)
+
+
+def test_gesamtheft_knopf_sichtbar(konfiguration: Konfiguration, monkeypatch):
+    from stadionheft import gesamtheft
+
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    konfiguration.roh["heft"]["gesamt_aktiv"] = True
+    monkeypatch.setattr(gesamtheft, "ausgaben_auflisten",
+                        lambda k: ["09 Ausgabe 301026", "08 Ausgabe 161026"])
+    client = _client(konfiguration)
+    assert "Gesamtes Heft bauen" in client.get("/").get_data(as_text=True)
+    seite = client.get("/heft").get_data(as_text=True)
+    assert "<option>09 Ausgabe 301026</option>" in seite

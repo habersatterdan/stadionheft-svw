@@ -1,0 +1,7 @@
+{# Ein Bild aus dem Ausgabe-Ordner (z. B. Liga-Uebersicht) als Inhaltsseite:
+   mit Kopf-/Fussbalken, das Bild passt sich dem Inhaltsbereich an. #}
+{% extends "_inhaltsseite.html.j2" %}
+
+{% block inhalt %}
+  <div class="bildinhalt"><img src="{{ bild_url }}" alt=""></div>
+{% endblock %}

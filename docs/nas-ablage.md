@@ -48,3 +48,38 @@ Vorlage direkt von der NAS – zum Prüfen der Einstellungen, ohne DSM zu öffne
   Umgebungsvariablen `NAS_PASSWORT`.
 * Im Saisonordner einen Ordner `00 Vorlage` anlegen – mit genau den Dateien,
   die in jede Ausgabe gehören (Titelbild, Liga-Übersichten je Mannschaft).
+
+## Das gesamte Heft (zweiter Knopf)
+
+Eingeschaltet mit `heft.gesamt_aktiv: true`. Ablauf:
+
+1. **Knopf 1:** FuPa-Seiten erzeugen und „Auf NAS ablegen“. Dabei landen die
+   Spieldaten im Unterordner `_daten` der Ausgabe.
+2. **Von Hand** in den Ausgabe-Ordner legen:
+   * `Titelbild.jpg` (ersetzt das aus der Vorlage),
+   * `Vorwort.txt`, `Vorwort.docx` oder `Vorwort.pdf`,
+   * Berichte, Bilder usw. in den jeweiligen Mannschaftsordner.
+3. **„Gesamtes Heft bauen …“** auf der Startseite, Ausgabe wählen.
+
+Aufbau: Deckblatt (mit Balken neu gesetzt), Vorwort, je Mannschaft die
+FuPa-Seiten und dann alles aus ihrem Ordner (nach Namen sortiert), weitere
+Ordner wie „Jugend“, Ansprechpartner. Die Anzeigen aus `Allgemein/Werbung`
+werden zwischen die Mannschaften verteilt, die letzte (nach Namen) kommt auf
+die Rückseite. Leerseiten füllen auf eine durch 4 teilbare Seitenzahl auf.
+
+Das Heft (`<Datum>_WaB_Druck.pdf`) und `Heftplan.txt` landen im
+Ausgabe-Ordner. **Reihenfolge ändern:** `Heftplan.txt` bearbeiten und erneut
+bauen – dann gilt genau diese Reihenfolge. Neu planen: Datei löschen oder
+„Heftplan neu erstellen“ anhaken.
+
+Dateiarten: PDF, JPG/PNG, Word (`.docx`, braucht `heft.umwandler_url`), Text.
+**Synology-Office-Dateien (`.odoc`) gehen nicht** – in DSM als PDF oder
+`.docx` exportieren.
+
+## Neue Saison
+
+1. In der Konfiguration `saison` umstellen (z. B. `"2027/2028"`). FuPa-Adressen
+   und Saisonordner mit `{saison_slug}`/`{saison_kurz}` stellen sich mit um;
+   die Ligen bitte prüfen.
+2. Seite **„NAS-Ordner“** → **„Saisonordner anlegen“**: legt den Ordner an und
+   übernimmt `00 Vorlage` und `Allgemein` aus der Vorsaison.

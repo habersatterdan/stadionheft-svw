@@ -156,7 +156,7 @@ class Konfiguration:
                 gruppe=eintrag.get("gruppe", ""),
                 untertitel=eintrag.get("untertitel", ""),
                 liga=eintrag.get("liga", ""),
-                fupa_team_url=eintrag.get("fupa_team_url", ""),
+                fupa_team_url=self.mit_saison(eintrag.get("fupa_team_url", "")),
                 zusatz_urls=[str(u) for u in (eintrag.get("zusatz_urls") or [])],
                 aktiv=bool(eintrag.get("aktiv", True)),
             )
@@ -325,6 +325,31 @@ class Konfiguration:
         self.warnungen = warnungen
 
     # -- Abgeleitete Werte --------------------------------------------------
+
+    def saison_platzhalter(self) -> dict[str, str]:
+        """Aus ``saison: "2026/2027"``: ``saison_slug`` = 2026-27 (wie FuPa
+        seine Teamseiten benennt), ``saison_kurz`` = 26-27 (wie die Ordner auf
+        der NAS heissen). So ist der Saisonwechsel eine einzige Zeile."""
+        treffer = re.match(r"\s*(\d{4})\s*/\s*(\d{2,4})\s*$", self.saison)
+        if not treffer:
+            return {}
+        anfang, ende = treffer.group(1), treffer.group(2)[-2:]
+        return {"saison_slug": f"{anfang}-{ende}",
+                "saison_kurz": f"{anfang[-2:]}-{ende}"}
+
+    def mit_saison(self, text: Any) -> str:
+        """Setzt {saison_slug}/{saison_kurz} ein. Bewusst kein str.format:
+        Andere geschweifte Klammern im Text bleiben unberuehrt."""
+        ergebnis = str(text or "")
+        for name, wert in self.saison_platzhalter().items():
+            ergebnis = ergebnis.replace("{" + name + "}", wert)
+        return ergebnis
+
+    @property
+    def nas_saison_ordner(self) -> str:
+        """Saisonordner auf der NAS (nas.filestation.saison_ordner, mit
+        Platzhaltern), ohne Schraegstrich am Ende."""
+        return self.mit_saison(self.get("nas.filestation.saison_ordner", "")).rstrip("/")
 
     @property
     def saison(self) -> str:

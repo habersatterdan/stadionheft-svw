@@ -221,7 +221,7 @@ class NasAblage:
                                       "NAS_PASSWORT"))
             if not os.environ.get(variable):
                 return False, f"Umgebungsvariable {variable} ist nicht gesetzt."
-            ziel = self.k.get("nas.filestation.saison_ordner", "")
+            ziel = self.k.nas_saison_ordner
             return True, (f"Ablage auf Knopfdruck nach '{ziel}' "
                           f"(File Station, nicht getestet).")
         if self.modus == "mount":

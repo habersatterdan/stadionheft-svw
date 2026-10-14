@@ -26,6 +26,9 @@ verein:
   # Im Docker-Betrieb auf der NAS: "/app/daten/01_vorlagen/svw_logo.png"
   logo: "stadionheft/static/img/svw_logo.png"
 
+# Zum Saisonwechsel: In fupa_team_url und nas.filestation.saison_ordner
+# duerfen {saison_slug} (2026-27, wie FuPa) und {saison_kurz} (26-27) stehen --
+# dann ist der Wechsel nur diese eine Zeile.
 saison: "2026/2027"
 
 
@@ -273,8 +276,10 @@ nas:
     benutzer: "stadionheft"
     # Das Passwort steht NIE hier, sondern in dieser Umgebungsvariablen:
     passwort_umgebungsvariable: "NAS_PASSWORT"
-    # Hier entsteht je Ausgabe ein neuer Ordner.
-    saison_ordner: "/Verein/Stadionheft/Saison 26-27"    # TODO
+    # Hier entsteht je Ausgabe ein neuer Ordner. {saison_kurz} wird aus
+    # 'saison' gesetzt (2026/2027 -> 26-27) -- zum Saisonwechsel genuegt dann
+    # die Zeile 'saison', danach auf der Seite "NAS-Ordner" anlegen.
+    saison_ordner: "/Verein/Stadionheft/Saison {saison_kurz}"    # TODO
     # Unterordner von saison_ordner. Sein Inhalt wird in jede neue Ausgabe
     # kopiert (z. B. Titelbild, Liga-Uebersichten). Liegt darin eine Datei
     # "Titelbild.jpeg" (oder .jpg/.png), kommt sie aufs Deckblatt.
@@ -292,6 +297,29 @@ nas:
 
 
 # ---------------------------------------------------------------------------
+# Gesamtes Heft (zweiter Knopf, nur mit nas.modus: filestation)
+#
+# Baut aus einem fertigen Ausgabe-Ordner das komplette Heft: Deckblatt,
+# Vorwort (Datei "Vorwort..." im Ausgabe-Ordner), je Mannschaft FuPa-Seiten
+# plus alles aus dem Mannschaftsordner, Ansprechpartner und Werbung. Die
+# Reihenfolge steht danach als Heftplan.txt im Ordner und laesst sich dort
+# aendern.
+# ---------------------------------------------------------------------------
+heft:
+  gesamt_aktiv: false
+  # Relativ zum Saisonordner. Jede Datei = Anzeige (PDF oder Bild), in
+  # Namensreihenfolge; die letzte kommt auf die Rueckseite.
+  werbung_ordner: "Allgemein/Werbung"
+  # Relativ zum Saisonordner. Je Person: "Funktion: Name", naechste Zeile
+  # Kontaktdaten, Leerzeile dazwischen. Gilt auch fuers Deckblatt.
+  ansprechpartner_datei: "Allgemein/Ansprechpartner.txt"
+  # Gotenberg fuer Word-Dateien (.docx), z. B. "http://gotenberg:3000".
+  # Leer = Word-Dateien werden mit Hinweis uebersprungen.
+  umwandler_url: ""
+  dateiname: "{datum:%Y%m%d}_WaB_Druck.pdf"
+
+
+# ---------------------------------------------------------------------------
 # Deckblatt
 #
 # Eine eigene Datei vor den Mannschaftsdateien: Titelbild, "Wir begruessen
@@ -300,6 +328,7 @@ nas:
 # ---------------------------------------------------------------------------
 deckblatt:
   aktiv: true
+  # Rueckfall, wenn heft.ansprechpartner_datei auf der NAS fehlt.
   # Jede Zeile: Funktion, Name und eine Zeile Kontaktdaten.
   ansprechpartner:
     - funktion: "Vorstand"           # TODO

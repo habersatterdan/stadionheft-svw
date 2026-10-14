@@ -1,0 +1,81 @@
+{% extends "_layout.html" %}
+{% block titel %}Gesamtes Heft bauen{% endblock %}
+
+{% block inhalt %}
+{% if not lauf %}
+<h1>Gesamtes Heft bauen</h1>
+<p class="hilfe">Baut aus einem fertigen Ausgabe-Ordner auf der NAS das komplette
+  Heft: Deckblatt mit dem Titelbild aus dem Ordner, Vorwort, je Mannschaft die
+  FuPa-Seiten und alles aus dem Mannschaftsordner, Ansprechpartner und Werbung.
+  Das fertige Heft und der <em>Heftplan.txt</em> landen im Ausgabe-Ordner.</p>
+
+{% if fehler %}<div class="fehlerkasten">{{ fehler }}</div>{% endif %}
+
+<form method="post" action="{{ url_for('heft_bauen') }}" class="karte">
+  <div class="feld">
+    <label for="ausgabe">Ausgabe</label>
+    <select id="ausgabe" name="ausgabe">
+      {% for name in ausgaben %}<option>{{ name }}</option>{% endfor %}
+    </select>
+  </div>
+  <label class="zeile">
+    <input type="checkbox" name="neu" value="ja">
+    <span><span class="name">Heftplan neu erstellen</span><br>
+      <span class="liga">Sonst gilt ein vorhandener Heftplan.txt im Ordner – mit
+        deinen Änderungen an der Reihenfolge.</span></span>
+  </label>
+  <p><button type="submit" {{ 'disabled' if not ausgaben }}>Heft bauen</button></p>
+  <p class="hilfe">Über QuickConnect dauert das einige Minuten – Werbung und Bilder
+    werden nur beim ersten Mal geladen.</p>
+</form>
+{% else %}
+<h1 id="ueberschrift"><span class="spinner"></span> Heft wird gebaut …</h1>
+<p class="hilfe" id="aktuell"></p>
+<div class="karte" id="ergebnis" style="display:none"></div>
+<div class="karte">
+  <h2 style="margin-top:0">Was gerade passiert</h2>
+  <pre class="protokoll" id="protokoll">wird geladen …</pre>
+</div>
+<script>
+const statusUrl = {{ url_for('heft_status', lauf_id=lauf.id)|tojson }};
+const downloadUrl = {{ url_for('heft_download', lauf_id=lauf.id)|tojson }};
+function escape(t) { const d = document.createElement('div');
+  d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+function zeigen(z) {
+  const k = document.getElementById('ergebnis'); k.style.display = 'block';
+  document.getElementById('aktuell').textContent = '';
+  if (z.erfolgreich && z.ergebnis) {
+    const e = z.ergebnis;
+    document.getElementById('ueberschrift').innerHTML = '&#10003; Heft fertig';
+    let h = '<div class="erfolg"><strong>' + escape(e.seitenzahl) + ' Seiten</strong>'
+          + (e.nas_datei ? '<br>Auf der NAS: ' + escape(e.nas_datei) : '')
+          + (e.plan_von_hand ? '<br>Nach deinem Heftplan gebaut.' : '') + '</div>'
+          + '<p><a class="knopf-zweit" href="' + downloadUrl + '" style="background:#E52421;'
+          + 'color:#fff;border-color:#E52421">Heft herunterladen (PDF)</a></p>';
+    (e.warnungen || []).forEach(function (w) { h += '<div class="hinweis">' + escape(w) + '</div>'; });
+    h += '<details open><summary>Heftplan</summary><pre class="protokoll">'
+       + escape(e.plan) + '</pre></details>';
+    k.innerHTML = h;
+  } else {
+    const f = z.fehler || {};
+    document.getElementById('ueberschrift').innerHTML = '&#10007; Es hat nicht geklappt';
+    k.innerHTML = '<div class="fehlerkasten"><strong>' + escape(f.meldung) + '</strong>'
+      + (f.hinweis ? '<p>' + escape(f.hinweis) + '</p>' : '') + '</div>'
+      + (f.technisch ? '<details><summary>Technische Details</summary><pre class="protokoll">'
+         + escape(f.technisch) + '</pre></details>' : '');
+  }
+}
+function abfragen() {
+  fetch(statusUrl).then(function (a) { return a.json(); }).then(function (z) {
+    document.getElementById('protokoll').textContent = (z.protokoll || []).map(function (p) {
+      return p.zeit + '  ' + p.level.padEnd(7) + ' ' + p.text; }).join('\n') || '…';
+    if (z.fertig) { zeigen(z); return; }
+    if (z.aktuell) { document.getElementById('aktuell').textContent = z.aktuell; }
+    setTimeout(abfragen, 1500);
+  }).catch(function () { setTimeout(abfragen, 3000); });
+}
+abfragen();
+</script>
+{% endif %}
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Zur Startseite</a></p>
+{% endblock %}
