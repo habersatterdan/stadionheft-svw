@@ -128,9 +128,9 @@ class Vorabbericht:
                     f"noch nie getestet wurde. Sicher sind {sicher} Dateien. "
                     f"Bitte einmal 'FuPa-Verbindung prüfen' anstoßen.")
         if self.offene:
-            return (f"Ein Lauf erzeugt {len(self.bereite)} von {gesamt} "
-                    f"Dateien. Für die übrigen fehlen die Daten.")
-        return f"Alles bereit. Ein Lauf erzeugt {len(self.bereite)} Dateien."
+            return (f"Ein Lauf erzeugt {len(self.bereite)} von {gesamt} Mannschafts"
+                    f"dateien. Für die übrigen fehlen die Daten.")
+        return f"Alles bereit. Ein Lauf erzeugt {len(self.bereite)} Mannschaftsdateien."
 
 
 # ---------------------------------------------------------------------------
