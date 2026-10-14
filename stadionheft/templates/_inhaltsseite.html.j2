@@ -14,7 +14,11 @@
 #}
 {% extends "_basis.html.j2" %}
 
+{# layout.balken = false: ohne Kopfbalken (samt Ueberschrift), Wappen und
+   Fussbalken -- die stehen dann schon in der Layoutdatei. Der Inhalt bleibt
+   genau an seiner Stelle, damit er dort passgenau hineinfaellt. #}
 {% macro kopfbereich(fest) %}
+  {% if layout.balken %}
   <div class="kopf {{ 'kopf-fix' if fest }}">
     <h1>{{ seitentitel }}</h1>
   </div>
@@ -22,6 +26,7 @@
     <img class="wappen {{ 'wappen-fix' if fest }}" src="{{ heft.logo_url }}" alt="">
   {% endif %}
   <div class="fuss {{ 'fuss-fix' if fest }}">{{ heft.hefttitel }}</div>
+  {% endif %}
 {% endmacro %}
 
 {% block koerper %}

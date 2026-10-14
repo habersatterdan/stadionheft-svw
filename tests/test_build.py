@@ -323,3 +323,22 @@ def test_spielerstatistik_nach_einsaetzen_und_minuten_hoechstens_22():
 
 def test_saisonbilanz_ist_keine_seite_mehr():
     assert "bilanz" not in STANDARD_SEITEN
+
+
+def test_ohne_balken_nur_der_inhalt(konfiguration: Konfiguration):
+    """Wunsch der Layouterin: Kopf-/Fussbalken stehen schon in ihrer Datei."""
+    mit = dateien_erstellen(konfiguration, ["herren1"]).dateien[0]
+    seite = STANDARD_SEITEN.index("spielerstatistik")
+    text_mit = PdfReader(str(mit.pdf)).pages[seite].extract_text()
+    assert "Wörnitzstein am Ball" in text_mit and "Spielerstatistik" in text_mit
+
+    konfiguration.roh["layout"]["balken"] = False
+    ohne = dateien_erstellen(konfiguration, ["herren1"]).dateien[0]
+    leser = PdfReader(str(ohne.pdf))
+    text_ohne = leser.pages[seite].extract_text()
+    assert "Wörnitzstein am Ball" not in text_ohne
+    assert "Spielerstatistik" not in text_ohne
+    # Der Inhalt selbst ist noch da, Seitenzahl und Format unveraendert
+    assert "Spieler" in text_ohne
+    assert len(leser.pages) == mit.seitenzahl
+    assert leser.pages[seite].mediabox == PdfReader(str(mit.pdf)).pages[seite].mediabox

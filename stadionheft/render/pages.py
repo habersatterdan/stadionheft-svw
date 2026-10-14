@@ -87,6 +87,8 @@ class LayoutWerte:
     primaerfarbe: str = "#E52421"
     textfarbe: str = "#1A1A1A"
     schriftfamilie: str = "Segoe UI, Open Sans, DejaVu Sans, sans-serif"
+    #: Kopf- und Fussbalken auf den Inhaltsseiten (siehe _inhaltsseite.html.j2)
+    balken: bool = True
 
     @property
     def schrift_css(self) -> Markup:
@@ -132,6 +134,7 @@ class LayoutWerte:
             textfarbe=str(k.get("layout.textfarbe", "#1A1A1A")),
             schriftfamilie=str(k.get("layout.schriftfamilie",
                                      "Segoe UI, Open Sans, DejaVu Sans, sans-serif")),
+            balken=bool(k.get("layout.balken", True)),
         )
 
 
