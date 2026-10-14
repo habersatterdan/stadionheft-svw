@@ -301,7 +301,8 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
                                    and not VERSTECKT.match(f["name"])}
             except StadionheftFehler:
                 ergebnis.warnungen.append(f"Werbe-Ordner '{werbe_ordner}' fehlt.")
-        werbung = [merken(Baustein("werbung", n)) for n in sorted(werbe_eintraege)]
+        werbung = [merken(Baustein("werbung", n))
+                   for n in sorted(werbe_eintraege, key=str.lower)]
 
         # -- 4. Plan: der eigene aus dem Ordner oder ein neuer ----------------
         plan_datei = dateien_oben.get(HEFTPLAN)
@@ -506,14 +507,74 @@ def _datei_setzen(k: Konfiguration, renderer: SeitenRenderer, laden: _Laden,
         return None
     lokal = laden.holen(eintrag)
     if endung in PDF:
-        return lokal
+        return auf_heftformat(lokal, renderer.layout,
+                              renderer.arbeitsordner / f"{stamm}.pdf", ergebnis)
     if endung in BILD:
         return (renderer.vollbildseite(lokal, stamm) if vollbild
                 else renderer.bildseite(lokal, titel, stamm))
     if endung in TEXT:
         return renderer.freitextseite(titel, text_dekodieren(lokal.read_bytes()),
                                       stamm, quelle=eintrag["name"])
-    return _umwandeln(k, lokal, renderer.arbeitsordner / f"{stamm}.pdf", ergebnis)
+    umgewandelt = _umwandeln(k, lokal, renderer.arbeitsordner / f"{stamm}_word.pdf",
+                             ergebnis)
+    return auf_heftformat(umgewandelt, renderer.layout,
+                          renderer.arbeitsordner / f"{stamm}.pdf", ergebnis) \
+        if umgewandelt else None
+
+
+MM = 72 / 25.4
+#: So viel Abweichung vom Endformat gilt noch als "passt" (Rundung, 150 statt
+#: 148 mm bei mancher Anzeige) -- solche Seiten bleiben unangetastet.
+FORMAT_TOLERANZ_MM = 3
+
+
+def auf_heftformat(quelle: Path, layout, ziel: Path,
+                   ergebnis: HeftErgebnis | None = None) -> Path:
+    """Bringt jede Seite einer fremden PDF auf das Heftformat.
+
+    Anzeigen und Zeitungsartikel kommen als A4, A5-quer oder A5 mit/ohne
+    Anschnitt. Die Montage legt Seiten nur mittig auf ein gemeinsames Format
+    -- eine einzige A4-Anzeige machte so das ganze Heft zu A4. Hier wird jede
+    Seite, deren Endformat nicht passt, proportional in das Endformat
+    (A5) eingepasst und mittig auf A5 + Anschnitt gesetzt. Passende Seiten
+    bleiben, wie sie sind (ihr Anschnitt ist dann echt).
+    """
+    from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+    from pypdf.generic import RectangleObject
+
+    breite, hoehe = layout.breite_mm * MM, layout.hoehe_mm * MM
+    rand = layout.anschnitt_mm * MM
+    leser = PdfReader(str(quelle))
+    schreiber = PdfWriter()
+    angepasst = 0
+    for seite in leser.pages:
+        trim = seite.trimbox
+        tb, th = float(trim.width), float(trim.height)
+        if (abs(tb - breite) <= FORMAT_TOLERANZ_MM * MM
+                and abs(th - hoehe) <= FORMAT_TOLERANZ_MM * MM):
+            schreiber.add_page(seite)
+            continue
+        angepasst += 1
+        faktor = min(breite / tb, hoehe / th)
+        dx = rand + (breite - tb * faktor) / 2
+        dy = rand + (hoehe - th * faktor) / 2
+        neu = PageObject.create_blank_page(width=breite + 2 * rand,
+                                           height=hoehe + 2 * rand)
+        neu.merge_transformed_page(
+            seite, Transformation().translate(-float(trim.left), -float(trim.bottom))
+            .scale(faktor, faktor).translate(dx, dy))
+        neu.trimbox = RectangleObject((rand, rand, rand + breite, rand + hoehe))
+        neu.bleedbox = RectangleObject((0, 0, breite + 2 * rand, hoehe + 2 * rand))
+        schreiber.add_page(neu)
+    if not angepasst:
+        return quelle
+    with ziel.open("wb") as strom:
+        schreiber.write(strom)
+    if ergebnis is not None:
+        ergebnis.warnungen.append(
+            f"'{quelle.name}': {angepasst} Seite(n) nicht im Heftformat -- auf A5 "
+            f"verkleinert/eingepasst. Bitte im Druck-PDF ansehen.")
+    return ziel
 
 
 def _umwandeln(k: Konfiguration, datei: Path, ziel: Path,

@@ -269,3 +269,32 @@ def test_vorherige_saison():
     assert vorherige_saison(["Saison24-25", "Saison 26-27", "Allgemein"],
                             "Saison 27-28") == "Saison 26-27"
     assert vorherige_saison([], "Saison 27-28") == ""
+
+
+def test_fremde_formate_werden_eingepasst(tmp_path):
+    from stadionheft.gesamtheft import MM, auf_heftformat
+    from stadionheft.render.pages import LayoutWerte
+
+    schreiber = PdfWriter()
+    schreiber.add_blank_page(width=210 * MM, height=297 * MM)   # A4
+    schreiber.add_blank_page(width=210 * MM, height=148 * MM)   # A5 quer
+    schreiber.add_blank_page(width=154 * MM, height=216 * MM)   # A5 + Anschnitt
+    from pypdf.generic import RectangleObject
+    schreiber.pages[2].trimbox = RectangleObject((3 * MM, 3 * MM, 151 * MM, 213 * MM))
+    quelle = tmp_path / "anzeigen.pdf"
+    with quelle.open("wb") as strom:
+        schreiber.write(strom)
+
+    ziel = auf_heftformat(quelle, LayoutWerte(), tmp_path / "heft.pdf")
+    seiten = PdfReader(str(ziel)).pages
+    for seite in seiten:
+        assert round(float(seite.mediabox.width) / MM) == 154
+        assert round(float(seite.mediabox.height) / MM) == 216
+        assert round(float(seite.trimbox.width) / MM) == 148
+    # Bereits passende Datei bleibt, wie sie ist
+    nur_a5 = tmp_path / "a5.pdf"
+    w = PdfWriter()
+    w.add_blank_page(width=148 * MM, height=210 * MM)
+    with nur_a5.open("wb") as strom:
+        w.write(strom)
+    assert auf_heftformat(nur_a5, LayoutWerte(), tmp_path / "x.pdf") == nur_a5
