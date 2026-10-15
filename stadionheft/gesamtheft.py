@@ -316,11 +316,12 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
         schluss: list[Baustein] = []
         for muster in k.get("heft.kontaktlisten") or [
                 k.get("heft.ansprechpartner_datei", "")]:
-            for pfad in _finden(liste, saison, str(muster or "")):
+            for pfad in _finden(liste, saison, str(muster or ""), ergebnis):
                 schluss.append(Baustein("kontaktliste", pfad))
         if not any(b.art == "kontaktliste" for b in schluss):
             schluss.append(Baustein("kontaktliste", ""))     # aus der Konfiguration
-        for pfad in _finden(liste, saison, str(k.get("heft.impressum", "") or "")):
+        for pfad in _finden(liste, saison, str(k.get("heft.impressum", "") or ""),
+                            ergebnis):
             schluss.append(Baustein("impressum", pfad))
 
         werbe_ordner = str(k.get("heft.werbung_ordner", "") or "").strip("/")
@@ -338,8 +339,10 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
             pfad = f"{saison}/{werbe_ordner}/{unter}" if unter else \
                 f"{saison}/{werbe_ordner}"
             bausteine = []
-            for f in sorted(liste(pfad), key=lambda f: f["name"].lower()):
-                if f.get("isdir"):
+            dateien = [f for f in liste(pfad) if not f.get("isdir")]
+            behalten = set(nur_neueste([f["name"] for f in dateien], ergebnis))
+            for f in sorted(dateien, key=lambda f: f["name"].lower()):
+                if f["name"] not in behalten:
                     continue
                 schluessel = f"{unter}/{f['name']}" if unter else f["name"]
                 werbe_dateien[schluessel] = f
@@ -592,7 +595,34 @@ def paaren(werbung: list[Baustein], setzen: Callable[[Baustein], None]) -> list[
 # Helfer
 # ---------------------------------------------------------------------------
 
-def _finden(liste: Callable[[str], list[dict]], saison: str, muster: str) -> list[str]:
+JAHR = re.compile(r"(?<!\d)(19|20)\d{2}(?!\d)")
+
+
+def nur_neueste(namen: list[str], ergebnis: HeftErgebnis | None = None) -> list[str]:
+    """Von Dateien, die sich nur in der Jahreszahl unterscheiden, die neueste.
+
+    So genuegt es, den neuen Teamshop-Flyer (..._2026.pdf) dazuzulegen --
+    der alte (..._2025.pdf) faellt von selbst heraus, nichts steht doppelt
+    im Heft.
+    """
+    gruppen: dict[str, list[tuple[int, str]]] = {}
+    for name in namen:
+        jahre = [int(t.group(0)) for t in JAHR.finditer(name)]
+        kern = JAHR.sub("####", name).lower()
+        gruppen.setdefault(kern, []).append((max(jahre) if jahre else 0, name))
+    behalten = []
+    for gruppe in gruppen.values():
+        gruppe.sort()
+        behalten.append(gruppe[-1][1])
+        if ergebnis is not None and len(gruppe) > 1:
+            ergebnis.warnungen.append(
+                f"'{gruppe[-1][1]}' ist die neueste Fassung -- übergangen: "
+                + ", ".join(n for _, n in gruppe[:-1]))
+    return [n for n in namen if n in behalten]
+
+
+def _finden(liste: Callable[[str], list[dict]], saison: str, muster: str,
+            ergebnis: HeftErgebnis | None = None) -> list[str]:
     """'Allgemein/Kontakte_Jugend*.docx' -> passende Pfade (relativ zur Saison)."""
     muster = muster.strip("/")
     if not muster:
@@ -600,6 +630,7 @@ def _finden(liste: Callable[[str], list[dict]], saison: str, muster: str) -> lis
     eltern, _, name = muster.rpartition("/")
     treffer = [f["name"] for f in liste(f"{saison}/{eltern}" if eltern else saison)
                if not f.get("isdir") and fnmatch.fnmatch(f["name"].lower(), name.lower())]
+    treffer = nur_neueste(treffer, ergebnis)
     return [f"{eltern}/{n}" if eltern else n for n in sorted(treffer, key=str.lower)]
 
 
@@ -874,27 +905,43 @@ def auf_heftformat(quelle: Path, layout, ziel: Path,
 
     breite, hoehe = layout.breite_mm * MM, layout.hoehe_mm * MM
     rand = layout.anschnitt_mm * MM
-    leser = PdfReader(str(quelle))
+    toleranz = FORMAT_TOLERANZ_MM * MM
     schreiber = PdfWriter()
     angepasst = 0
-    for seite in leser.pages:
+    for nummer in range(len(PdfReader(str(quelle)).pages)):
+        seite = PdfReader(str(quelle)).pages[nummer]
         trim = seite.trimbox
         tb, th = float(trim.width), float(trim.height)
-        if (abs(tb - breite) <= FORMAT_TOLERANZ_MM * MM
-                and abs(th - hoehe) <= FORMAT_TOLERANZ_MM * MM):
+        if abs(tb - breite) <= toleranz and abs(th - hoehe) <= toleranz:
             schreiber.add_page(seite)
             continue
         angepasst += 1
-        faktor = min(breite / tb, hoehe / th)
-        dx = rand + (breite - tb * faktor) / 2
-        dy = rand + (hoehe - th * faktor) / 2
-        neu = schreiber.add_blank_page(width=breite + 2 * rand,
-                                       height=hoehe + 2 * rand)
-        neu.merge_transformed_page(
-            seite, Transformation().translate(-float(trim.left), -float(trim.bottom))
-            .scale(faktor, faktor).translate(dx, dy))
-        neu.trimbox = RectangleObject((rand, rand, rand + breite, rand + hoehe))
-        neu.bleedbox = RectangleObject((0, 0, breite + 2 * rand, hoehe + 2 * rand))
+        # Doppelseite: quer und so gross wie zwei Heftseiten nebeneinander
+        # (A4 quer bei A5) -- wie der Teamshop-Flyer. Wird in zwei Seiten
+        # zerlegt, so wie es das Layout von Hand macht. Erkannt an der Groesse,
+        # nicht am Seitenverhaeltnis: A5 quer (halbe Anzeige) hat dasselbe.
+        if abs(tb - 2 * breite) <= 2 * toleranz and abs(th - hoehe) <= 2 * toleranz:
+            mitte = float(trim.left) + tb / 2
+            teile = [(float(trim.left), mitte), (mitte, float(trim.right))]
+        else:
+            teile = [(float(trim.left), float(trim.right))]
+        for links, rechts in teile:
+            # Frisch lesen: die CropBox begrenzt, was eingesetzt wird --
+            # so blitzt die Nachbarhaelfte nicht im Anschnitt durch.
+            teil = PdfReader(str(quelle)).pages[nummer]
+            teil.cropbox = RectangleObject((links, float(trim.bottom),
+                                            rechts, float(trim.top)))
+            tb_teil = rechts - links
+            faktor = min(breite / tb_teil, hoehe / th)
+            dx = rand + (breite - tb_teil * faktor) / 2
+            dy = rand + (hoehe - th * faktor) / 2
+            neu = schreiber.add_blank_page(width=breite + 2 * rand,
+                                           height=hoehe + 2 * rand)
+            neu.merge_transformed_page(
+                teil, Transformation().translate(-links, -float(trim.bottom))
+                .scale(faktor, faktor).translate(dx, dy))
+            neu.trimbox = RectangleObject((rand, rand, rand + breite, rand + hoehe))
+            neu.bleedbox = RectangleObject((0, 0, breite + 2 * rand, hoehe + 2 * rand))
     if not angepasst:
         return quelle
     with ziel.open("wb") as strom:

@@ -410,3 +410,42 @@ def test_fremde_formate_werden_eingepasst(tmp_path):
     with nur_a5.open("wb") as strom:
         w.write(strom)
     assert auf_heftformat(nur_a5, LayoutWerte(), tmp_path / "x.pdf") == nur_a5
+
+
+def test_doppelseite_wird_zerlegt_halbe_anzeige_nicht(tmp_path):
+    """Teamshop-Flyer: A4 hoch + zwei A4-quer-Seiten = 1 + 4 Heftseiten.
+    Eine A5-quer-Anzeige (gleiches Seitenverhaeltnis) bleibt eine Seite."""
+    from stadionheft.gesamtheft import MM, auf_heftformat
+    from stadionheft.render.pages import LayoutWerte
+
+    w = PdfWriter()
+    w.add_blank_page(width=210 * MM, height=297 * MM)
+    w.add_blank_page(width=297 * MM, height=210 * MM)
+    w.add_blank_page(width=297 * MM, height=210 * MM)
+    flyer = tmp_path / "flyer.pdf"
+    with flyer.open("wb") as strom:
+        w.write(strom)
+    seiten = PdfReader(str(auf_heftformat(flyer, LayoutWerte(),
+                                          tmp_path / "f.pdf"))).pages
+    assert len(seiten) == 5
+    assert all(round(float(s.trimbox.width) / MM) == 148 for s in seiten)
+
+    w = PdfWriter()
+    w.add_blank_page(width=210 * MM, height=148 * MM)
+    quer = tmp_path / "axa.pdf"
+    with quer.open("wb") as strom:
+        w.write(strom)
+    assert len(PdfReader(str(auf_heftformat(quer, LayoutWerte(),
+                                            tmp_path / "a.pdf"))).pages) == 1
+
+
+def test_nur_die_neueste_fassung():
+    from stadionheft.gesamtheft import HeftErgebnis, nur_neueste
+
+    ergebnis = HeftErgebnis()
+    namen = ["01 SVW_Flyer_Ausstattung_2025.pdf", "01 SVW_Flyer_Ausstattung_2026.pdf",
+             "12082024_Anzeige_Augenblick.pdf", "Axa.pdf", "Kontakte_Jugend_2026.docx"]
+    assert nur_neueste(namen, ergebnis) == [
+        "01 SVW_Flyer_Ausstattung_2026.pdf", "12082024_Anzeige_Augenblick.pdf",
+        "Axa.pdf", "Kontakte_Jugend_2026.docx"]
+    assert len(ergebnis.warnungen) == 1 and "2025" in ergebnis.warnungen[0]
