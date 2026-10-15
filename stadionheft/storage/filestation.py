@@ -225,7 +225,7 @@ class FileStation:
         self.abmelden()
 
     def _roh(self, parameter: dict, *, mit_sid: bool = True,
-             dateien: dict | None = None) -> Any:
+             dateien: dict | None = None, timeout: float | None = None) -> Any:
         """Ein Aufruf mit Wiederholung.
 
         Das QuickConnect-Relay antwortet gelegentlich mit 502, und eine
@@ -248,7 +248,7 @@ class FileStation:
                     for wert in dateien.values():
                         wert[1].seek(0)
                 antwort = self._sitzung().post(url, data=daten, files=dateien,
-                                               timeout=self.timeout)
+                                               timeout=timeout or self.timeout)
             except requests.RequestException as fehler:
                 letzter = fehler
                 logger().warning("NAS-Aufruf %s fehlgeschlagen (%s), Versuch %d.",
@@ -337,13 +337,20 @@ class FileStation:
         raise NasFehler(f"CopyMove {aufgabe} nach {warten}s nicht fertig.",
                         benutzer_text="Das Kopieren der Vorlage dauert zu lange.")
 
+    #: Ueber das QuickConnect-Relay gemessen ~60 KB/s; mit Reserve gerechnet.
+    MINDEST_RATE = 30_000
+
     def hochladen(self, datei: Path, zielordner: str, name: str = "") -> None:
+        # Zeitgrenze nach Groesse: Ein ganzes Heft (~50 MB) braucht ueber das
+        # Relay eine Viertelstunde -- mit 2 Minuten brach es ab (15.10.2026).
+        zeit = max(self.timeout, datei.stat().st_size / self.MINDEST_RATE)
         with datei.open("rb") as strom:
             self._roh({"api": "SYNO.FileStation.Upload", "version": "2",
                        "method": "upload", "path": zielordner,
                        "create_parents": "true", "overwrite": "true"},
                       dateien={"file": (name or datei.name, strom,
-                                        "application/octet-stream")})
+                                        "application/octet-stream")},
+                      timeout=zeit)
 
     def herunterladen(self, pfad: str, ziel: Path) -> Path:
         """Laedt eine Datei herunter -- mit Wiederholung wie bei ``_roh``.
@@ -364,7 +371,7 @@ class FileStation:
                             "method": "download", "mode": "download",
                             "path": json.dumps([pfad], ensure_ascii=False),
                             "_sid": self._sid},
-                    timeout=self.timeout)
+                    timeout=(self.timeout, max(self.timeout, 1800)))
             except requests.RequestException as fehler:
                 letzter = fehler
                 time.sleep(2 * versuch)

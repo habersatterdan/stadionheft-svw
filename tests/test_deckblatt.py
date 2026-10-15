@@ -117,3 +117,35 @@ def test_filestation_legt_nicht_automatisch_ab(konfiguration: Konfiguration,
     monkeypatch.setattr(build.NasAblage, "ablegen_mehrere", verboten)
     ergebnis = dateien_erstellen(konfiguration, ["herren1"])
     assert ergebnis.nas_ziel == ""
+
+
+def test_mehrseitiger_text_bleibt_zwischen_den_balken(konfiguration: Konfiguration,
+                                                      tmp_path):
+    """Gesehen 15.10.2026 im Vorwort: Text lief in den Fussbalken und begann
+    auf der Folgeseite ueber dem Kopfbalken."""
+    from stadionheft.render.pages import SeitenRenderer
+
+    renderer = SeitenRenderer(konfiguration, tmp_path)
+    text = "\n\n".join(f"Absatz {i}: " + "Lorem ipsum dolor sit amet. " * 20
+                       for i in range(20))
+    leser = PdfReader(str(renderer.freitextseite("Vorwort", text, "probe")))
+    assert len(leser.pages) >= 2
+    mm = 72 / 25.4
+    for seite in leser.pages:
+        hoehe = float(seite.mediabox.height)
+        hoehen: list[tuple[str, float]] = []
+
+        def merken(text, cm, tm, _font, _size):
+            if text.strip():
+                # Textposition (tm) mit der Seitentransformation (cm) verrechnet
+                y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+                hoehen.append((text.strip(), y))
+
+        seite.extract_text(visitor_text=merken)
+        inhalt = [y for t, y in hoehen
+                  if t not in ("Vorwort", "Wörnitzstein am Ball")]
+        assert inhalt
+        # unter dem Kopfbereich (44 mm + 3 mm Anschnitt) und ueber dem Fussbalken
+        assert max(inhalt) <= hoehe - 44 * mm
+        assert min(inhalt) >= 20 * mm
+        assert any(t == "Vorwort" for t, _ in hoehen)

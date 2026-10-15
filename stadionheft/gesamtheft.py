@@ -391,7 +391,9 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
                 return None, False
             lokal = laden.holen(eintrag)
             if endung in BILD:
-                lokal = bild_als_pdf(lokal, arbeit / f"anzeige_{len(werbe_pdf)}.pdf")
+                # Nach der Anzeige benannt -- der Name erscheint in Hinweisen.
+                lokal = bild_als_pdf(lokal, arbeit / f"{len(werbe_pdf):02d}"
+                                     / f"{Path(eintrag['name']).stem}.pdf")
             return lokal, _ist_halbe_seite(lokal)
 
         werbe_pdf: dict[str, tuple[Path | None, bool]] = {}
@@ -549,7 +551,9 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
         if not ergebnis.plan_von_hand:
             jetzt("Lege den Heftplan in den Ordner …")
             client.hochladen(plan_lokal, ordner)
-        jetzt(f"Lade {dateiname} auf die NAS ({lokal.stat().st_size // 1_000_000} MB) …")
+        groesse = lokal.stat().st_size
+        jetzt(f"Lade {dateiname} auf die NAS ({groesse // 1_000_000} MB, über "
+              f"QuickConnect etwa {max(1, groesse // 60_000 // 60)} Minuten) …")
         try:
             client.hochladen(lokal, ordner)
             ergebnis.nas_datei = f"{ordner}/{dateiname}"
@@ -654,6 +658,7 @@ def bild_als_pdf(bild: Path, ziel: Path) -> Path:
     """Ein Bild als einseitige PDF in seinem Seitenverhaeltnis (300 dpi)."""
     from PIL import Image
 
+    ziel.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(bild) as quelle:
         quelle.convert("RGB").save(ziel, "PDF", resolution=300)
     return ziel

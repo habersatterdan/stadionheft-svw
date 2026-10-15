@@ -133,13 +133,26 @@ html, body {
    deshalb exakt dieselben Werte wie im festen Modus und werden auf jeder
    Folgeseite automatisch wiederholt. */
 
+/* Die Raender muessen auf JEDER Seite gelten -- als Raender des <body>
+   galten sie nur oben auf der ersten und unten auf der letzten Seite: Der
+   Text lief in den Fussbalken und begann auf Folgeseiten ueber dem
+   Kopfbalken. Darum eine eigene Seitenart mit Seitenraendern (gleiche Werte
+   wie --inhalt-oben/--rand/--inhalt-unten; var() ist in @page nicht
+   zuverlaessig). */
 body.fliessend {
-    margin: var(--inhalt-oben) var(--rand) var(--inhalt-unten) var(--rand);
+    margin: 0;
+    page: fliessend;
+}
+@page fliessend {
+    margin: 44mm 12mm 20mm 12mm;
 }
 
+/* Feste Elemente misst WeasyPrint ab dem Satzspiegel (innerhalb der
+   Seitenraender von @page fliessend) -- also um die Raender zurueck. */
 .kopf-fix, .fuss-fix, .wappen-fix { position: fixed; }
-.kopf-fix { top: var(--kopf-oben); left: 0; width: var(--seitenbreite); }
-.fuss-fix { bottom: var(--fuss-unten); left: 0; width: var(--seitenbreite); }
+.kopf-fix { top: calc(var(--kopf-oben) - 44mm); left: -12mm; width: var(--seitenbreite); }
+.fuss-fix { bottom: calc(var(--fuss-unten) - 20mm); left: -12mm; width: var(--seitenbreite); }
+.wappen-fix { top: calc(5.5mm - 44mm); left: calc(9mm - 12mm); }
 
 .inhalt-fliessend { width: 100%; }
 
