@@ -647,3 +647,25 @@ dl.merkmale .form-zeichen {
 
 .vollbild { display: flex; align-items: center; justify-content: center; }
 .vollbild img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Gesamtheft: Trennseite mit Zwischenbild (wie in der Layoutdatei) */
+.zwischenbild img {
+    position: absolute;
+    top: 12mm;
+    left: 10mm;
+    width: calc(100% - 20mm);
+    height: 168mm;
+    object-fit: contain;
+}
+.zwischenbild .beschriftung {
+    position: absolute;
+    bottom: 13mm;
+    left: 0;
+    width: 100%;
+    font-size: 17pt;
+}
+
+/* Gesamtheft: Kontaktlisten / Impressum */
+.kontaktliste { font-size: 7pt; line-height: 1.3; }
+.kontaktliste .kopfzeile-liste { font-weight: 700; margin-top: 1.4mm; }
+.kontaktliste .zeile-liste { color: #333333; }

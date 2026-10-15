@@ -115,6 +115,8 @@ def nas(heft_konfiguration: Konfiguration) -> SpeicherNas:
     ausgabe = f"{SAISON}/09 Ausgabe 290726"
     speicher = SpeicherNas()
     speicher.datei(f"{SAISON}/00 Vorlage/Titelbild.jpeg", _bild())
+    # Das "schwarze Zwischenbild" der Mannschaft liegt in der Vorlage ...
+    speicher.datei(f"{SAISON}/00 Vorlage/Herren 1/Liga.jpeg", _bild())
     speicher.datei(f"{ausgabe}/_daten/{lauf.snapshot.name}", lauf.snapshot.read_bytes())
     for d in lauf.dateien:
         unter = {"herren1": "Herren 1", "damen1": "Damen1"}.get(d.schluessel, "")
@@ -193,31 +195,42 @@ def test_saison_platzhalter(heft_konfiguration: Konfiguration):
     assert heft_konfiguration.mit_saison("{andere} bleibt") == "{andere} bleibt"
 
 
+def _zeilen(ergebnis) -> list[str]:
+    return [z.split("#")[0].strip() for z in ergebnis.plan.splitlines()
+            if z.startswith("[")]
+
+
 def test_gesamtes_heft(heft_konfiguration: Konfiguration, nas: SpeicherNas):
     ergebnis = gesamtheft_bauen(heft_konfiguration, "09 Ausgabe 290726", fs=nas)
 
     leser = PdfReader(str(ergebnis.pdf))
     assert ergebnis.seitenzahl == len(leser.pages)
     assert ergebnis.seitenzahl % 4 == 0
-    zeilen = [z.split("#")[0].strip() for z in ergebnis.plan.splitlines()
-              if z.startswith("[")]
+    zeilen = _zeilen(ergebnis)
     assert zeilen[:2] == ["[Deckblatt]", "[Vorwort] Vorwort.txt"]
-    # Herren 1 vor Damen1 (Reihenfolge der Konfiguration), Jugend danach
-    assert zeilen.index("[FuPa] herren1") < zeilen.index("[FuPa] damen1") \
-        < zeilen.index("[Datei] Jugend/Jugend.pdf")
-    assert "[Datei] Herren 1/Bericht.pdf" in zeilen
+    # Je Mannschaft: Trenner, ihre Dateien, dann die FuPa-Seiten
+    h1 = [zeilen.index(z) for z in ("[Trenner] herren1", "[Datei] Herren 1/Bericht.pdf",
+                                    "[FuPa] herren1")]
+    assert h1 == sorted(h1)
+    assert zeilen.index("[FuPa] herren1") < zeilen.index("[Trenner] damen1") \
+        < zeilen.index("[FuPa] damen1") < zeilen.index("[Datei] Jugend/Jugend.pdf")
+    # ... das Zwischenbild aus der Vorlage steht nicht noch einmal als Datei drin
+    assert "[Datei] Herren 1/Liga.jpeg" not in zeilen
     # Die Datei ohne Balken aus Knopf 1 wird durch die FuPa-Seiten ersetzt
     assert not any("_gegen_" in z for z in zeilen)
     assert zeilen[-1] == "[Werbung] Z_Rueckseite.pdf"
-    assert "[Ansprechpartner]" in zeilen
-    # Nicht Umwandelbares wird gemeldet, nicht verschluckt
+    assert "[Kontaktliste] Allgemein/Ansprechpartner.txt" in zeilen
+    # Nicht Lesbares wird gemeldet, nicht verschluckt -- und kostet nicht das Heft
     assert any("H1-Alles.odoc" in w for w in ergebnis.warnungen)
-    assert any("Vorwort Trainer.docx" in w for w in ergebnis.warnungen)
+    assert any("Vorwort Trainer.docx" in w and "nicht lesbar" in w
+               for w in ergebnis.warnungen)
     assert not any("@eaDir" in z for z in zeilen + ergebnis.warnungen)
-    # Titelbild aus dem Ausgabe-Ordner, nicht aus der Vorlage
+    # Titelbild aus dem Ausgabe-Ordner, Zwischenbild aus der Vorlage
     assert f"{SAISON}/09 Ausgabe 290726/Titelbild.jpg" in nas.geladen
+    assert f"{SAISON}/00 Vorlage/Herren 1/Liga.jpeg" in nas.geladen
     # Mit Balken (die Mannschaftsdateien fuers Layout sind ohne)
     assert any("Wörnitzstein am Ball" in (s.extract_text() or "") for s in leser.pages)
+    assert any("Spielbericht" in (s.extract_text() or "") for s in leser.pages)
     # Heft + Heftplan liegen im Ordner
     assert f"{SAISON}/09 Ausgabe 290726/Heftplan.txt" in nas.hochgeladen
     assert ergebnis.nas_datei.endswith("_WaB_Druck.pdf")
@@ -228,6 +241,106 @@ def test_gesamtes_heft(heft_konfiguration: Konfiguration, nas: SpeicherNas):
     assert not any("Werbung" in p for p in nas.geladen)
 
 
+def _docx(absaetze: list[str], fett: tuple[int, ...] = ()) -> bytes:
+    import zipfile
+
+    def absatz(i: int, text: str) -> str:
+        rpr = "<w:rPr><w:b/></w:rPr>" if i in fett else ""
+        return f'<w:p><w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+    puffer = io.BytesIO()
+    with zipfile.ZipFile(puffer, "w") as z:
+        z.writestr("word/document.xml",
+                   '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+                   'wordprocessingml/2006/main"><w:body>'
+                   + "".join(absatz(i, t) for i, t in enumerate(absaetze))
+                   + "</w:body></w:document>")
+    return puffer.getvalue()
+
+
+def _quer_pdf() -> bytes:
+    schreiber = PdfWriter()
+    schreiber.add_blank_page(width=595, height=300)
+    puffer = io.BytesIO()
+    schreiber.write(puffer)
+    return puffer.getvalue()
+
+
+def test_heft_wie_in_der_layoutdatei(heft_konfiguration: Konfiguration,
+                                     nas: SpeicherNas):
+    """Werbung vorne/hinten/Rueckseite, halbe Anzeigen zu zweit, Grusswort als
+    Word, Kontaktlisten mit Jugend, Impressum -- wie Ausgabe 08."""
+    ordner = f"{SAISON}/09 Ausgabe 290726"
+    del nas.baum[ordner]["Vorwort.txt"]
+    nas.datei(f"{ordner}/Grußwort Stadionheft.docx",
+              _docx(["Hallo zusammen,", "herzlich willkommen.", "Euer SVW"]))
+    w = f"{SAISON}/Allgemein/Werbung"
+    for name in list(nas.baum[w]):
+        if nas.baum[w][name] is not None:
+            del nas.baum[w][name]
+    nas.datei(f"{w}/1 vorne/JAKO.pdf", _pdf(5))
+    nas.datei(f"{w}/2 hinten/A_Sparkasse.pdf", _quer_pdf())
+    nas.datei(f"{w}/2 hinten/B_Logo.pdf", _quer_pdf())
+    nas.datei(f"{w}/2 hinten/C_EloTec.pdf", _pdf(1))
+    nas.datei(f"{w}/3 Rückseite/MRplan.pdf", _pdf(1))
+    nas.datei(f"{SAISON}/Allgemein/Kontakte_Jugend_2026.docx",
+              _docx(["A-Jugend", "Watzl Nico • 0151-10304443 • a-jgd@x.de"]))
+    nas.datei(f"{SAISON}/Allgemein/Impressum.pdf", _pdf(1))
+
+    ergebnis = gesamtheft_bauen(heft_konfiguration, "09 Ausgabe 290726", fs=nas,
+                                neu_planen=True)
+    zeilen = _zeilen(ergebnis)
+    assert zeilen[:3] == ["[Deckblatt]", "[Vorwort] Grußwort Stadionheft.docx",
+                          "[Werbung] 1 vorne/JAKO.pdf"]
+    # Mannschaften am Stueck, Werbung erst danach
+    erste_hinten = zeilen.index("[Werbung] 2 hinten/A_Sparkasse.pdf + 2 hinten/B_Logo.pdf")
+    assert zeilen.index("[FuPa] damen1") < erste_hinten
+    assert zeilen[erste_hinten + 1] == "[Werbung] 2 hinten/C_EloTec.pdf"
+    ende = zeilen[-4:]
+    assert ende == ["[Kontaktliste] Allgemein/Ansprechpartner.txt",
+                    "[Kontaktliste] Allgemein/Kontakte_Jugend_2026.docx",
+                    "[Impressum] Allgemein/Impressum.pdf",
+                    "[Werbung] 3 Rückseite/MRplan.pdf"]
+    assert ergebnis.seitenzahl % 4 == 0
+    leser = PdfReader(str(ergebnis.pdf))
+    texte = [s.extract_text() or "" for s in leser.pages]
+    assert any("Vorwort" in t and "herzlich willkommen" in t for t in texte)
+    assert any("Kontaktlisten" in t and "A-Jugend" in t for t in texte)
+
+
+def test_word_absaetze_und_ueberschriften(tmp_path):
+    from stadionheft.gesamtheft import _sieht_aus_wie_ueberschrift, word_absaetze
+
+    datei = tmp_path / "x.docx"
+    datei.write_bytes(_docx(["Titel", "normal &amp; gut"], fett=(0,)))
+    assert word_absaetze(datei) == [("Titel", True), ("normal & gut", False)]
+    assert _sieht_aus_wie_ueberschrift("B-Juniorinnen")
+    assert not _sieht_aus_wie_ueberschrift("Moll Lea • 0151-68528611 • x@y.de")
+
+
+def test_spielbericht_und_halbe_seiten(tmp_path):
+    from stadionheft.gesamtheft import MM, halbe_seiten, inhalt_einsetzen
+    from stadionheft.render.pages import LayoutWerte
+
+    rahmen = tmp_path / "rahmen.pdf"
+    w = PdfWriter()
+    w.add_blank_page(width=154 * MM, height=216 * MM)
+    from pypdf.generic import RectangleObject
+    w.pages[0].trimbox = RectangleObject((3 * MM, 3 * MM, 151 * MM, 213 * MM))
+    with rahmen.open("wb") as strom:
+        w.write(strom)
+    artikel = tmp_path / "artikel.pdf"
+    artikel.write_bytes(_pdf(2))
+    ziel = inhalt_einsetzen(rahmen, artikel, tmp_path / "bericht.pdf")
+    assert len(PdfReader(str(ziel)).pages) == 2          # je Artikelseite eine
+
+    quer = tmp_path / "quer.pdf"
+    quer.write_bytes(_quer_pdf())
+    seite = PdfReader(str(halbe_seiten([quer, quer], LayoutWerte(),
+                                       tmp_path / "halb.pdf"))).pages
+    assert len(seite) == 1
+    assert round(float(seite[0].trimbox.width) / MM) == 148
+
+
 def test_eigener_heftplan_wird_befolgt(heft_konfiguration: Konfiguration,
                                        nas: SpeicherNas):
     ordner = f"{SAISON}/09 Ausgabe 290726"
@@ -236,8 +349,7 @@ def test_eigener_heftplan_wird_befolgt(heft_konfiguration: Konfiguration,
         "[Datei] Herren 1/Bericht.pdf\n[Werbung] A_Axa.pdf\n").encode())
     ergebnis = gesamtheft_bauen(heft_konfiguration, "09 Ausgabe 290726", fs=nas)
     assert ergebnis.plan_von_hand
-    zeilen = [z.split("#")[0].strip() for z in ergebnis.plan.splitlines()
-              if z.startswith("[")]
+    zeilen = _zeilen(ergebnis)
     # Genau die Reihenfolge, aufgefuellt vor der letzten Seite
     assert zeilen[:4] == ["[Deckblatt]", "[Werbung] B_Baecker.jpg", "[FuPa] damen1",
                           "[Datei] Herren 1/Bericht.pdf"]

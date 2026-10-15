@@ -263,10 +263,30 @@ class SeitenRenderer:
     # -- Gesamtheft --------------------------------------------------------
 
     def freitextseite(self, titel: str, text: str, name: str,
-                      quelle: str = "") -> Path:
-        """Text (Vorwort, Bericht als .txt) -- darf auf Folgeseiten weiterlaufen."""
+                      quelle: str = "", absaetze: list[dict] | None = None) -> Path:
+        """Text (Vorwort, Bericht) -- darf auf Folgeseiten weiterlaufen.
+
+        ``absaetze`` statt ``text``, wenn die Absaetze schon feststehen (aus
+        einer Word-Datei) -- dann gilt keine Ueberschriften-Erkennung.
+        """
         html = self._html("freitext.html.j2", seitentitel=titel, fliessend=True,
-                          absaetze=text_zu_absaetzen(text), quelle=quelle)
+                          absaetze=absaetze if absaetze is not None
+                          else text_zu_absaetzen(text), quelle=quelle)
+        return self._pdf(html, name)
+
+    def zwischenbildseite(self, daten: MannschaftsDaten, bild: Path | None,
+                          name: str) -> Path:
+        html = self._html("zwischenbild.html.j2", seitentitel="", fliessend=False,
+                          daten=daten, bild_url=bild.as_uri() if bild else "")
+        return self._pdf(html, name)
+
+    def rahmenseite(self, titel: str, name: str) -> Path:
+        html = self._html("rahmen.html.j2", seitentitel=titel, fliessend=False)
+        return self._pdf(html, name)
+
+    def kontaktlistenseite(self, titel: str, zeilen: list[dict], name: str) -> Path:
+        html = self._html("kontaktliste.html.j2", seitentitel=titel,
+                          fliessend=True, zeilen=zeilen)
         return self._pdf(html, name)
 
     def bildseite(self, bild: Path, titel: str, name: str) -> Path:

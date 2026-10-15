@@ -1,0 +1,12 @@
+{# Kontaktlisten, Impressum: Zeilen untereinander, fette Zeilen als
+   Ueberschrift bzw. "Funktion: Name". #}
+{% extends "_inhaltsseite.html.j2" %}
+
+{% block inhalt %}
+  <div class="kontakte kontaktliste">
+    {% for z in zeilen %}
+      {% if z.fett %}<div class="kopfzeile-liste">{{ z.text }}</div>
+      {% else %}<div class="zeile-liste">{{ z.text }}</div>{% endif %}
+    {% endfor %}
+  </div>
+{% endblock %}

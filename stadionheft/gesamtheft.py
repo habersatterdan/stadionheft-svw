@@ -20,6 +20,7 @@ dort aendert und erneut baut, bekommt genau diese Reihenfolge.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import re
@@ -27,6 +28,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
+
+from pypdf.errors import PdfReadError
 
 from .build import seitenfolge
 from .config import Konfiguration
@@ -55,8 +58,10 @@ FUPA_DATEI = re.compile(r"^\d{4}-\d{2}-\d{2}_.+_gegen_.+\.pdf$")
 DECKBLATT_DATEI = re.compile(r"^\d{4}-\d{2}-\d{2}_Deckblatt\.pdf$")
 
 HEFTPLAN = "Heftplan.txt"
-ARTEN = ("deckblatt", "vorwort", "fupa", "datei", "ansprechpartner",
-         "werbung", "leerseite")
+#: "Vorwort.docx", "Grußwort Stadionheft.docx", "Grusswort.txt" ...
+VORWORT = re.compile(r"^(vorwort|gru(ß|ss)wort)", re.I)
+ARTEN = ("deckblatt", "vorwort", "trenner", "datei", "fupa", "kontaktliste",
+         "impressum", "werbung", "leerseite", "ansprechpartner")
 
 
 @dataclass
@@ -68,6 +73,7 @@ class Baustein:
     titel: str = ""
     pdf: Path | None = None   # nach dem Setzen
     seiten: int = 0
+    halb: bool = False        # Anzeige, die nur eine halbe Seite braucht
 
     def zeile(self) -> str:
         name = self.art.capitalize() if self.art != "fupa" else "FuPa"
@@ -223,19 +229,30 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
     try:
         laden = _Laden(client, k.arbeits_ordner / "nas_cache")
 
+        def liste(pfad: str) -> list[dict]:
+            try:
+                return [f for f in client.auflisten(pfad)
+                        if not VERSTECKT.match(f["name"])]
+            except StadionheftFehler:
+                return []
+
         # -- 1. Was liegt im Ausgabe-Ordner? ---------------------------------
         jetzt(f"Lese den Ordner '{name}' …")
-        if name not in {f["name"] for f in client.auflisten(saison) if f.get("isdir")}:
+        if name not in {f["name"] for f in liste(saison) if f.get("isdir")}:
             raise NasFehler(f"{ordner} fehlt",
                             benutzer_text=f"Den Ordner '{name}' gibt es nicht.")
         oben = client.auflisten(ordner)
-        unterordner = {f["name"]: client.auflisten(f["path"]) for f in oben
+        unterordner = {f["name"]: liste(f["path"]) for f in oben
                        if f.get("isdir") and not VERSTECKT.match(f["name"])}
-        daten_ordner = next((f for f in oben if f.get("isdir")
-                             and f["name"] == "_daten"), None)
+        dateien_oben = {f["name"]: f for f in oben if not f.get("isdir")}
+        vorlage_name = str(k.get("nas.filestation.vorlage_ordner", "") or "").strip("/")
+        vorlage = {u: liste(f"{saison}/{vorlage_name}/{u}")
+                   for u in unterordner} if vorlage_name else {}
 
         # -- 2. Spieldaten (von Knopf 1 mit abgelegt) ------------------------
         ausgabe: Ausgabe | None = None
+        daten_ordner = next((f for f in oben if f.get("isdir")
+                             and f["name"] == "_daten"), None)
         if daten_ordner:
             snapshots = sorted((f for f in client.auflisten(daten_ordner["path"])
                                 if f["name"].endswith("_snapshot.json")),
@@ -250,73 +267,137 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
                 "(ohne Balken). Ordner von neueren Läufen haben sie.")
         mannschaften: dict[str, MannschaftsDaten] = {
             m.schluessel: m for m in (ausgabe.mannschaften if ausgabe else [])}
-
-        # -- 3. Bausteine sammeln ---------------------------------------------
-        bausteine: dict[tuple[str, str], Baustein] = {}
-
-        def merken(b: Baustein) -> Baustein:
-            bausteine[(b.art, b.wert)] = b
-            return b
-
-        dateien_oben = {f["name"]: f for f in oben if not f.get("isdir")}
-        vorne = [merken(Baustein("deckblatt"))]
-        vorwort = next((f for n, f in sorted(dateien_oben.items())
-                        if n.lower().startswith("vorwort")), None)
-        if vorwort:
-            vorne.append(merken(Baustein("vorwort", vorwort["name"], "Vorwort")))
-        else:
-            ergebnis.warnungen.append("Kein Vorwort im Ordner (Datei 'Vorwort…').")
-
         ordner_je_schluessel = {zielordner_fuer(k, m.schluessel): m.schluessel
                                 for m in k.aktive_mannschaften()}
+
+        def team(schluessel: str) -> MannschaftsDaten | None:
+            if schluessel in mannschaften:
+                return mannschaften[schluessel]
+            if schluessel in k.mannschaften:
+                m = k.mannschaften[schluessel]
+                return MannschaftsDaten(schluessel=m.schluessel,
+                                        anzeigename=m.anzeigename,
+                                        gruppe=m.gruppe, untertitel=m.untertitel,
+                                        liga=m.liga)
+            return None
+
+        # -- 3. Bausteine sammeln ---------------------------------------------
+        vorne = [Baustein("deckblatt")]
+        vorwort = next((f for n, f in sorted(dateien_oben.items())
+                        if VORWORT.match(n) and Path(n).suffix.lower()
+                        in PDF | WORD | TEXT | NICHT_LESBAR), None)
+        if vorwort:
+            vorne.append(Baustein("vorwort", vorwort["name"]))
+        else:
+            ergebnis.warnungen.append("Kein Vorwort im Ordner (Datei 'Vorwort…' "
+                                      "oder 'Grußwort…').")
+
         reihenfolge = [o for o in ordner_je_schluessel if o in unterordner] + \
             sorted(o for o in unterordner if o not in ordner_je_schluessel)
         abschnitte: list[list[Baustein]] = []
         for unter in reihenfolge:
             schluessel = ordner_je_schluessel.get(unter, "")
+            aus_vorlage = {f["name"] for f in vorlage.get(unter, [])}
             abschnitt: list[Baustein] = []
-            if schluessel and schluessel in mannschaften:
-                abschnitt.append(merken(Baustein(
-                    "fupa", schluessel, mannschaften[schluessel].anzeigename)))
-            titel = mannschaften[schluessel].anzeigename if schluessel in mannschaften \
-                else unter
+            if schluessel:
+                abschnitt.append(Baustein("trenner", schluessel))
             for f in sorted(unterordner[unter], key=lambda f: f["name"].lower()):
-                if (f.get("isdir") or EIGENE_AUSGABE.search(f["name"])
-                        or VERSTECKT.match(f["name"])):
+                if f.get("isdir") or EIGENE_AUSGABE.search(f["name"]):
                     continue
+                if f["name"] in aus_vorlage:
+                    continue        # das Zwischenbild -- kommt aus der Vorlage
                 if schluessel in mannschaften and FUPA_DATEI.match(f["name"]):
                     continue        # ersetzt durch die FuPa-Seiten mit Balken
-                abschnitt.append(merken(Baustein("datei", f"{unter}/{f['name']}", titel)))
+                abschnitt.append(Baustein("datei", f"{unter}/{f['name']}"))
+            if schluessel in mannschaften:
+                abschnitt.append(Baustein("fupa", schluessel))
             abschnitte.append(abschnitt)
 
-        hinten = [merken(Baustein("ansprechpartner", titel="Ansprechpartner"))]
+        schluss: list[Baustein] = []
+        for muster in k.get("heft.kontaktlisten") or [
+                k.get("heft.ansprechpartner_datei", "")]:
+            for pfad in _finden(liste, saison, str(muster or "")):
+                schluss.append(Baustein("kontaktliste", pfad))
+        if not any(b.art == "kontaktliste" for b in schluss):
+            schluss.append(Baustein("kontaktliste", ""))     # aus der Konfiguration
+        for pfad in _finden(liste, saison, str(k.get("heft.impressum", "") or "")):
+            schluss.append(Baustein("impressum", pfad))
 
         werbe_ordner = str(k.get("heft.werbung_ordner", "") or "").strip("/")
-        werbe_eintraege: dict[str, dict] = {}
-        if werbe_ordner:
-            try:
-                werbe_eintraege = {f["name"]: f for f in
-                                   client.auflisten(f"{saison}/{werbe_ordner}")
-                                   if not f.get("isdir")
-                                   and not VERSTECKT.match(f["name"])}
-            except StadionheftFehler:
-                ergebnis.warnungen.append(f"Werbe-Ordner '{werbe_ordner}' fehlt.")
-        werbung = [merken(Baustein("werbung", n))
-                   for n in sorted(werbe_eintraege, key=str.lower)]
+        werbung_alle = {f["name"]: f for f in liste(f"{saison}/{werbe_ordner}")} \
+            if werbe_ordner else {}
+        if werbe_ordner and not werbung_alle:
+            ergebnis.warnungen.append(f"Werbe-Ordner '{werbe_ordner}' fehlt oder ist leer.")
+        werbe_teile = {teil: str(k.get(f"heft.werbung_{teil}", "") or "")
+                       for teil in ("vorne", "hinten", "rueckseite")}
+        fest = any(n in werbung_alle and werbung_alle[n].get("isdir")
+                   for n in werbe_teile.values() if n)
+        werbe_dateien: dict[str, dict] = {}
+
+        def werbung_aus(unter: str) -> list[Baustein]:
+            pfad = f"{saison}/{werbe_ordner}/{unter}" if unter else \
+                f"{saison}/{werbe_ordner}"
+            bausteine = []
+            for f in sorted(liste(pfad), key=lambda f: f["name"].lower()):
+                if f.get("isdir"):
+                    continue
+                schluessel = f"{unter}/{f['name']}" if unter else f["name"]
+                werbe_dateien[schluessel] = f
+                bausteine.append(Baustein("werbung", schluessel))
+            return bausteine
+
+        werbung = {teil: (werbung_aus(werbe_teile[teil]) if fest and werbe_teile[teil]
+                          else []) for teil in werbe_teile}
+        if not fest:
+            werbung["verteilt"] = werbung_aus("")
 
         # -- 4. Plan: der eigene aus dem Ordner oder ein neuer ----------------
         plan_datei = dateien_oben.get(HEFTPLAN)
-        plan: list[Baustein] | None = None
+        eigener_plan: list[Baustein] | None = None
         if plan_datei and not neu_planen:
             text = text_dekodieren(laden.holen(plan_datei).read_bytes())
-            plan, warnungen = plan_lesen(text)
+            eigener_plan, warnungen = plan_lesen(text)
             ergebnis.warnungen.extend(warnungen)
             ergebnis.plan_von_hand = True
             jetzt("Heftplan aus dem Ordner wird befolgt.")
+            for b in eigener_plan:
+                if b.art == "werbung":
+                    for teil in b.wert.split(" + "):
+                        if teil not in werbe_dateien:
+                            unter, _, dateiname = teil.rpartition("/")
+                            eintrag = next((f for f in liste(
+                                f"{saison}/{werbe_ordner}/{unter}" if unter
+                                else f"{saison}/{werbe_ordner}")
+                                if f["name"] == dateiname), None)
+                            if eintrag:
+                                werbe_dateien[teil] = eintrag
 
         # -- 5. Setzen ---------------------------------------------------------
-        def setzen(b: Baustein, nummer: int) -> None:
-            stamm = f"{nummer:03d}_{b.art}"
+        zaehler = [0]
+
+        def stamm(b: Baustein) -> str:
+            zaehler[0] += 1
+            return f"{zaehler[0]:03d}_{b.art}"
+
+        def anzeige(schluessel: str) -> tuple[Path | None, bool]:
+            """Eine Anzeige als PDF -- und ob sie nur eine halbe Seite ist."""
+            eintrag = werbe_dateien.get(schluessel)
+            if eintrag is None:
+                return None, False
+            endung = Path(eintrag["name"]).suffix.lower()
+            if endung not in PDF | BILD:
+                ergebnis.warnungen.append(
+                    f"Werbung '{eintrag['name']}': nur PDF oder Bild möglich.")
+                return None, False
+            lokal = laden.holen(eintrag)
+            if endung in BILD:
+                lokal = bild_als_pdf(lokal, arbeit / f"anzeige_{len(werbe_pdf)}.pdf")
+            return lokal, _ist_halbe_seite(lokal)
+
+        werbe_pdf: dict[str, tuple[Path | None, bool]] = {}
+
+        def setzen(b: Baustein) -> None:
+            name_s = stamm(b)
             if b.art == "deckblatt":
                 if ausgabe is not None:
                     bild = _titelbild(dateien_oben, laden, k, client, saison)
@@ -327,63 +408,118 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
                     b.pdf = laden.holen(alt) if alt else None
             elif b.art == "vorwort":
                 eintrag = dateien_oben.get(b.wert)
-                b.pdf = _datei_setzen(k, renderer, laden, eintrag, "Vorwort",
-                                      stamm, ergebnis) if eintrag else None
+                b.pdf = _text_oder_pdf(renderer, laden, eintrag, "Vorwort", name_s,
+                                       ergebnis) if eintrag else None
+            elif b.art == "trenner":
+                daten = team(b.wert)
+                if daten is not None:
+                    unter = zielordner_fuer(k, b.wert)
+                    bild = next((f for f in vorlage.get(unter, [])
+                                 if Path(f["name"]).suffix.lower() in BILD), None)
+                    b.pdf = (renderer.zwischenbildseite(daten, laden.holen(bild), name_s)
+                             if bild else renderer.mannschaftsseite("trenner", daten, 0))
             elif b.art == "fupa":
                 daten = mannschaften.get(b.wert)
                 if daten is not None:
                     seiten = [Heftseite(renderer.mannschaftsseite(art, daten, i),
                                         f"{daten.anzeigename} – {art}")
-                              for i, art in enumerate(seitenfolge(daten), 1)]
-                    b.pdf = zusammenfuegen(seiten, arbeit / f"{stamm}_{b.wert}.pdf").ziel
+                              for i, art in enumerate(seitenfolge(daten), 1)
+                              if art != "trenner"]
+                    b.pdf = zusammenfuegen(seiten, arbeit / f"{name_s}_{b.wert}.pdf").ziel
             elif b.art == "datei":
                 unter, _, dateiname = b.wert.partition("/")
                 eintrag = next((f for f in unterordner.get(unter, [])
                                 if f["name"] == dateiname), None) \
                     if dateiname else dateien_oben.get(unter)
-                titel = b.titel or (mannschaften[ordner_je_schluessel[unter]].anzeigename
-                                    if ordner_je_schluessel.get(unter) in mannschaften
-                                    else unter)
-                b.pdf = _datei_setzen(k, renderer, laden, eintrag, titel, stamm,
-                                      ergebnis) if eintrag else None
-            elif b.art == "ansprechpartner":
-                eintraege = _ansprechpartner(k, client, saison, laden, ergebnis)
-                b.pdf = renderer.ansprechpartner(eintraege) if eintraege else None
+                if eintrag is not None:
+                    ist_team = unter in ordner_je_schluessel
+                    titel = "Spielbericht" if ist_team else unter
+                    if ist_team and Path(dateiname).suffix.lower() in PDF \
+                            and not FUPA_DATEI.match(dateiname):
+                        rahmen = renderer.rahmenseite(titel, name_s + "_rahmen")
+                        b.pdf = inhalt_einsetzen(rahmen, laden.holen(eintrag),
+                                                 arbeit / f"{name_s}.pdf")
+                    else:
+                        daten = team(ordner_je_schluessel.get(unter, ""))
+                        b.pdf = _text_oder_pdf(
+                            renderer, laden, eintrag, titel, name_s, ergebnis,
+                            bildtitel=daten.anzeigename if daten else unter)
+            elif b.art == "kontaktliste":
+                b.pdf = _kontaktliste(k, renderer, laden, liste, saison, b.wert,
+                                      str(k.get("heft.kontaktlisten_titel",
+                                                "Kontaktlisten")), name_s, ergebnis)
+            elif b.art == "impressum":
+                b.pdf = _kontaktliste(k, renderer, laden, liste, saison, b.wert,
+                                      "Impressum", name_s, ergebnis)
             elif b.art == "werbung":
-                eintrag = werbe_eintraege.get(b.wert)
-                b.pdf = _datei_setzen(k, renderer, laden, eintrag, "", stamm,
-                                      ergebnis, vollbild=True) if eintrag else None
+                teile = [t.strip() for t in b.wert.split(" + ") if t.strip()]
+                quellen = []
+                for teil in teile:
+                    if teil not in werbe_pdf:
+                        werbe_pdf[teil] = anzeige(teil)
+                    if werbe_pdf[teil][0] is not None:
+                        quellen.append(werbe_pdf[teil])
+                if len(teile) > 1 or (quellen and quellen[0][1]):
+                    b.pdf = halbe_seiten([q for q, _ in quellen], renderer.layout,
+                                         arbeit / f"{name_s}.pdf") if quellen else None
+                    b.halb = len(teile) == 1
+                elif quellen:
+                    b.pdf = auf_heftformat(quellen[0][0], renderer.layout,
+                                           arbeit / f"{name_s}.pdf", ergebnis)
             elif b.art == "leerseite":
-                b.pdf = renderer.vollbildseite(None, stamm)
+                b.pdf = renderer.vollbildseite(None, name_s)
             if b.pdf is None and b.art != "leerseite":
                 ergebnis.warnungen.append(f"{b.zeile()} -- nicht gefunden, übersprungen.")
             b.seiten = _seitenzahl(b.pdf)
 
-        if plan is None:
-            alle = vorne + [b for a in abschnitte for b in a] + hinten + werbung
+        if eigener_plan is None:
+            alle = vorne + [b for a in abschnitte for b in a] + schluss + \
+                [b for teil in werbung.values() for b in teil]
         else:
-            alle = plan
-        gesetzt: dict[tuple[str, str], tuple[Path | None, int]] = {}
-        for nummer, b in enumerate(alle, 1):
+            alle = eigener_plan
+        gesetzt: dict[tuple[str, str], tuple[Path | None, int, bool]] = {}
+        for b in alle:
             schluessel_b = (b.art, b.wert)
             if b.art != "leerseite" and schluessel_b in gesetzt:
-                # Steht im eigenen Plan zweimal: nur einmal setzen.
-                b.pdf, b.seiten = gesetzt[schluessel_b]
+                b.pdf, b.seiten, b.halb = gesetzt[schluessel_b]
                 continue
             jetzt(f"Setze {b.zeile()} …")
-            setzen(b, nummer)
-            gesetzt[schluessel_b] = (b.pdf, b.seiten)
+            try:
+                setzen(b)
+            except (DateiKaputt, PdfReadError, OSError, ValueError) as fehler:
+                # Eine kaputte Datei darf nie das ganze Heft kosten.
+                logger().warning("%s nicht lesbar: %s", b.zeile(), fehler)
+                ergebnis.warnungen.append(
+                    f"{b.zeile()} -- Datei nicht lesbar, übersprungen ({fehler}).")
+                b.pdf, b.seiten = None, 0
+            gesetzt[schluessel_b] = (b.pdf, b.seiten, b.halb)
 
-        if plan is None:
-            plan = plan_erstellen(
-                [[b for b in a if b.pdf] for a in abschnitte],
-                [b for b in vorne if b.pdf], [b for b in hinten if b.pdf],
-                [b for b in werbung if b.pdf])
-            for nummer, b in enumerate(plan, 1):
-                if b.art == "leerseite" and b.pdf is None:
-                    setzen(b, 900 + nummer)
+        def mit_pdf(liste_b: list[Baustein]) -> list[Baustein]:
+            return [b for b in liste_b if b.pdf is not None]
+
+        if eigener_plan is None:
+            if fest:
+                vorne_werbung = paaren(mit_pdf(werbung["vorne"]), setzen)
+                hinten_werbung = paaren(mit_pdf(werbung["hinten"]), setzen)
+                rueckseite = paaren(mit_pdf(werbung["rueckseite"]), setzen)
+                plan = mit_pdf(vorne) + vorne_werbung + \
+                    [b for a in abschnitte for b in mit_pdf(a)] + hinten_werbung
+                ende = mit_pdf(schluss) + rueckseite
+                fehlend = (-(sum(b.seiten for b in plan + ende))) % 4
+                leer = [Baustein("leerseite") for _ in range(fehlend)]
+                for b in leer:
+                    setzen(b)
+                # Leerseiten vor die Kontaktlisten -- nicht mitten ins Heft
+                plan = plan + leer + ende
+            else:
+                plan = plan_erstellen(
+                    [mit_pdf(a) for a in abschnitte], mit_pdf(vorne),
+                    mit_pdf(schluss), paaren(mit_pdf(werbung["verteilt"]), setzen))
+                for b in plan:
+                    if b.art == "leerseite" and b.pdf is None:
+                        setzen(b)
         else:
-            plan = [b for b in plan if b.pdf is not None]
+            plan = mit_pdf(eigener_plan)
             fehlend = (-sum(b.seiten for b in plan)) % 4
             if fehlend:
                 ergebnis.warnungen.append(
@@ -391,8 +527,8 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
                     f"nicht durch 4 teilbar. {fehlend} Leerseite(n) vor der "
                     f"Rückseite ergänzt.")
                 leer = [Baustein("leerseite") for _ in range(fehlend)]
-                for nummer, b in enumerate(leer, 1):
-                    setzen(b, 950 + nummer)
+                for b in leer:
+                    setzen(b)
                 plan = plan[:-1] + leer + plan[-1:] if plan else leer
 
         # -- 6. Zusammenfuegen --------------------------------------------------
@@ -428,9 +564,247 @@ def gesamtheft_bauen(k: Konfiguration, ausgabe_name: str, *,
             client.abmelden()
 
 
+def paaren(werbung: list[Baustein], setzen: Callable[[Baustein], None]) -> list[Baustein]:
+    """Halbe Anzeigen (quer, Logos) kommen zu zweit auf eine Seite --
+    wie in der Layoutdatei. Die Reihenfolge bleibt erhalten."""
+    ergebnis: list[Baustein] = []
+    offen: Baustein | None = None
+    for b in werbung:
+        if not b.halb:
+            ergebnis.append(b)
+            continue
+        if offen is None:
+            offen = b
+            ergebnis.append(b)
+            continue
+        paar = Baustein("werbung", f"{offen.wert} + {b.wert}")
+        setzen(paar)
+        ergebnis[ergebnis.index(offen)] = paar
+        offen = None
+    return ergebnis
+
+
 # ---------------------------------------------------------------------------
 # Helfer
 # ---------------------------------------------------------------------------
+
+def _finden(liste: Callable[[str], list[dict]], saison: str, muster: str) -> list[str]:
+    """'Allgemein/Kontakte_Jugend*.docx' -> passende Pfade (relativ zur Saison)."""
+    muster = muster.strip("/")
+    if not muster:
+        return []
+    eltern, _, name = muster.rpartition("/")
+    treffer = [f["name"] for f in liste(f"{saison}/{eltern}" if eltern else saison)
+               if not f.get("isdir") and fnmatch.fnmatch(f["name"].lower(), name.lower())]
+    return [f"{eltern}/{n}" if eltern else n for n in sorted(treffer, key=str.lower)]
+
+
+def _eintrag(liste: Callable[[str], list[dict]], saison: str, pfad: str) -> dict | None:
+    eltern, _, name = f"{saison}/{pfad}".rpartition("/")
+    return next((f for f in liste(eltern) if f["name"] == name), None)
+
+
+class DateiKaputt(Exception):
+    """Eine Datei laesst sich nicht lesen -- sie wird mit Hinweis uebersprungen."""
+
+
+def word_absaetze(datei: Path) -> list[tuple[str, bool]]:
+    """Absaetze einer .docx als (Text, fett). Bilder und Formatierung bleiben
+    draussen -- gesetzt wird im Heftlayout."""
+    import html
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(datei) as archiv:
+            xml = archiv.read("word/document.xml").decode("utf-8")
+    except (zipfile.BadZipFile, KeyError, UnicodeDecodeError, OSError) as fehler:
+        raise DateiKaputt(f"{datei.name}: {fehler}") from fehler
+    absaetze: list[tuple[str, bool]] = []
+    for absatz in re.findall(r"<w:p[ >].*?</w:p>", xml, re.S):
+        absatz = re.sub(r"<w:tab/>", "\t", absatz)
+        absatz = re.sub(r"<w:br/>", "\n", absatz)
+        laeufe = re.findall(r"<w:r[ >].*?</w:r>", absatz, re.S)
+        teile = []
+        fett = bool(laeufe)
+        for lauf in laeufe:
+            text = "".join(re.findall(r"<w:t(?: [^>]*)?>(.*?)</w:t>", lauf, re.S))
+            text += "\t" * lauf.count("\t") if "<w:t" not in lauf else ""
+            if text.strip():
+                teile.append(text)
+                if not re.search(r"<w:b(?: w:val=\"(?:1|true)\")?/>", lauf):
+                    fett = False
+        text = html.unescape("".join(teile)).strip()
+        if text:
+            absaetze.append((text, fett))
+    return absaetze
+
+
+def _ist_halbe_seite(pdf: Path) -> bool:
+    """Querformat oder Logo-Streifen: passt zweimal auf eine Seite."""
+    from pypdf import PdfReader
+
+    seiten = PdfReader(str(pdf)).pages
+    if len(seiten) != 1:
+        return False
+    trim = seiten[0].trimbox
+    return float(trim.width) >= float(trim.height)
+
+
+def bild_als_pdf(bild: Path, ziel: Path) -> Path:
+    """Ein Bild als einseitige PDF in seinem Seitenverhaeltnis (300 dpi)."""
+    from PIL import Image
+
+    with Image.open(bild) as quelle:
+        quelle.convert("RGB").save(ziel, "PDF", resolution=300)
+    return ziel
+
+
+def _text_oder_pdf(renderer: SeitenRenderer, laden: _Laden, eintrag: dict,
+                   titel: str, stamm: str, ergebnis: HeftErgebnis,
+                   bildtitel: str = "") -> Path | None:
+    """Vorwort, Berichte und sonstige Dateien als Seite(n) im Heftlayout."""
+    endung = Path(eintrag["name"]).suffix.lower()
+    if endung in NICHT_LESBAR:
+        ergebnis.warnungen.append(
+            f"'{eintrag['name']}' ist eine Synology-Office-Datei und lässt sich nur "
+            f"in DSM umwandeln -- bitte dort als PDF oder .docx exportieren.")
+        return None
+    if endung not in PDF | BILD | WORD | TEXT:
+        ergebnis.warnungen.append(f"'{eintrag['name']}': Dateiart wird nicht "
+                                  f"unterstützt, übersprungen.")
+        return None
+    lokal = laden.holen(eintrag)
+    if endung in PDF:
+        return auf_heftformat(lokal, renderer.layout,
+                              renderer.arbeitsordner / f"{stamm}.pdf", ergebnis)
+    if endung in BILD:
+        return renderer.bildseite(lokal, bildtitel or titel, stamm)
+    if endung in TEXT:
+        return renderer.freitextseite(titel, text_dekodieren(lokal.read_bytes()),
+                                      stamm, quelle=eintrag["name"])
+    if endung == ".docx":
+        absaetze = [{"ueberschrift": False, "text": text}
+                    for text, _fett in word_absaetze(lokal)]
+        return renderer.freitextseite(titel, "", stamm, quelle=eintrag["name"],
+                                      absaetze=absaetze)
+    # .doc/.odt/.rtf: ueber Gotenberg (LibreOffice) als fertige Seiten
+    umgewandelt = _umwandeln(renderer.konfiguration, lokal,
+                             renderer.arbeitsordner / f"{stamm}_word.pdf", ergebnis)
+    return auf_heftformat(umgewandelt, renderer.layout,
+                          renderer.arbeitsordner / f"{stamm}.pdf", ergebnis) \
+        if umgewandelt else None
+
+
+def _kontaktliste(k: Konfiguration, renderer: SeitenRenderer, laden: _Laden,
+                  liste: Callable[[str], list[dict]], saison: str, pfad: str,
+                  titel: str, stamm: str, ergebnis: HeftErgebnis) -> Path | None:
+    """Kontaktlisten/Impressum aus .txt, .docx oder fertigem PDF."""
+    if not pfad:
+        eintraege = [e for e in (k.get("deckblatt.ansprechpartner") or [])
+                     if isinstance(e, dict) and e.get("funktion")]
+        zeilen = _zeilen_aus_ansprechpartnern(eintraege)
+        return renderer.kontaktlistenseite(titel, zeilen, stamm) if zeilen else None
+    eintrag = _eintrag(liste, saison, pfad)
+    if eintrag is None:
+        return None
+    endung = Path(eintrag["name"]).suffix.lower()
+    lokal = laden.holen(eintrag)
+    if endung in PDF:
+        return auf_heftformat(lokal, renderer.layout,
+                              renderer.arbeitsordner / f"{stamm}.pdf", ergebnis)
+    if endung in TEXT:
+        text = text_dekodieren(lokal.read_bytes())
+        eintraege = ansprechpartner_lesen(text)
+        zeilen = _zeilen_aus_ansprechpartnern(eintraege) if eintraege else \
+            [{"text": z.strip(), "fett": False} for z in text.splitlines()
+             if z.strip() and not z.lstrip().startswith("#")]
+    elif endung == ".docx":
+        zeilen = [{"text": text, "fett": fett or _sieht_aus_wie_ueberschrift(text)}
+                  for text, fett in word_absaetze(lokal)]
+    else:
+        ergebnis.warnungen.append(f"'{eintrag['name']}': für {titel} bitte .txt, "
+                                  f".docx oder PDF.")
+        return None
+    return renderer.kontaktlistenseite(titel, zeilen, stamm)
+
+
+def _zeilen_aus_ansprechpartnern(eintraege: list[dict]) -> list[dict]:
+    zeilen = []
+    for e in eintraege:
+        zeilen.append({"text": f"{e['funktion']}: {e.get('name', '')}".rstrip(": "),
+                       "fett": True})
+        if e.get("kontakt"):
+            zeilen.append({"text": e["kontakt"], "fett": False})
+    return zeilen
+
+
+def _sieht_aus_wie_ueberschrift(text: str) -> bool:
+    """'A-Jugend' ja, 'Watzl Nico • 0151-… • a-jgd@…' nein."""
+    return len(text) <= 40 and "@" not in text and not re.search(r"\d{3}", text)
+
+
+def inhalt_einsetzen(rahmen: Path, quelle: Path, ziel: Path) -> Path:
+    """Setzt jede Seite von ``quelle`` (z. B. Zeitungsartikel) verkleinert in
+    den Inhaltsbereich einer Rahmenseite (Balken + Ueberschrift)."""
+    from pypdf import PdfReader, PdfWriter, Transformation
+
+    schreiber = PdfWriter()
+    for seite in PdfReader(str(quelle)).pages:
+        # Erst ins Dokument, dann einsetzen -- so verlangt es pypdf ab 7.
+        grund = schreiber.add_page(PdfReader(str(rahmen)).pages[0])
+        trim = grund.trimbox
+        x0 = float(trim.left) + INHALT_RAND_MM * MM
+        x1 = float(trim.right) - INHALT_RAND_MM * MM
+        y0 = float(trim.bottom) + INHALT_UNTEN_MM * MM
+        y1 = float(trim.top) - INHALT_OBEN_MM * MM
+        q = seite.trimbox
+        faktor = min((x1 - x0) / float(q.width), (y1 - y0) / float(q.height))
+        dx = x0 + ((x1 - x0) - float(q.width) * faktor) / 2
+        dy = y1 - float(q.height) * faktor              # oben anliegend
+        grund.merge_transformed_page(
+            seite, Transformation().translate(-float(q.left), -float(q.bottom))
+            .scale(faktor, faktor).translate(dx, dy))
+    with ziel.open("wb") as strom:
+        schreiber.write(strom)
+    return ziel
+
+
+def halbe_seiten(quellen: list[Path], layout, ziel: Path) -> Path:
+    """Eine Seite mit bis zu zwei halben Anzeigen uebereinander."""
+    from pypdf import PdfReader, PdfWriter, Transformation
+    from pypdf.generic import RectangleObject
+
+    breite, hoehe = layout.breite_mm * MM, layout.hoehe_mm * MM
+    rand = layout.anschnitt_mm * MM
+    luft = 8 * MM
+    schreiber = PdfWriter()
+    neu = schreiber.add_blank_page(width=breite + 2 * rand, height=hoehe + 2 * rand)
+    faecher = [(rand + hoehe / 2 + luft / 2, rand + hoehe - luft),     # oben
+               (rand + luft, rand + hoehe / 2 - luft / 2)]             # unten
+    for quelle, (unten, oben) in zip(quellen[:2], faecher):
+        seite = PdfReader(str(quelle)).pages[0]
+        q = seite.trimbox
+        b_fach, h_fach = breite - 2 * luft, oben - unten
+        faktor = min(b_fach / float(q.width), h_fach / float(q.height))
+        dx = rand + luft + (b_fach - float(q.width) * faktor) / 2
+        dy = unten + (h_fach - float(q.height) * faktor) / 2
+        neu.merge_transformed_page(
+            seite, Transformation().translate(-float(q.left), -float(q.bottom))
+            .scale(faktor, faktor).translate(dx, dy))
+    neu.trimbox = RectangleObject((rand, rand, rand + breite, rand + hoehe))
+    neu.bleedbox = RectangleObject((0, 0, breite + 2 * rand, hoehe + 2 * rand))
+    with ziel.open("wb") as strom:
+        schreiber.write(strom)
+    return ziel
+
+
+#: Inhaltsbereich der Inhaltsseiten (wie --rand/--inhalt-oben/--inhalt-unten
+#: in heft.css), fuer Artikel, die in eine Rahmenseite gesetzt werden.
+INHALT_RAND_MM = 12
+INHALT_OBEN_MM = 44
+INHALT_UNTEN_MM = 20
+
+
 
 def _seitenzahl(pdf: Path | None) -> int:
     if pdf is None or not Path(pdf).exists():
@@ -473,55 +847,6 @@ def _titelbild(dateien_oben: dict, laden: _Laden, k: Konfiguration,
     return laden.holen(eintrag) if eintrag else None
 
 
-def _ansprechpartner(k: Konfiguration, client: FileStation, saison: str,
-                     laden: _Laden, ergebnis: HeftErgebnis) -> list[dict]:
-    datei = str(k.get("heft.ansprechpartner_datei", "") or "").strip("/")
-    if datei:
-        eltern, _, name = f"{saison}/{datei}".rpartition("/")
-        try:
-            eintrag = next((f for f in client.auflisten(eltern)
-                            if f["name"] == name), None)
-        except StadionheftFehler:
-            eintrag = None
-        if eintrag:
-            return ansprechpartner_lesen(text_dekodieren(laden.holen(eintrag).read_bytes()))
-        ergebnis.warnungen.append(f"Ansprechpartner-Datei '{datei}' fehlt -- "
-                                  f"es gilt die Liste aus der Konfiguration.")
-    return [e for e in (k.get("deckblatt.ansprechpartner") or [])
-            if isinstance(e, dict) and e.get("funktion")]
-
-
-def _datei_setzen(k: Konfiguration, renderer: SeitenRenderer, laden: _Laden,
-                  eintrag: dict, titel: str, stamm: str, ergebnis: HeftErgebnis,
-                  vollbild: bool = False) -> Path | None:
-    """Eine Datei von der NAS als PDF-Seite(n) -- je nach Art."""
-    endung = Path(eintrag["name"]).suffix.lower()
-    if endung in NICHT_LESBAR:
-        ergebnis.warnungen.append(
-            f"'{eintrag['name']}' ist eine Synology-Office-Datei und lässt sich nur "
-            f"in DSM umwandeln -- bitte dort als PDF oder .docx exportieren.")
-        return None
-    if endung not in PDF | BILD | WORD | TEXT:
-        ergebnis.warnungen.append(f"'{eintrag['name']}': Dateiart wird nicht "
-                                  f"unterstützt, übersprungen.")
-        return None
-    lokal = laden.holen(eintrag)
-    if endung in PDF:
-        return auf_heftformat(lokal, renderer.layout,
-                              renderer.arbeitsordner / f"{stamm}.pdf", ergebnis)
-    if endung in BILD:
-        return (renderer.vollbildseite(lokal, stamm) if vollbild
-                else renderer.bildseite(lokal, titel, stamm))
-    if endung in TEXT:
-        return renderer.freitextseite(titel, text_dekodieren(lokal.read_bytes()),
-                                      stamm, quelle=eintrag["name"])
-    umgewandelt = _umwandeln(k, lokal, renderer.arbeitsordner / f"{stamm}_word.pdf",
-                             ergebnis)
-    return auf_heftformat(umgewandelt, renderer.layout,
-                          renderer.arbeitsordner / f"{stamm}.pdf", ergebnis) \
-        if umgewandelt else None
-
-
 MM = 72 / 25.4
 #: So viel Abweichung vom Endformat gilt noch als "passt" (Rundung, 150 statt
 #: 148 mm bei mancher Anzeige) -- solche Seiten bleiben unangetastet.
@@ -539,7 +864,7 @@ def auf_heftformat(quelle: Path, layout, ziel: Path,
     (A5) eingepasst und mittig auf A5 + Anschnitt gesetzt. Passende Seiten
     bleiben, wie sie sind (ihr Anschnitt ist dann echt).
     """
-    from pypdf import PageObject, PdfReader, PdfWriter, Transformation
+    from pypdf import PdfReader, PdfWriter, Transformation
     from pypdf.generic import RectangleObject
 
     breite, hoehe = layout.breite_mm * MM, layout.hoehe_mm * MM
@@ -558,14 +883,13 @@ def auf_heftformat(quelle: Path, layout, ziel: Path,
         faktor = min(breite / tb, hoehe / th)
         dx = rand + (breite - tb * faktor) / 2
         dy = rand + (hoehe - th * faktor) / 2
-        neu = PageObject.create_blank_page(width=breite + 2 * rand,
-                                           height=hoehe + 2 * rand)
+        neu = schreiber.add_blank_page(width=breite + 2 * rand,
+                                       height=hoehe + 2 * rand)
         neu.merge_transformed_page(
             seite, Transformation().translate(-float(trim.left), -float(trim.bottom))
             .scale(faktor, faktor).translate(dx, dy))
         neu.trimbox = RectangleObject((rand, rand, rand + breite, rand + hoehe))
         neu.bleedbox = RectangleObject((0, 0, breite + 2 * rand, hoehe + 2 * rand))
-        schreiber.add_page(neu)
     if not angepasst:
         return quelle
     with ziel.open("wb") as strom:

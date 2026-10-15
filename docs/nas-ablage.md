@@ -61,18 +61,31 @@ Eingeschaltet mit `heft.gesamt_aktiv: true`. Ablauf:
    * Berichte, Bilder usw. in den jeweiligen Mannschaftsordner.
 3. **„Gesamtes Heft bauen …“** auf der Startseite, Ausgabe wählen.
 
-Aufbau: Deckblatt (mit Balken neu gesetzt), Vorwort, je Mannschaft die
-FuPa-Seiten und dann alles aus ihrem Ordner (nach Namen sortiert), weitere
-Ordner wie „Jugend“, Ansprechpartner. Die Anzeigen aus `Allgemein/Werbung`
-werden zwischen die Mannschaften verteilt, die letzte (nach Namen) kommt auf
-die Rückseite. Leerseiten füllen auf eine durch 4 teilbare Seitenzahl auf.
+Aufbau wie im Heft der Layouterin:
+
+1. Deckblatt (mit dem Titelbild aus dem Ausgabe-Ordner), Vorwort
+   (`Vorwort…` oder `Grußwort…`, Word wird im Heftlayout gesetzt)
+2. Werbung aus `Allgemein/Werbung/1 vorne`
+3. je Mannschaft: Trennseite mit dem **Zwischenbild aus `00 Vorlage/<Mannschaft>`**
+   (dort austauschen), dann ihre Dateien (PDF-Artikel als „Spielbericht“),
+   dann die FuPa-Seiten; danach weitere Ordner wie „Jugend“
+4. Werbung aus `2 hinten`
+5. Kontaktlisten (`Allgemein/Ansprechpartner.txt`, `Kontakte_Jugend*.docx`),
+   Impressum (`Allgemein/Impressum.pdf`)
+6. Rückseite aus `3 Rückseite`
+
+Innerhalb eines Werbe-Ordners bestimmt der Dateiname die Reihenfolge (am
+besten mit Nummer vorne: `01 …`, `02 …`). Querformate und Logos sind halbe
+Seiten – zwei hintereinander teilen sich eine Seite. Leerseiten (vor den
+Kontaktlisten) füllen auf eine durch 4 teilbare Seitenzahl auf. Gibt es die
+drei Unterordner nicht, wird die Werbung zwischen die Mannschaften verteilt.
 
 Das Heft (`<Datum>_WaB_Druck.pdf`) und `Heftplan.txt` landen im
 Ausgabe-Ordner. **Reihenfolge ändern:** `Heftplan.txt` bearbeiten und erneut
 bauen – dann gilt genau diese Reihenfolge. Neu planen: Datei löschen oder
 „Heftplan neu erstellen“ anhaken.
 
-Dateiarten: PDF, JPG/PNG, Word (`.docx`, braucht `heft.umwandler_url`), Text.
+Dateiarten: PDF, JPG/PNG, Word (`.docx`; `.doc`/`.odt` über `heft.umwandler_url`), Text.
 **Synology-Office-Dateien (`.odoc`) gehen nicht** – in DSM als PDF oder
 `.docx` exportieren.
 

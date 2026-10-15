@@ -308,13 +308,29 @@ nas:
 heft:
   gesamt_aktiv: false
   # Relativ zum Saisonordner. Jede Datei = Anzeige (PDF oder Bild), in
-  # Namensreihenfolge; die letzte kommt auf die Rueckseite.
+  # Namensreihenfolge. Querformate und Logos sind "halbe Seiten" und kommen
+  # zu zweit auf eine Seite.
   werbung_ordner: "Allgemein/Werbung"
+  # Unterordner im Werbe-Ordner, wie im Heft der Layouterin: vorne = nach dem
+  # Vorwort, hinten = nach den Mannschaften, Rueckseite = letzte Seite.
+  # Gibt es keinen davon, wird die Werbung zwischen die Mannschaften verteilt.
+  werbung_vorne: "1 vorne"
+  werbung_hinten: "2 hinten"
+  werbung_rueckseite: "3 Rückseite"
+  # Kontaktlisten am Ende (relativ zum Saisonordner, * erlaubt): .txt im
+  # Ansprechpartner-Format, .docx (Zeilen ohne @/Telefon = Ueberschrift) oder PDF.
+  kontaktlisten:
+    - "Allgemein/Ansprechpartner.txt"
+    - "Allgemein/Kontakte_Jugend*.docx"
+  kontaktlisten_titel: "Kontaktlisten"
+  # Impressum vor der Rueckseite: PDF (fertige Seite), .txt oder .docx.
+  impressum: "Allgemein/Impressum*"
   # Relativ zum Saisonordner. Je Person: "Funktion: Name", naechste Zeile
   # Kontaktdaten, Leerzeile dazwischen. Gilt auch fuers Deckblatt.
   ansprechpartner_datei: "Allgemein/Ansprechpartner.txt"
-  # Gotenberg fuer Word-Dateien (.docx), z. B. "http://gotenberg:3000".
-  # Leer = Word-Dateien werden mit Hinweis uebersprungen.
+  # .docx (Vorwort, Berichte) setzt das Programm selbst im Heftlayout.
+  # Fuer aeltere Formate (.doc, .odt, .rtf) Gotenberg, z. B.
+  # "http://gotenberg:3000"; leer = mit Hinweis uebersprungen.
   umwandler_url: ""
   dateiname: "{datum:%Y%m%d}_WaB_Druck.pdf"
 
