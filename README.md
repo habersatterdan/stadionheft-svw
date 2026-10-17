@@ -8,19 +8,27 @@ die Person, die das Stadionheft „Wörnitzstein am Ball" zusammenbaut.
 Ein Klick. Die Zahlen sind die von jetzt.
 
 ```
-Mannschaften anhaken  →  Knopf  →  ZIP mit einer PDF je Mannschaft
+Knopf 1:  Mannschaften anhaken  →  ZIP mit Deckblatt + einer PDF je Mannschaft
+          → optional „Auf NAS ablegen“ (neuer Ausgabe-Ordner)
+Knopf 2:  Titelbild, Grußwort, Berichte in den Ordner  →  komplettes Heft
 ```
 
 ---
 
-## Was es macht — und was nicht
+## Was es macht
 
-**Es liefert:** die Statistikseiten, druckfertig gesetzt (A5, 3 mm Anschnitt,
-Schnittmarken), mit korrekt ermitteltem nächsten Gegner.
+**Knopf 1** liefert die Statistikseiten, druckfertig gesetzt (A5, 3 mm
+Anschnitt, Schnittmarken), mit korrekt ermitteltem nächsten Gegner – dazu ein
+**Deckblatt** mit Titelbild, allen Heimspielen und den Ansprechpartnern. Auf
+Wunsch legt es alles in einen neuen Ausgabe-Ordner auf der NAS, auch über
+QuickConnect.
 
-**Es liefert nicht:** Titelseite, Vorwort, Werbung, Kontaktlisten, Impressum.
-Die kommen weiterhin von Hand – sie ändern sich kaum und stecken nicht in
-FuPa.
+**Knopf 2** („Gesamtes Heft bauen“, optional) baut aus diesem Ordner das
+komplette Heft: Deckblatt, Grußwort, je Mannschaft Trennseite, Spielberichte
+und Statistik, Werbung, Kontaktlisten, Impressum, Rückseite – auf eine durch 4
+teilbare Seitenzahl. Die Reihenfolge steht als `Heftplan.txt` im Ordner und
+lässt sich dort ändern.
+→ **[Deckblatt, NAS-Ablage, Gesamtheft, neue Saison](docs/nas-ablage.md)**
 
 Je Mannschaft entstehen sechs Seiten:
 
@@ -228,6 +236,8 @@ stadionheft/
 │   ├── pages.py          Jinja2 → HTML → WeasyPrint → PDF
 │   └── assemble.py       Seiten zu einer Datei montieren
 ├── storage/nas.py        Ablage auf der NAS (Mount oder SMB)
+├── storage/filestation.py  Ablage per File-Station-API (auch QuickConnect)
+├── gesamtheft.py         Das komplette Heft aus dem Ausgabe-Ordner
 ├── web/                  Flask-Oberfläche
 ├── templates/            Seitenvorlagen
 └── static/css/heft.css   Das gesamte Layout
@@ -244,6 +254,7 @@ Tests: `python -m pytest -q` (141 Tests, kein Netzzugriff)
 | [Anleitung als Website](https://habersatterdan.github.io/stadionheft-svw/) | Alles unten, aber schöner |
 | [Seiten erzeugen](docs/erzeugen.md) | Der Vorgang vor jedem Heimspiel |
 | [Übergabe ans Layout](docs/uebergabe.md) | Für die Person, die das Heft baut |
+| [Deckblatt, NAS-Ablage, Gesamtheft, neue Saison](docs/nas-ablage.md) | Ablage per QuickConnect, das komplette Heft per Knopf, Saisonwechsel |
 | [Erste Einrichtung](docs/ERSTE_EINRICHTUNG.md) | NAS, Schritt für Schritt |
 | [Im Homelab betreiben](docs/homelab.md) | Docker außerhalb der NAS |
 | [FuPa-Anbindung](docs/fupa.md) | Wie der Abruf funktioniert |

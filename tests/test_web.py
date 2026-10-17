@@ -286,3 +286,5 @@ def test_gesamtheft_knopf_sichtbar(konfiguration: Konfiguration, monkeypatch):
     assert "Gesamtes Heft bauen" in client.get("/").get_data(as_text=True)
     seite = client.get("/heft").get_data(as_text=True)
     assert "<option>09 Ausgabe 301026</option>" in seite
+    hilfe = client.get("/hilfe").get_data(as_text=True)
+    assert "Das gesamte Heft bauen" in hilfe and "Neue Saison" in hilfe

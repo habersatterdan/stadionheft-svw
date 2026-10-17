@@ -5,15 +5,66 @@
 <h1>Hilfe</h1>
 
 <div class="karte">
-  <h2 style="margin-top:0">So erstellst du ein Stadionheft</h2>
+  <h2 style="margin-top:0">1. Die Seiten aus FuPa erzeugen</h2>
   <ol>
-    <li>Mannschaften anhaken, die im Heft vorkommen sollen.</li>
-    <li>Optional Spieltag und deinen Namen eintragen.</li>
-    <li>Auf <strong>Stadionheft erstellen</strong> klicken.</li>
-    <li>Warten, bis „Stadionheft ist fertig“ erscheint.</li>
-    <li>PDF herunterladen oder direkt von der NAS holen.</li>
+    <li>Auf der Startseite die Mannschaften anhaken, die ins Heft sollen.</li>
+    <li>Auf <strong>Seiten jetzt erzeugen</strong> klicken.</li>
+    <li>Warten, bis „Fertig“ erscheint – dann die ZIP oder einzelne PDFs ansehen.
+      Dazu gehört auch das <strong>Deckblatt</strong> mit allen Heimspielen.</li>
+    {% if konfiguration.get("nas.modus") == "filestation" and konfiguration.get("nas.aktiv") %}
+    <li>Unten bei <strong>Auf die NAS legen</strong> den vorgeschlagenen
+      Ordnernamen prüfen (z. B. „09 Ausgabe 301026“) und
+      <strong>Auf NAS ablegen</strong> klicken. Seite offen lassen, das dauert
+      ein paar Minuten.</li>
+    {% endif %}
   </ol>
 </div>
+
+{% if gesamtheft_aktiv %}
+<div class="karte">
+  <h2 style="margin-top:0">2. Das gesamte Heft bauen</h2>
+  <ol>
+    <li>In den neuen Ausgabe-Ordner auf der NAS legen:
+      <strong>Titelbild.jpg</strong>, das <strong>Grußwort</strong> als Word-Datei
+      („Grußwort…“ oder „Vorwort…“) und <strong>Zeitungsartikel</strong> als PDF
+      in den Ordner der Mannschaft.</li>
+    <li>Auf der Startseite <strong>Gesamtes Heft bauen …</strong> → Ausgabe wählen →
+      <strong>Heft bauen</strong>. Das fertige Heft landet im Ausgabe-Ordner.</li>
+    <li>Reihenfolge ändern: <em>Heftplan.txt</em> im Ausgabe-Ordner bearbeiten
+      (Zeilen verschieben/löschen) und noch einmal bauen.</li>
+  </ol>
+  <p class="hilfe">Was wo liegt (Saisonordner
+    <code>{{ konfiguration.nas_saison_ordner }}</code>):</p>
+  <table class="info">
+    <tr><td>{{ konfiguration.get("nas.filestation.vorlage_ordner") }}</td>
+        <td>wird in jede neue Ausgabe kopiert – Titelbild und das Zwischenbild
+            je Mannschaft hier austauschen</td></tr>
+    <tr><td>{{ konfiguration.get("heft.werbung_ordner") }}/{{ konfiguration.get("heft.werbung_vorne") }}</td>
+        <td>Anzeigen nach dem Grußwort</td></tr>
+    <tr><td>{{ konfiguration.get("heft.werbung_ordner") }}/{{ konfiguration.get("heft.werbung_hinten") }}</td>
+        <td>Anzeigen nach den Mannschaften (Querformate: zwei auf einer Seite)</td></tr>
+    <tr><td>{{ konfiguration.get("heft.werbung_ordner") }}/{{ konfiguration.get("heft.werbung_rueckseite") }}</td>
+        <td>Rückseite</td></tr>
+    <tr><td>{{ konfiguration.get("heft.ansprechpartner_datei") }}</td>
+        <td>Ansprechpartner (Deckblatt und Kontaktlisten)</td></tr>
+  </table>
+  <p class="hilfe">Reihenfolge der Anzeigen = Dateiname (am besten „01 …“, „02 …“).
+    Neue Fassung mit Jahreszahl (z. B. Flyer „…_2026.pdf“) einfach dazulegen –
+    die ältere wird automatisch weggelassen. Word-Dateien als .docx speichern,
+    nicht als Synology-Office-Dokument.</p>
+</div>
+
+<div class="karte">
+  <h2 style="margin-top:0">Neue Saison</h2>
+  <ol>
+    <li>Einen Administrator bitten, in der Konfiguration die Saison umzustellen
+      (FuPa-Adressen und Ordnername stellen sich mit um).</li>
+    <li>Seite <a href="{{ url_for('nas_ordner') }}">NAS-Ordner</a> öffnen →
+      <strong>Saisonordner anlegen</strong>. Vorlage, Werbung und
+      Ansprechpartner werden aus der alten Saison übernommen.</li>
+  </ol>
+</div>
+{% endif %}
 
 <div class="karte">
   <h2 style="margin-top:0">Was tun, wenn eine Fehlermeldung kommt?</h2>

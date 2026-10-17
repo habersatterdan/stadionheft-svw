@@ -8,7 +8,7 @@ Das ist der Vorgang, den ihr vor jedem Heimspiel macht. Er dauert eine Minute.
 
 ### 1. Seite öffnen
 
-Im Browser: **http://svwnas:8080**
+Im Browser: **http://svwnas:8080** (im Homelab: **https://stadionheft.haberlab.local**)
 
 Das geht vom Handy, vom Tablet und von jedem Rechner im Vereinsnetz – es muss
 nichts installiert werden. Von unterwegs braucht es eine Verbindung ins
@@ -44,10 +44,47 @@ Die Dateien liegen außerdem auf der NAS unter
 SVW/Stadionheft/Saison 26-27/05_Ausgaben/<Datum>_Spieltag/
 ```
 
-### 5. Weitergeben
+### 5. Auf die NAS legen (wenn eingerichtet)
+
+Ist die Ablage per File Station eingerichtet, steht unter dem Ergebnis
+**„Auf die NAS legen“**:
+
+1. Ordnernamen prüfen – vorgeschlagen ist die nächste Nummer mit dem Datum
+   des ersten Spiels, z. B. `09 Ausgabe 301026`.
+2. **„Auf NAS ablegen“** klicken und die Seite offen lassen. Über QuickConnect
+   dauert das ein paar Minuten; der Fortschritt steht darunter.
+
+Das Programm legt den Ordner im Saisonordner an, kopiert den Inhalt von
+`00 Vorlage` hinein (Titelbild, Zwischenbilder) und legt jede Mannschaftsdatei
+in ihren Ordner, das Deckblatt in den Hauptordner.
+
+### 6. Weitergeben
 
 Das ZIP an die Person schicken, die das Heft zusammenbaut. Mehr braucht sie
 nicht – [was sie damit macht, steht hier](uebergabe.md).
+
+---
+
+## Das gesamte Heft bauen (zweiter Knopf)
+
+Statt alles von Hand zusammenzubauen, kann das Programm das komplette Heft
+aus dem Ausgabe-Ordner der NAS bauen:
+
+1. Ausgabe wie oben anlegen (Schritt 1–5).
+2. In den Ausgabe-Ordner auf der NAS legen:
+   * **`Titelbild.jpg`** (ersetzt das aus der Vorlage),
+   * **das Grußwort** als `Grußwort….docx` oder `Vorwort….docx` (Word),
+   * **Zeitungsartikel** als PDF in den Ordner der Mannschaft.
+3. Auf der Startseite **„Gesamtes Heft bauen …“** → Ausgabe wählen →
+   **„Heft bauen“**. Nach einigen Minuten liegt das fertige Heft
+   (`<Datum>_WaB_Druck.pdf`) im Ausgabe-Ordner und lässt sich herunterladen.
+4. **Reihenfolge ändern:** Im Ordner liegt jetzt `Heftplan.txt`. Zeilen
+   verschieben oder löschen, dann noch einmal „Heft bauen“ – es gilt genau
+   diese Reihenfolge.
+
+Werbung, Kontaktlisten und Impressum kommen aus dem Ordner `Allgemein` der
+Saison. Was wo liegt und wie man es pflegt:
+[Deckblatt, NAS-Ablage, Gesamtheft, neue Saison](nas-ablage.md).
 
 ---
 
