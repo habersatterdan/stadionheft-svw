@@ -249,3 +249,19 @@ def test_laengere_tabelle_gewinnt():
         ],
     }
     assert len(tabelle_erkennen(daten)) == 10
+
+
+def test_spielerstatistik_mit_spielerbild():
+    # Form wie FuPas Spielerstatistik: Bild direkt unter "image", ein
+    # Platzhalter-SVG zaehlt nicht als Foto.
+    nutzlast = {"players": [
+        {"firstName": "Max", "lastName": "Muster", "matches": 10, "goals": 3,
+         "assists": 1, "minutesPlayed": 900, "substitutesIn": 1,
+         "image": {"path": "https://image.fupa.net/player/abc/", "svg": False}},
+        {"firstName": "Erik", "lastName": "Ohnefoto", "matches": 8, "goals": 0,
+         "assists": 2, "minutesPlayed": 600, "substitutesIn": 2,
+         "image": {"path": "https://image.fupa.net/default/", "svg": True}},
+    ]}
+    zeilen = spieler_erkennen(nutzlast)
+    assert [z.bild for z in zeilen] == [
+        "https://image.fupa.net/player/abc/64x80.jpeg", ""]

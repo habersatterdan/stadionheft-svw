@@ -144,6 +144,8 @@ class SpielerZeile(_Basis):
     eingewechselt: int = 0
     ausgewechselt: int = 0
     minuten: int = 0
+    #: Spielerbild wie bei TorjaegerZeile (erst Adresse, dann data:-URI).
+    bild: str = ""
 
     @property
     def elfmeter(self) -> str:

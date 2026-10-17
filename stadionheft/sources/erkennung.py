@@ -533,6 +533,7 @@ def spieler_erkennen(nutzlast: Any) -> list[SpielerZeile]:
             eingewechselt=z.zahl("eingewechselt"),
             ausgewechselt=z.zahl("ausgewechselt"),
             minuten=z.zahl("minuten"),
+            bild=_bild_aus(z),
         ))
     return ergebnis
 

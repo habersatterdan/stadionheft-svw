@@ -838,7 +838,7 @@ VEREINSSEITE = """<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
 
 
 def test_eigene_vereinsseite_liefert_tabelle_und_spielplan(
-        konfiguration: Konfiguration, herren1):
+        konfiguration: Konfiguration, herren1, stichtag_5_oktober):
     """Die eigene Seite braucht keine Erlaubnis von Dritten.
 
     Sie liefert kein eingebettetes JSON, sondern eine ausgeschriebene
