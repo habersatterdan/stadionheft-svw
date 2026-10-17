@@ -89,3 +89,52 @@ Zwei Dinge:
    Saison umstellen (`...-2026-27` → `...-2027-28`) und `saison:` ändern.
 2. In der `docker-compose.yml` den Ausgabeordner auf den neuen Saisonordner
    umstellen, dann Projekt neu erstellen.
+
+---
+
+## Mit Ablage per File Station (QuickConnect)
+
+Ist `nas.modus: "filestation"` eingestellt, legt das Programm je Ausgabe einen
+eigenen Ordner im Saisonordner an. So sieht eine Saison dann aus:
+
+```
+SVW/Stadionheft/Saison 26-27/
+│
+├── 00 Vorlage/                     Wird in jede neue Ausgabe kopiert
+│   ├── Titelbild.jpeg              Standard-Titelbild
+│   ├── Herren 1/                   Je Mannschaft das Zwischenbild
+│   │   └── Mannschaften in der Bezirksliga.jpeg   (Liga-Übersicht)
+│   └── …
+│
+├── Allgemein/                      Gilt für die ganze Saison
+│   ├── Ansprechpartner.txt         Ansprechpartner (Deckblatt + Kontaktlisten)
+│   ├── Kontakte_Jugend_2026.docx   Zweite Kontaktlisten-Seite
+│   ├── Impressum.pdf               Fertige Impressum-Seite
+│   └── Werbung/
+│       ├── 1 vorne/                nach dem Grußwort
+│       ├── 2 hinten/               nach den Mannschaften
+│       └── 3 Rückseite/            letzte Seite
+│
+└── 09 Ausgabe 301026/              Eine Ausgabe (angelegt per Knopf)
+    ├── 2026-10-30_Deckblatt.pdf
+    ├── Titelbild.jpeg              ← hier das Bild der Ausgabe ablegen
+    ├── Grußwort Stadionheft.docx   ← von Hand
+    ├── Herren 1/
+    │   ├── 2026-10-30_Herren_1_gegen_….pdf
+    │   └── 2026-10-28_Donauworther_Zeitung_….pdf   ← von Hand (Spielbericht)
+    ├── …
+    ├── _daten/                     Spieldaten für „Gesamtes Heft bauen“
+    ├── Heftplan.txt                Reihenfolge – darf bearbeitet werden
+    └── 20261030_WaB_Druck.pdf      Das fertige Heft
+```
+
+**Regeln für die Ablage**
+
+* Reihenfolge der Anzeigen = Dateiname, am besten mit Nummer vorne (`01 …`).
+* Querformate und Logos sind halbe Seiten – zwei teilen sich eine Seite.
+* Eine neue Fassung mit Jahreszahl (`…_2026.pdf`) einfach dazulegen; die
+  ältere wird automatisch weggelassen.
+* Word-Dateien als `.docx` speichern – Synology-Office-Dokumente (`.odoc`)
+  kann das Programm nicht lesen.
+
+Mehr: [Deckblatt, NAS-Ablage, Gesamtheft, neue Saison](nas-ablage.md)

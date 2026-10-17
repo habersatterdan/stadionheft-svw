@@ -31,6 +31,9 @@ def konfiguration(tmp_path: Path) -> Konfiguration:
         k: v for k, v in daten["mannschaften"].items() if k in ("herren1", "damen1")
     }
     daten["mannschaften"]["damen1"]["liga"] = "Kreisliga Donau"
+    # Die meisten Tests pruefen die Mannschaftsdateien. Das Deckblatt hat
+    # eigene Tests (test_deckblatt.py) und schaltet es dort ein.
+    daten["deckblatt"]["aktiv"] = False
     return Konfiguration(daten, BEISPIEL_CONFIG)
 
 

@@ -1,0 +1,9 @@
+{# Anzeige als Bilddatei: ganze Seite, ohne Balken. Das Bild wird vollstaendig
+   gezeigt (nicht beschnitten) und mittig gesetzt. #}
+{% extends "_basis.html.j2" %}
+
+{% block koerper %}
+<div class="seite vollbild">
+  {% if bild_url %}<img src="{{ bild_url }}" alt="">{% endif %}
+</div>
+{% endblock %}

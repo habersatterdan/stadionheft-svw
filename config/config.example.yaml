@@ -26,6 +26,9 @@ verein:
   # Im Docker-Betrieb auf der NAS: "/app/daten/01_vorlagen/svw_logo.png"
   logo: "stadionheft/static/img/svw_logo.png"
 
+# Zum Saisonwechsel: In fupa_team_url und nas.filestation.saison_ordner
+# duerfen {saison_slug} (2026-27, wie FuPa) und {saison_kurz} (26-27) stehen --
+# dann ist der Wechsel nur diese eine Zeile.
 saison: "2026/2027"
 
 
@@ -202,6 +205,11 @@ layout:
   # Segoe UI ist eine Windows-Schrift und darf nicht frei weitergegeben
   # werden. Auf dem Server wird die erste verfuegbare Schrift verwendet.
   schriftfamilie: "Segoe UI, Open Sans, Source Sans 3, DejaVu Sans, sans-serif"
+  # Roter Kopfbalken (mit Ueberschrift und Wappen) und Fussbalken auf den
+  # Inhaltsseiten. false = nur der Inhalt, an genau derselben Stelle -- wenn
+  # die Balken schon in der Layoutdatei stehen. Deckblatt und Trennseite
+  # bleiben unveraendert.
+  balken: true
 
 
 # ---------------------------------------------------------------------------
@@ -230,11 +238,15 @@ ausgabe:
 nas:
   aktiv: false
 
-  # mount = Der NAS-Ordner ist im Dateisystem eingebunden (Netzlaufwerk unter
-  #         Windows, Docker-Volume auf der NAS selbst). Das ist der einfachste
-  #         und stabilste Weg - Empfehlung.
-  # smb   = Direkter SMB-Upload ueber das Netzwerk (benoetigt zusaetzlich
-  #         das Paket "smbprotocol", siehe README).
+  # mount       = Der NAS-Ordner ist im Dateisystem eingebunden (Netzlaufwerk
+  #               unter Windows, Docker-Volume auf der NAS selbst). Das ist der
+  #               einfachste und stabilste Weg - Empfehlung.
+  # smb         = Direkter SMB-Upload ueber das Netzwerk (benoetigt zusaetzlich
+  #               das Paket "smbprotocol", siehe README).
+  # filestation = Ueber die File-Station-API der Synology, auch per
+  #               QuickConnect. Legt NICHT automatisch ab: Nach dem Ansehen
+  #               des Hefts gibt es einen Knopf "Auf NAS ablegen" mit
+  #               frei waehlbarem Ordnernamen (siehe nas.filestation).
   modus: "mount"
 
   mount:
@@ -253,8 +265,91 @@ nas:
     passwort_umgebungsvariable: "NAS_PASSWORT"
     domaene: "WORKGROUP"
 
+  filestation:
+    # Entweder die QuickConnect-ID (der Teil vor .quickconnect.to) ...
+    quickconnect_id: ""              # TODO, z. B. "meinverein"
+    # ... oder eine direkte Adresse, z. B. "https://192.168.178.20:5001".
+    # Ist sie gesetzt, wird QuickConnect nicht gefragt.
+    adresse: ""
+    # Eigener DSM-Benutzer nur fuer das Programm: kein Admin, nur File
+    # Station, nur Schreibrecht auf den Stadionheft-Ordner, ohne 2FA.
+    benutzer: "stadionheft"
+    # Das Passwort steht NIE hier, sondern in dieser Umgebungsvariablen:
+    passwort_umgebungsvariable: "NAS_PASSWORT"
+    # Hier entsteht je Ausgabe ein neuer Ordner. {saison_kurz} wird aus
+    # 'saison' gesetzt (2026/2027 -> 26-27) -- zum Saisonwechsel genuegt dann
+    # die Zeile 'saison', danach auf der Seite "NAS-Ordner" anlegen.
+    saison_ordner: "/Verein/Stadionheft/Saison {saison_kurz}"    # TODO
+    # Unterordner von saison_ordner. Sein Inhalt wird in jede neue Ausgabe
+    # kopiert (z. B. Titelbild, Liga-Uebersichten). Liegt darin eine Datei
+    # "Titelbild.jpeg" (oder .jpg/.png), kommt sie aufs Deckblatt.
+    vorlage_ordner: "00 Vorlage"
+    # Vorschlag fuer den Ordnernamen. {nummer} = naechste laufende Nummer
+    # nach den vorhandenen "NN Ausgabe ..."-Ordnern, {datum} = erstes Spiel.
+    ordnername: "{nummer:02d} Ausgabe {datum:%d%m%y}"
+    # Unterordner je Mannschaft (Schluessel wie unter 'mannschaften').
+    # Wer hier fehlt, landet im Hauptordner der Ausgabe -- wie das Deckblatt.
+    mannschaftsordner:
+      herren1: "Herren 1"
+
   # Vorhandene Datei mit gleichem Namen ueberschreiben?
   ueberschreiben: false
+
+
+# ---------------------------------------------------------------------------
+# Gesamtes Heft (zweiter Knopf, nur mit nas.modus: filestation)
+#
+# Baut aus einem fertigen Ausgabe-Ordner das komplette Heft: Deckblatt,
+# Vorwort (Datei "Vorwort..." im Ausgabe-Ordner), je Mannschaft FuPa-Seiten
+# plus alles aus dem Mannschaftsordner, Ansprechpartner und Werbung. Die
+# Reihenfolge steht danach als Heftplan.txt im Ordner und laesst sich dort
+# aendern.
+# ---------------------------------------------------------------------------
+heft:
+  gesamt_aktiv: false
+  # Relativ zum Saisonordner. Jede Datei = Anzeige (PDF oder Bild), in
+  # Namensreihenfolge. Querformate und Logos sind "halbe Seiten" und kommen
+  # zu zweit auf eine Seite.
+  werbung_ordner: "Allgemein/Werbung"
+  # Unterordner im Werbe-Ordner, wie im Heft der Layouterin: vorne = nach dem
+  # Vorwort, hinten = nach den Mannschaften, Rueckseite = letzte Seite.
+  # Gibt es keinen davon, wird die Werbung zwischen die Mannschaften verteilt.
+  werbung_vorne: "1 vorne"
+  werbung_hinten: "2 hinten"
+  werbung_rueckseite: "3 Rückseite"
+  # Kontaktlisten am Ende (relativ zum Saisonordner, * erlaubt): .txt im
+  # Ansprechpartner-Format, .docx (Zeilen ohne @/Telefon = Ueberschrift) oder PDF.
+  kontaktlisten:
+    - "Allgemein/Ansprechpartner.txt"
+    - "Allgemein/Kontakte_Jugend*.docx"
+  kontaktlisten_titel: "Kontaktlisten"
+  # Impressum vor der Rueckseite: PDF (fertige Seite), .txt oder .docx.
+  impressum: "Allgemein/Impressum*"
+  # Relativ zum Saisonordner. Je Person: "Funktion: Name", naechste Zeile
+  # Kontaktdaten, Leerzeile dazwischen. Gilt auch fuers Deckblatt.
+  ansprechpartner_datei: "Allgemein/Ansprechpartner.txt"
+  # .docx (Vorwort, Berichte) setzt das Programm selbst im Heftlayout.
+  # Fuer aeltere Formate (.doc, .odt, .rtf) Gotenberg, z. B.
+  # "http://gotenberg:3000"; leer = mit Hinweis uebersprungen.
+  umwandler_url: ""
+  dateiname: "{datum:%Y%m%d}_WaB_Druck.pdf"
+
+
+# ---------------------------------------------------------------------------
+# Deckblatt
+#
+# Eine eigene Datei vor den Mannschaftsdateien: Titelbild, "Wir begruessen
+# unsere Gaeste" mit allen Heimspielen der Ausgabe, dahinter die
+# Ansprechpartner des Vereins.
+# ---------------------------------------------------------------------------
+deckblatt:
+  aktiv: true
+  # Rueckfall, wenn heft.ansprechpartner_datei auf der NAS fehlt.
+  # Jede Zeile: Funktion, Name und eine Zeile Kontaktdaten.
+  ansprechpartner:
+    - funktion: "Vorstand"           # TODO
+      name: "Max Mustermann"
+      kontakt: "0123 / 456789 • vorstand@example.org"
 
 
 # ---------------------------------------------------------------------------

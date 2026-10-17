@@ -214,6 +214,16 @@ class NasAblage:
         """Schnelltest fuer die Oberflaeche ('NAS-Verbindung pruefen')."""
         if not self.aktiv:
             return True, "NAS-Upload ist ausgeschaltet."
+        if self.modus == "filestation":
+            # Bewusst ohne Netzabfrage: Die Startseite soll sofort da sein.
+            # Den echten Test gibt es auf der Seite "NAS-Ordner".
+            variable = str(self.k.get("nas.filestation.passwort_umgebungsvariable",
+                                      "NAS_PASSWORT"))
+            if not os.environ.get(variable):
+                return False, f"Umgebungsvariable {variable} ist nicht gesetzt."
+            ziel = self.k.nas_saison_ordner
+            return True, (f"Ablage auf Knopfdruck nach '{ziel}' "
+                          f"(File Station, nicht getestet).")
         if self.modus == "mount":
             ordner = Path(str(self.k.get("nas.mount.zielordner", "")))
             if not str(ordner):

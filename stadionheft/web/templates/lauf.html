@@ -10,6 +10,16 @@
 
 <div class="karte" id="ergebnis" style="display:none"></div>
 
+{% if nas_ablage %}
+<div class="karte" id="nas" style="display:none">
+  <h2 style="margin-top:0">Auf die NAS legen</h2>
+  <p class="hilfe" id="nas-erklaerung">Erst das Heft ansehen, dann ablegen. Es
+    wird ein neuer Ordner angelegt, der Inhalt des Vorlage-Ordners hineinkopiert
+    und jede Datei in ihren Mannschaftsordner hochgeladen.</p>
+  <div id="nas-inhalt">NAS wird gefragt …</div>
+</div>
+{% endif %}
+
 <div class="karte">
   <h2 style="margin-top:0">Was gerade passiert</h2>
   <pre class="protokoll" id="protokoll">wird geladen …</pre>
@@ -110,6 +120,108 @@ function zeigeErgebnis(daten) {
   }
 }
 
+{% if nas_ablage %}
+const nasVorschlagUrl = {{ url_for('nas_vorschlag', lauf_id=lauf.id)|tojson }};
+const nasAblegenUrl = {{ url_for('nas_ablegen', lauf_id=lauf.id)|tojson }};
+const nasStatusUrl = {{ url_for('nas_status', lauf_id=lauf.id)|tojson }};
+
+function nasBericht(status) {
+  const b = status.bericht || {};
+  let html = b.erfolgreich
+    ? '<div class="erfolg"><strong>Abgelegt in ' + escape(b.ordner) + '</strong></div>'
+    : '<div class="fehlerkasten"><strong>' + escape(b.fehler || 'Ablage fehlgeschlagen')
+      + '</strong></div>';
+  html += '<ul>';
+  (b.schritte || []).forEach(function (s) {
+    html += '<li style="color:' + (s.ok ? 'inherit' : '#E52421') + '">'
+          + (s.ok ? '&#10003; ' : '&#10007; ') + escape(s.text) + '</li>';
+  });
+  return html + '</ul>';
+}
+
+function nasPruefen() {
+  fetch(nasStatusUrl).then(function (a) { return a.json(); }).then(function (status) {
+    if (status.laeuft) {
+      if (status.aktuell) {
+        document.getElementById('nas-ergebnis').innerHTML =
+          '<p class="hilfe"><span class="spinner"></span> ' + escape(status.aktuell) + '</p>';
+      }
+      setTimeout(nasPruefen, 1500);
+      return;
+    }
+    const ziel = document.getElementById('nas-ergebnis');
+    ziel.innerHTML = nasBericht(status);
+    const b = status.bericht || {};
+    document.getElementById('nas-knopf').disabled = !!b.erfolgreich;
+    document.getElementById('nas-knopf').textContent =
+      b.erfolgreich ? 'Abgelegt' : 'Erneut versuchen';
+  }).catch(function () { setTimeout(nasPruefen, 3000); });
+}
+
+function nasAblegen() {
+  const name = document.getElementById('nas-name').value.trim();
+  if (!name) { return; }
+  if (!confirm('Ordner "' + name + '" auf der NAS anlegen und alle Dateien hochladen?')) {
+    return;
+  }
+  const knopf = document.getElementById('nas-knopf');
+  knopf.disabled = true;
+  knopf.innerHTML = '<span class="spinner"></span> wird abgelegt …';
+  document.getElementById('nas-ergebnis').innerHTML =
+    '<p class="hilfe">Über QuickConnect dauert das einige Minuten '
+    + '(gemessen: gut 3 Minuten für ein ganzes Heft). Die Seite bitte offen lassen.</p>';
+  fetch(nasAblegenUrl, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ordnername: name})})
+    .then(function (a) { return a.json(); })
+    .then(function (antwort) {
+      if (antwort.fehler) {
+        document.getElementById('nas-ergebnis').innerHTML =
+          '<div class="fehlerkasten">' + escape(antwort.fehler) + '</div>';
+        knopf.disabled = false; knopf.textContent = 'Auf NAS ablegen';
+        return;
+      }
+      nasPruefen();
+    }).catch(function () {
+      document.getElementById('nas-ergebnis').innerHTML =
+        '<div class="fehlerkasten">Die Anfrage kam nicht an. Bitte erneut versuchen.</div>';
+      knopf.disabled = false; knopf.textContent = 'Auf NAS ablegen';
+    });
+}
+
+function nasZeigen() {
+  document.getElementById('nas').style.display = 'block';
+  fetch(nasVorschlagUrl).then(function (a) { return a.json(); }).then(function (v) {
+    let html = '';
+    if (v.fehler) {
+      html += '<div class="fehlerkasten">' + escape(v.fehler) + '</div>';
+    }
+    html += '<div class="feld"><label for="nas-name"><strong>Ordnername</strong>'
+          + ' in ' + escape(v.saison_ordner) + '</label>'
+          + '<input type="text" id="nas-name" maxlength="80"></div>'
+          + '<p><button type="button" id="nas-knopf" onclick="nasAblegen()">'
+          + 'Auf NAS ablegen</button></p><div id="nas-ergebnis"></div>'
+          + '<details><summary>Was wohin kommt</summary><table class="info">'
+          + '<tr><td>Vorlage</td><td>Inhalt von „' + escape(v.vorlage) + '“</td></tr>';
+    (v.ziele || []).forEach(function (z) {
+      html += '<tr><td>' + escape(z.datei) + '</td><td>'
+            + escape(z.ordner || 'Hauptordner') + '</td></tr>';
+    });
+    html += '</table>';
+    if (v.vorhandene && v.vorhandene.length) {
+      html += '<p class="hilfe">Schon vorhanden: ' + v.vorhandene.map(escape).join(', ') + '</p>';
+    }
+    html += '</details>';
+    document.getElementById('nas-inhalt').innerHTML = html;
+    // Per DOM statt im HTML-Text: so kann kein Zeichen im Namen das Feld sprengen.
+    document.getElementById('nas-name').value = v.vorschlag || '';
+    if (v.status && (v.status.laeuft || v.status.fertig)) { nasPruefen(); }
+  }).catch(function () {
+    document.getElementById('nas-inhalt').innerHTML =
+      '<div class="fehlerkasten">Die NAS konnte nicht gefragt werden.</div>';
+  });
+}
+{% endif %}
+
 function abfragen() {
   fetch(statusUrl).then(function (a) { return a.json(); }).then(function (daten) {
     if (daten.protokoll) {
@@ -120,6 +232,9 @@ function abfragen() {
     }
     if (daten.fertig) {
       zeigeErgebnis(daten);
+      {% if nas_ablage %}
+      if (daten.erfolgreich) { nasZeigen(); }
+      {% endif %}
     } else {
       setTimeout(abfragen, 1000);
     }

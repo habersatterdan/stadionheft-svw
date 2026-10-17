@@ -1,0 +1,58 @@
+{% extends "_layout.html" %}
+{% block titel %}NAS-Ordner{% endblock %}
+
+{% block inhalt %}
+<h1>NAS-Ordner</h1>
+{% if not lage.aktiv %}
+  <div class="hinweis">Die Ablage per File Station ist nicht eingeschaltet
+    (config.yaml: <code>nas.aktiv: true</code>, <code>nas.modus: "filestation"</code>).</div>
+{% elif lage.fehler %}
+  <div class="fehlerkasten"><strong>{{ lage.fehler }}</strong></div>
+{% else %}
+  <div class="erfolg">Verbunden über {{ lage.adresse }}</div>
+  {% if lage.saison_meldung == "ok" %}
+    <div class="erfolg">Saisonordner angelegt.</div>
+  {% elif lage.saison_meldung == "fehler" %}
+    <div class="fehlerkasten">{{ lage.saison_fehler }}</div>
+  {% endif %}
+  {% if lage.saison_fehlt %}
+    <div class="karte">
+      <h2 style="margin-top:0">Neue Saison {{ konfiguration.saison }}</h2>
+      <p>Den Saisonordner <code>{{ lage.saison_ordner }}</code> gibt es noch nicht.
+        Beim Anlegen werden der Vorlage-Ordner und „Allgemein“ (Werbung,
+        Ansprechpartner) aus der letzten Saison übernommen.</p>
+      <form method="post" action="{{ url_for('nas_saison_anlegen') }}"
+            onsubmit="return confirm('Saisonordner jetzt auf der NAS anlegen?')">
+        <button type="submit">Saisonordner anlegen</button>
+      </form>
+    </div>
+  {% endif %}
+  <table class="info">
+    <tr><td>Freigaben für den Benutzer</td><td>{{ lage.freigaben|join(', ') }}</td></tr>
+    <tr><td>Saisonordner</td><td>{{ lage.saison_ordner }}</td></tr>
+    <tr><td>Vorlage-Ordner</td><td>{{ lage.vorlage_ordner }}
+      {% if not lage.vorlage %}<span class="status warn">fehlt oder leer</span>{% endif %}</td></tr>
+  </table>
+
+  <div class="karte">
+    <h2 style="margin-top:0">Im Saisonordner</h2>
+    <ul>
+      {% for f in lage.saison %}
+        <li>{{ '📁 ' if f.isdir }}{{ f.name }}</li>
+      {% else %}
+        <li>leer</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {% if lage.vorlage %}
+  <div class="karte">
+    <h2 style="margin-top:0">Wird in jede neue Ausgabe kopiert</h2>
+    <ul>
+      {% for f in lage.vorlage %}<li>{{ '📁 ' if f.isdir }}{{ f.name }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+{% endif %}
+<p><a class="knopf-zweit" href="{{ url_for('start') }}">Zurück</a></p>
+{% endblock %}

@@ -66,7 +66,10 @@
     </fieldset>
   </div>
 
-  <p><button type="submit">Seiten jetzt erzeugen</button></p>
+  <p><button type="submit">Seiten jetzt erzeugen</button>
+  {% if gesamtheft_aktiv %}
+    &nbsp; <a class="knopf-zweit" href="{{ url_for('heft_seite') }}">Gesamtes Heft bauen …</a>
+  {% endif %}</p>
 
   <div class="karte">
     <details>
@@ -107,13 +110,20 @@
 
       {% if nas_aktiv %}
         <p class="hilfe" style="margin-top:1rem">
+          {% if konfiguration.get("nas.modus") == "filestation" %}
+          Nach dem Erzeugen lassen sich die Dateien per Knopf auf der NAS ablegen:
+          {% else %}
           Die fertigen Dateien werden zusätzlich auf der NAS abgelegt:
+          {% endif %}
           {% if nas_ok %}
             <span class="status ok">erreichbar</span>
           {% else %}
             <span class="status warn">Problem</span>
           {% endif %}
           {{ nas_meldung }}
+          {% if konfiguration.get("nas.modus") == "filestation" %}
+            &middot; <a href="{{ url_for('nas_ordner') }}">NAS-Ordner ansehen</a>
+          {% endif %}
         </p>
       {% endif %}
     </details>

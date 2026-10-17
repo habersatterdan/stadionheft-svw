@@ -163,7 +163,8 @@ def zusammenfuegen(eintraege: list[Heftseite], ziel: Path) -> MontageErgebnis:
 
         dx = (ziel_breite - breite) / 2 - float(seite.mediabox.left)
         dy = (ziel_hoehe - hoehe) / 2 - float(seite.mediabox.bottom)
-        neu = PageObject.create_blank_page(width=ziel_breite, height=ziel_hoehe)
+        # Erst ins Dokument, dann einsetzen -- so verlangt es pypdf ab 7.
+        neu = schreiber.add_blank_page(width=ziel_breite, height=ziel_hoehe)
         neu.merge_transformed_page(seite, Transformation().translate(dx, dy))
 
         trim = _box(seite, "trimbox")
@@ -178,7 +179,6 @@ def zusammenfuegen(eintraege: list[Heftseite], ziel: Path) -> MontageErgebnis:
                 float(bleed.left) + dx, float(bleed.bottom) + dy,
                 float(bleed.right) + dx, float(bleed.top) + dy,
             ))
-        schreiber.add_page(neu)
         ergebnis.quellen.append(beschreibung)
 
     # 4. Speichern -----------------------------------------------------------

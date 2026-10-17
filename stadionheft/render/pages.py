@@ -26,7 +26,7 @@ from markupsafe import Markup
 from ..config import Konfiguration
 from ..errors import RenderFehler
 from ..logging_setup import logger
-from ..models import MannschaftsDaten, Spiel, SpielerZeile
+from ..models import WOCHENTAGE, Ausgabe, MannschaftsDaten, Spiel, SpielerZeile
 
 TEMPLATE_ORDNER = Path(__file__).resolve().parent.parent / "templates"
 STATIC_ORDNER = Path(__file__).resolve().parent.parent / "static"
@@ -87,6 +87,8 @@ class LayoutWerte:
     primaerfarbe: str = "#E52421"
     textfarbe: str = "#1A1A1A"
     schriftfamilie: str = "Segoe UI, Open Sans, DejaVu Sans, sans-serif"
+    #: Kopf- und Fussbalken auf den Inhaltsseiten (siehe _inhaltsseite.html.j2)
+    balken: bool = True
 
     @property
     def schrift_css(self) -> Markup:
@@ -132,6 +134,7 @@ class LayoutWerte:
             textfarbe=str(k.get("layout.textfarbe", "#1A1A1A")),
             schriftfamilie=str(k.get("layout.schriftfamilie",
                                      "Segoe UI, Open Sans, DejaVu Sans, sans-serif")),
+            balken=bool(k.get("layout.balken", True)),
         )
 
 
@@ -231,6 +234,116 @@ class SeitenRenderer:
         html = self._html(vorlage, seitentitel=ueberschrift, fliessend=False,
                           daten=daten, **_seiten_kontext(art, daten))
         return self._pdf(html, f"{nummer:02d}_{daten.schluessel}_{art}")
+
+
+    # -- Deckblatt ----------------------------------------------------------
+
+    def deckblatt(self, ausgabe: Ausgabe, titelbild: Path | None) -> Path:
+        """Titelseite: Titelbild und die Heimspiele dieser Ausgabe."""
+        spieltage = deckblatt_spieltage(ausgabe, self.konfiguration.get(
+            "verein.kurzname", ""))
+        html = self._html(
+            "deckblatt.html.j2",
+            seitentitel=self.heft["hefttitel"],
+            spieltage=spieltage,
+            anzahl_spiele=sum(len(t["spiele"]) for t in spieltage),
+            kopfdatum=kopfdatum(ausgabe),
+            titelbild_url=(titelbild.as_uri()
+                           if titelbild and titelbild.exists() else ""),
+        )
+        return self._pdf(html, "00_deckblatt")
+
+    def ansprechpartner(self, eintraege: list[dict]) -> Path:
+        html = self._html("ansprechpartner.html.j2",
+                          seitentitel="Ansprechpartner", fliessend=False,
+                          eintraege=eintraege)
+        return self._pdf(html, "00_ansprechpartner")
+
+
+    # -- Gesamtheft --------------------------------------------------------
+
+    def freitextseite(self, titel: str, text: str, name: str,
+                      quelle: str = "", absaetze: list[dict] | None = None) -> Path:
+        """Text (Vorwort, Bericht) -- darf auf Folgeseiten weiterlaufen.
+
+        ``absaetze`` statt ``text``, wenn die Absaetze schon feststehen (aus
+        einer Word-Datei) -- dann gilt keine Ueberschriften-Erkennung.
+        """
+        html = self._html("freitext.html.j2", seitentitel=titel, fliessend=True,
+                          absaetze=absaetze if absaetze is not None
+                          else text_zu_absaetzen(text), quelle=quelle)
+        return self._pdf(html, name)
+
+    def zwischenbildseite(self, daten: MannschaftsDaten, bild: Path | None,
+                          name: str) -> Path:
+        html = self._html("zwischenbild.html.j2", seitentitel="", fliessend=False,
+                          daten=daten, bild_url=bild.as_uri() if bild else "")
+        return self._pdf(html, name)
+
+    def rahmenseite(self, titel: str, name: str) -> Path:
+        html = self._html("rahmen.html.j2", seitentitel=titel, fliessend=False)
+        return self._pdf(html, name)
+
+    def kontaktlistenseite(self, titel: str, zeilen: list[dict], name: str) -> Path:
+        html = self._html("kontaktliste.html.j2", seitentitel=titel,
+                          fliessend=True, zeilen=zeilen)
+        return self._pdf(html, name)
+
+    def bildseite(self, bild: Path, titel: str, name: str) -> Path:
+        html = self._html("bildseite.html.j2", seitentitel=titel, fliessend=False,
+                          bild_url=bild.as_uri())
+        return self._pdf(html, name)
+
+    def vollbildseite(self, bild: Path | None, name: str) -> Path:
+        """Ganze Seite ohne Balken -- fuer Anzeigen als Bild und Leerseiten."""
+        html = self._html("vollbild.html.j2", seitentitel="", fliessend=False,
+                          bild_url=bild.as_uri() if bild else "")
+        return self._pdf(html, name)
+
+
+def deckblatt_spieltage(ausgabe: Ausgabe, kurzname: str = "") -> list[dict]:
+    """Die Heimspiele aller Mannschaften, nach Tagen gruppiert.
+
+    "Wir begruessen unsere Gaeste" -- also nur, wo der Gegner zu uns kommt.
+    Jede Mannschaft steuert ihr naechstes Spiel bei; das ist genau das Spiel,
+    fuer das ihre Seiten in dieser Ausgabe gemacht sind.
+    """
+    spiele: list[tuple[Spiel, MannschaftsDaten]] = [
+        (m.naechstes_spiel, m) for m in ausgabe.mannschaften
+        if m.naechstes_spiel and m.naechstes_spiel.heimspiel]
+    # ISO-Text sortiert wie die Zeit; ohne Termin ans Ende.
+    spiele.sort(key=lambda p: (p[0].anstoss or "9999", p[1].anzeigename))
+
+    tage: list[dict] = []
+    for spiel, daten in spiele:
+        eintrag = {
+            "paarung": " ".join(t for t in (kurzname, daten.anzeigename) if t)
+                       + (f" – {spiel.gegner}" if spiel.gegner else ""),
+            "wettbewerb": spiel.wettbewerb or daten.liga,
+            "datum": spiel.datum,
+            "uhrzeit": spiel.uhrzeit,
+        }
+        if tage and tage[-1]["datum"] == spiel.datum:
+            tage[-1]["spiele"].append(eintrag)
+        else:
+            tage.append({"wochentag": spiel.wochentag or "Termin offen",
+                         "datum": spiel.datum, "spiele": [eintrag]})
+    return tage
+
+
+def kopfdatum(ausgabe: Ausgabe) -> str:
+    """'Freitag 16.10.2026' bei einem Tag, sonst '16.–18.10.2026'."""
+    termine = sorted({m.naechstes_spiel.anstoss_dt.date()
+                      for m in ausgabe.mannschaften
+                      if m.naechstes_spiel and m.naechstes_spiel.anstoss_dt})
+    if not termine:
+        return ""
+    erster, letzter = termine[0], termine[-1]
+    if erster == letzter:
+        return f"{WOCHENTAGE[erster.weekday()]} {erster:%d.%m.%Y}"
+    if (erster.year, erster.month) == (letzter.year, letzter.month):
+        return f"{erster:%d.}–{letzter:%d.%m.%Y}"
+    return f"{erster:%d.%m.}–{letzter:%d.%m.%Y}"
 
 
 def _seiten_kontext(art: str, daten: MannschaftsDaten) -> dict:

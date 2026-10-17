@@ -133,13 +133,26 @@ html, body {
    deshalb exakt dieselben Werte wie im festen Modus und werden auf jeder
    Folgeseite automatisch wiederholt. */
 
+/* Die Raender muessen auf JEDER Seite gelten -- als Raender des <body>
+   galten sie nur oben auf der ersten und unten auf der letzten Seite: Der
+   Text lief in den Fussbalken und begann auf Folgeseiten ueber dem
+   Kopfbalken. Darum eine eigene Seitenart mit Seitenraendern (gleiche Werte
+   wie --inhalt-oben/--rand/--inhalt-unten; var() ist in @page nicht
+   zuverlaessig). */
 body.fliessend {
-    margin: var(--inhalt-oben) var(--rand) var(--inhalt-unten) var(--rand);
+    margin: 0;
+    page: fliessend;
+}
+@page fliessend {
+    margin: 44mm 12mm 20mm 12mm;
 }
 
+/* Feste Elemente misst WeasyPrint ab dem Satzspiegel (innerhalb der
+   Seitenraender von @page fliessend) -- also um die Raender zurueck. */
 .kopf-fix, .fuss-fix, .wappen-fix { position: fixed; }
-.kopf-fix { top: var(--kopf-oben); left: 0; width: var(--seitenbreite); }
-.fuss-fix { bottom: var(--fuss-unten); left: 0; width: var(--seitenbreite); }
+.kopf-fix { top: calc(var(--kopf-oben) - 44mm); left: -12mm; width: var(--seitenbreite); }
+.fuss-fix { bottom: calc(var(--fuss-unten) - 20mm); left: -12mm; width: var(--seitenbreite); }
+.wappen-fix { top: calc(5.5mm - 44mm); left: calc(9mm - 12mm); }
 
 .inhalt-fliessend { width: 100%; }
 
@@ -532,6 +545,12 @@ dl.merkmale .form-zeichen {
 .titel .kasten .tag     { font-size: 8.5pt; font-weight: 700; }
 .titel .kasten .paarung { font-size: 9.5pt; font-weight: 700; }
 .titel .kasten .details { font-size: 8pt; color: #333333; }
+/* Deckblatt mit mehreren Heimspielen: Tag als Zwischenzeile, Spiele dicht. */
+.titel .kasten .tag { margin-top: 1.6mm; }
+.titel .kasten .gaeste + .tag { margin-top: 0; }
+.titel .kasten-voll .paarung { font-size: 8.5pt; }
+.titel .kasten-voll .details { font-size: 7pt; }
+.titel .kasten-voll .tag     { font-size: 7.5pt; margin-top: 1mm; }
 
 /* --------------------------------------------------------------------------
    Trennseite (voll rot, wie Seite 12 der Vorlage)
@@ -619,6 +638,7 @@ dl.merkmale .form-zeichen {
 .kontakte .eintrag { margin-bottom: 1.6mm; font-size: 7pt; }
 .kontakte .rolle { font-weight: 700; }
 .kontakte .kontaktdaten { color: #444444; }
+.ansprechpartner .eintrag { margin-bottom: 1.9mm; font-size: 7.2pt; line-height: 1.25; }
 
 /* --------------------------------------------------------------------------
    Impressum
@@ -630,3 +650,35 @@ dl.merkmale .form-zeichen {
     margin-top: 3mm;
 }
 .impressum dd { margin: 0; font-size: 8pt; }
+
+/* --------------------------------------------------------------------------
+   Gesamtheft: Bildseiten und Anzeigen als Bilddatei
+   -------------------------------------------------------------------------- */
+
+.bildinhalt { width: 100%; height: 100%; text-align: center; }
+.bildinhalt img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+.vollbild { display: flex; align-items: center; justify-content: center; }
+.vollbild img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Gesamtheft: Trennseite mit Zwischenbild (wie in der Layoutdatei) */
+.zwischenbild img {
+    position: absolute;
+    top: 12mm;
+    left: 10mm;
+    width: calc(100% - 20mm);
+    height: 168mm;
+    object-fit: contain;
+}
+.zwischenbild .beschriftung {
+    position: absolute;
+    bottom: 13mm;
+    left: 0;
+    width: 100%;
+    font-size: 17pt;
+}
+
+/* Gesamtheft: Kontaktlisten / Impressum */
+.kontaktliste { font-size: 7pt; line-height: 1.3; }
+.kontaktliste .kopfzeile-liste { font-weight: 700; margin-top: 1.4mm; }
+.kontaktliste .zeile-liste { color: #333333; }
