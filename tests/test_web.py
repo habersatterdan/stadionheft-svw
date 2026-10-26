@@ -288,3 +288,67 @@ def test_gesamtheft_knopf_sichtbar(konfiguration: Konfiguration, monkeypatch):
     assert "<option>09 Ausgabe 301026</option>" in seite
     hilfe = client.get("/hilfe").get_data(as_text=True)
     assert "Das gesamte Heft bauen" in hilfe and "Neue Saison" in hilfe
+
+
+# ---------------------------------------------------------------------------
+# Titelbild von Hand hochladen
+# ---------------------------------------------------------------------------
+
+JPG = b"\xff\xd8\xff\xe0" + b"0" * 64
+
+
+def test_startseite_bietet_titelbild_an(konfiguration: Konfiguration):
+    html = _client(konfiguration).get("/").get_data(as_text=True)
+    assert 'name="titelbild"' in html and "multipart/form-data" in html
+
+
+def test_titelbild_kein_bild_wird_abgelehnt(konfiguration: Konfiguration):
+    import io
+    antwort = _client(konfiguration).post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "titelbild": (io.BytesIO(b"%PDF-1.4"), "titel.jpg")})
+    assert antwort.status_code == 400
+    assert "JPG- oder PNG" in antwort.get_data(as_text=True)
+
+
+def test_titelbild_geht_ans_deckblatt_und_auf_die_nas(konfiguration: Konfiguration,
+                                                     monkeypatch):
+    import io
+
+    from stadionheft import build
+    from stadionheft.storage import filestation
+
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    gesehen: dict = {}
+    echt = build.dateien_erstellen
+
+    def erstellen(k, mannschaften, **argumente):
+        gesehen["titelbild"] = argumente.get("titelbild")
+        argumente["titelbild"] = None
+        return echt(k, mannschaften, **argumente)
+
+    def ablage(k, ordnername, dateien, fs=None, fortsetzen=False, melden=None):
+        gesehen["dateien"] = [(s, p.name) for s, p in dateien]
+        return filestation.AblageBericht(ordner=f"/S/{ordnername}",
+                                         angelegt=True, erfolgreich=True)
+
+    import stadionheft.web as web
+    monkeypatch.setattr(web, "dateien_erstellen", erstellen)
+    monkeypatch.setattr(filestation, "ablage_ausfuehren", ablage)
+    client = _client(konfiguration)
+    antwort = client.post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "titelbild": (io.BytesIO(JPG), "IMG_2026.JPEG")})
+    lauf_id = antwort.headers["Location"].rstrip("/").split("/")[-1]
+    for _ in range(120):
+        if client.get(f"/lauf/{lauf_id}/status").get_json()["fertig"]:
+            break
+        time.sleep(0.5)
+    assert gesehen["titelbild"].name == "Titelbild.jpg"
+    assert gesehen["titelbild"].read_bytes() == JPG
+
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe"})
+    _warten_auf_ablage(client, lauf_id)
+    assert ("", "Titelbild.jpg") in gesehen["dateien"]

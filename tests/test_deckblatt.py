@@ -149,3 +149,26 @@ def test_mehrseitiger_text_bleibt_zwischen_den_balken(konfiguration: Konfigurati
         assert max(inhalt) <= hoehe - 44 * mm
         assert min(inhalt) >= 20 * mm
         assert any(t == "Vorwort" for t, _ in hoehen)
+
+
+def test_hochgeladenes_titelbild_hat_vorrang_vor_der_nas(
+        konfiguration: Konfiguration, tmp_path, monkeypatch):
+    from PIL import Image
+
+    from stadionheft.storage import filestation
+
+    konfiguration.roh["deckblatt"]["aktiv"] = True
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+
+    def nicht_fragen(*_a, **_k):
+        raise AssertionError("Vorlage-Titelbild darf nicht geholt werden")
+
+    monkeypatch.setattr(filestation, "titelbild_holen", nicht_fragen)
+    monkeypatch.setattr(filestation, "ansprechpartner_von_nas", lambda *_a: None)
+    bild = tmp_path / "Titelbild.png"
+    Image.new("RGB", (40, 30), (200, 0, 0)).save(bild)
+
+    ergebnis = dateien_erstellen(konfiguration, ["herren1"], titelbild=bild)
+    deckblatt = ergebnis.dateien[0]
+    assert deckblatt.anzeigename == "Deckblatt"
+    assert not any("Kein Titelbild" in w for w in deckblatt.warnungen)

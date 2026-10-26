@@ -238,8 +238,13 @@ def dateien_erstellen(konfiguration: Konfiguration,
                       spieltag: str = "",
                       datenquelle: str | None = None,
                       erzeugt_von: str = "",
-                      frisch: bool = False) -> LaufErgebnis:
-    """Erzeugt je gewaehlter Mannschaft eine druckfertige PDF-Datei."""
+                      frisch: bool = False,
+                      titelbild: Path | None = None) -> LaufErgebnis:
+    """Erzeugt je gewaehlter Mannschaft eine druckfertige PDF-Datei.
+
+    ``titelbild``: von Hand hochgeladenes Bild fuers Deckblatt. Es hat Vorrang
+    vor dem Titelbild aus der NAS-Vorlage.
+    """
     start = datetime.now()
 
     if not mannschaften:
@@ -265,7 +270,7 @@ def dateien_erstellen(konfiguration: Konfiguration,
         erzeugt_von=erzeugt_von,
         warnungen=list(warnungen) + list(konfiguration.warnungen),
     )
-    return _bauen(konfiguration, ausgabe, start=start)
+    return _bauen(konfiguration, ausgabe, start=start, titelbild=titelbild)
 
 
 def dateien_aus_snapshot(konfiguration: Konfiguration,
@@ -294,7 +299,7 @@ def dateien_aus_snapshot(konfiguration: Konfiguration,
 # ---------------------------------------------------------------------------
 
 def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
-           *, start: datetime) -> LaufErgebnis:
+           *, start: datetime, titelbild: Path | None = None) -> LaufErgebnis:
     arbeitsordner = konfiguration.arbeits_ordner / _laufordner(start)
     renderer = SeitenRenderer(konfiguration, arbeitsordner)
 
@@ -338,7 +343,8 @@ def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
     if konfiguration.get("deckblatt.aktiv", True) and ausgabe.mannschaften:
         try:
             deckblatt = _deckblatt_bauen(konfiguration, renderer, ausgabe,
-                                         ziel_ordner, arbeitsordner, start)
+                                         ziel_ordner, arbeitsordner, start,
+                                         titelbild)
             ergebnis.dateien.insert(0, deckblatt)
             warnungen.extend(deckblatt.warnungen)
         except StadionheftFehler as fehler:
@@ -382,15 +388,20 @@ DECKBLATT = ""
 
 def _deckblatt_bauen(konfiguration: Konfiguration, renderer: SeitenRenderer,
                      ausgabe: Ausgabe, ziel_ordner: Path, arbeitsordner: Path,
-                     start: datetime) -> Mannschaftsdatei:
+                     start: datetime,
+                     eigenes_titelbild: Path | None = None) -> Mannschaftsdatei:
     """Deckblatt (Titelbild + Heimspiele) und Ansprechpartner als eine Datei."""
     warnungen: list[str] = []
-    titelbild = None
+    titelbild = (eigenes_titelbild
+                 if eigenes_titelbild and eigenes_titelbild.exists() else None)
+    if titelbild:
+        logger().info("Titelbild von Hand hochgeladen: %s", titelbild.name)
     von_nas: list[dict] | None = None
     if (konfiguration.get("nas.aktiv", False)
             and konfiguration.get("nas.modus") == "filestation"):
         from .storage.filestation import ansprechpartner_von_nas, titelbild_holen
-        titelbild = titelbild_holen(konfiguration, arbeitsordner)
+        if titelbild is None:
+            titelbild = titelbild_holen(konfiguration, arbeitsordner)
         # Die Liste wird auf der NAS gepflegt (Allgemein/Ansprechpartner.txt);
         # die Konfiguration ist nur der Rueckfall, wenn dort nichts liegt.
         von_nas = ansprechpartner_von_nas(konfiguration, arbeitsordner)

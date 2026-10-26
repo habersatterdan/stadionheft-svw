@@ -41,6 +41,8 @@ class Lauf:
     benutzer: str = ""
     #: Ablage auf der NAS per Knopf (nur nas.modus = filestation)
     nas: dict = field(default_factory=dict)
+    #: Von Hand hochgeladenes Titelbild (geht mit auf die NAS)
+    titelbild: str = ""
 
     def als_dict(self) -> dict:
         return {
@@ -60,6 +62,17 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["KONFIGURATION"] = k
+    # Titelbild vom Handy: Fotos sind selten groesser als 15 MB.
+    app.config["MAX_CONTENT_LENGTH"] = TITELBILD_MAX_BYTES
+
+    @app.errorhandler(413)
+    def zu_gross(_fehler):
+        return render_template(
+            "fehler.html", titel="Bild zu groß",
+            meldung=f"Das Titelbild darf höchstens "
+                    f"{TITELBILD_MAX_BYTES // 1_000_000} MB groß sein.",
+            hinweis="Bitte ein kleineres Bild wählen (am Handy z. B. per "
+                    "Teilen → verkleinern).", technisch=""), 413
 
     from .zugang import einrichten as zugang_einrichten
     zugang_einrichten(app, k)
@@ -134,10 +147,29 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
         lauf = Lauf(id=uuid.uuid4().hex[:12],
                     benutzer=request.form.get("benutzer", "").strip())
+        titelbild = None
+        hochgeladen = request.files.get("titelbild")
+        if hochgeladen and hochgeladen.filename:
+            inhalt = hochgeladen.read()
+            endung = _bildendung(inhalt)
+            if not endung:
+                return render_template(
+                    "fehler.html", titel="Titelbild nicht lesbar",
+                    meldung="Das Titelbild muss ein JPG- oder PNG-Bild sein.",
+                    hinweis="Am Handy klappt es mit einem Foto aus der Galerie.",
+                    technisch=hochgeladen.filename), 400
+            # Genau so benannt, wie es im Ausgabe-Ordner liegen soll -- daran
+            # erkennt es "Gesamtes Heft bauen" spaeter wieder.
+            ordner = k.arbeits_ordner / "titelbilder" / lauf.id
+            ordner.mkdir(parents=True, exist_ok=True)
+            titelbild = ordner / f"Titelbild{endung}"
+            titelbild.write_bytes(inhalt)
+            lauf.titelbild = str(titelbild)
         with sperre:
             laeufe[lauf.id] = lauf
 
         argumente = {
+            "titelbild": titelbild,
             "mannschaften": auswahl,
             "spieltag": request.form.get("spieltag", "").strip(),
             "datenquelle": request.form.get("quelle") or None,
@@ -199,6 +231,10 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
         snapshot = (lauf.ergebnis or {}).get("snapshot")
         if snapshot and Path(snapshot).exists():
             dateien.append(("ordner:_daten", Path(snapshot)))
+        # Ein hochgeladenes Titelbild liegt danach im Ausgabe-Ordner -- und
+        # ersetzt dort das aus der Vorlage (auch fuers Gesamtheft).
+        if lauf.titelbild and Path(lauf.titelbild).exists():
+            dateien.append(("", Path(lauf.titelbild)))
         return dateien
 
     @app.get("/lauf/<lauf_id>/nas/vorschlag")
@@ -459,6 +495,18 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             technisch=fehler.technisch), 500
 
     return app
+
+
+TITELBILD_MAX_BYTES = 30_000_000
+
+
+def _bildendung(inhalt: bytes) -> str:
+    """Erkennt JPG/PNG am Inhalt, nicht am Dateinamen."""
+    if inhalt[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if inhalt[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    return ""
 
 
 def _lauf_ausfuehren(k: Konfiguration, lauf: Lauf, argumente: dict) -> None:

@@ -521,6 +521,12 @@ def ablage_ausfuehren(k: Konfiguration, ordnername: str,
             bericht.schritte.append(Schritt(f"Ordner '{name}' angelegt"))
         bericht.angelegt = True
 
+        # Kommt ein eigenes Titelbild mit, bleibt das der Vorlage draussen --
+        # sonst laegen zwei im Ordner und "Gesamtes Heft bauen" nimmt das
+        # falsche.
+        if any(not s and ist_titelbild(d.name) for s, d in dateien):
+            vorlage_inhalt = [f for f in vorlage_inhalt
+                              if f.get("isdir") or not ist_titelbild(f["name"])]
         if vorlage_inhalt:
             jetzt(f"Kopiere die Vorlage '{vorlage_name}' …")
             client.kopieren([f["path"] for f in vorlage_inhalt], ziel)
@@ -568,6 +574,11 @@ def ablage_ausfuehren(k: Konfiguration, ordnername: str,
         if fs is None:
             client.abmelden()
     return bericht
+
+
+def ist_titelbild(name: str) -> bool:
+    """Titelbild.jpg / .jpeg / .png -- so heisst es in Vorlage und Ausgabe."""
+    return bool(re.match(r"titelbild\.(jpe?g|png)$", name, re.I))
 
 
 def titelbild_holen(k: Konfiguration, ziel_ordner: Path) -> Path | None:
