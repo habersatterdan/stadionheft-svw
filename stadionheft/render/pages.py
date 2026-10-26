@@ -26,7 +26,8 @@ from markupsafe import Markup
 from ..config import Konfiguration
 from ..errors import RenderFehler
 from ..logging_setup import logger
-from ..models import WOCHENTAGE, Ausgabe, MannschaftsDaten, Spiel, SpielerZeile
+from ..models import (WOCHENTAGE, Ausgabe, MannschaftsDaten, Spiel, SpielerZeile,
+                      bilanz_aus_spielen, form_aus_spielen)
 
 TEMPLATE_ORDNER = Path(__file__).resolve().parent.parent / "templates"
 STATIC_ORDNER = Path(__file__).resolve().parent.parent / "static"
@@ -39,6 +40,8 @@ SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
     "torjaeger":        ("torjaeger.html.j2", "Torschützenliste"),
     "spielerstatistik": ("spielerstatistik.html.j2", "Spielerstatistik"),
     "gegner":           ("gegner.html.j2", "Der Gegner"),
+    # Nur bei Pokalspielen: statt Tabelle und Torschuetzenliste der Liga.
+    "pokalweg":         ("pokalweg.html.j2", "Der Weg im Pokal"),
     # Nur noetig, wenn der Gegner in einer anderen Liga spielt (Pokal).
     "tabelle_gegner":   ("tabelle.html.j2", "Tabelle des Gegners"),
     "torjaeger_gegner": ("torjaeger.html.j2", "Torschützen des Gegners"),
@@ -51,6 +54,13 @@ SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
 STANDARD_SEITEN: tuple[str, ...] = (
     "trenner", "vergleich", "tabelle", "torjaeger",
     "spielerstatistik", "gegner",
+)
+
+#: Bei einem Pokalspiel zaehlt die Liga nicht -- Tabelle und Torschuetzen
+#: der Liga entfallen, dafuer zeigt "pokalweg" die bisherigen Pokalrunden
+#: beider Mannschaften.
+POKAL_SEITEN: tuple[str, ...] = (
+    "trenner", "vergleich", "pokalweg", "spielerstatistik", "gegner",
 )
 
 #: So viele Zeilen passen auf eine A5-Seite. Was darueber hinausgeht, wuerde
@@ -376,7 +386,18 @@ def _seiten_kontext(art: str, daten: MannschaftsDaten) -> dict:
     if art == "gegner":
         return {"spieler": spieler_rangfolge(gegner.spieler if gegner else [])}
     if art == "vergleich":
-        return {"letzte_duelle": letzte_duelle(daten)}
+        kontext = {"letzte_duelle": letzte_duelle(daten)}
+        if daten.pokalspiel:
+            kontext.update(
+                pokal_wir=bilanz_aus_spielen(daten.pokalweg).gesamt,
+                pokal_sie=bilanz_aus_spielen(daten.pokalweg_gegner).gesamt,
+                form_wir=form_aus_spielen(daten.pokalweg),
+                form_sie=form_aus_spielen(daten.pokalweg_gegner))
+        return kontext
+    if art == "pokalweg":
+        return {"wettbewerb": daten.naechstes_spiel.wettbewerb
+                if daten.naechstes_spiel else "",
+                "weg_wir": daten.pokalweg, "weg_sie": daten.pokalweg_gegner}
     return {}
 
 

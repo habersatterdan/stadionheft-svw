@@ -37,7 +37,8 @@ from .errors import StadionheftFehler, VorlageFehltFehler
 from .logging_setup import logger
 from .models import Ausgabe, MannschaftsDaten
 from .render.assemble import Heftseite, zusammenfuegen
-from .render.pages import SEITEN_VORLAGEN, STANDARD_SEITEN, SeitenRenderer
+from .render.pages import (POKAL_SEITEN, SEITEN_VORLAGEN, STANDARD_SEITEN,
+                           SeitenRenderer)
 from .sources.base import quelle_erzeugen
 from .storage.nas import NasAblage
 
@@ -427,7 +428,13 @@ def seitenfolge(daten: MannschaftsDaten) -> list[str]:
     Grundsaetzlich bei allen gleich. Nur wenn der Gegner in einer **anderen**
     Liga spielt (Pokal), kommen dessen Tabelle und Torschuetzenliste dazu --
     in derselben Liga waeren es dieselben Zahlen zweimal.
+
+    Ist das naechste Spiel ein **Pokalspiel**, zaehlt die Liga gar nicht:
+    keine Tabellen, keine Torschuetzenlisten -- dafuer der bisherige Weg
+    beider Mannschaften durch diesen Pokal.
     """
+    if daten.pokalspiel:
+        return [s for s in POKAL_SEITEN if s in SEITEN_VORLAGEN]
     seiten = list(STANDARD_SEITEN)
     gegner = daten.gegner_daten
     if gegner and gegner.gefunden and not daten.gleiche_liga:
@@ -571,6 +578,7 @@ SEITENNAMEN = {
     "torjaeger": "Torschützenliste der Liga",
     "spielerstatistik": "Spielerstatistik der eigenen Mannschaft",
     "gegner": "Der Gegner mit seinem Kader",
+    "pokalweg": "Der Weg im Pokal (nur bei Pokalspielen, statt der Liga)",
     "tabelle_gegner": "Tabelle der Liga des Gegners",
     "torjaeger_gegner": "Torschützenliste der Liga des Gegners",
     "deckblatt": "Deckblatt mit Titelbild und Heimspielen",

@@ -30,6 +30,46 @@
       </div>
     </div>
 
+    {% if daten.pokalspiel %}
+    {# Pokal: die Liga zaehlt nicht -- nur die bisherigen Runden dieses
+       Pokals, fuer beide Mannschaften gleich gerechnet. #}
+    <table class="vergleich">
+      <thead>
+        <tr>
+          <th class="wir">{{ daten.anzeigename }}</th>
+          <th class="mitte">im Pokal</th>
+          <th class="sie">{{ daten.gegner or 'Gegner' }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="wir gross">{{ pokal_wir.spiele }}</td>
+          <td class="mitte">Spiele</td>
+          <td class="sie gross">{{ pokal_sie.spiele }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ pokal_wir.bilanz }}</td>
+          <td class="mitte">S-U-N</td>
+          <td class="sie">{{ pokal_sie.bilanz }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ pokal_wir.torverhaeltnis }}</td>
+          <td class="mitte">Tore</td>
+          <td class="sie">{{ pokal_sie.torverhaeltnis }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ '%+d'|format(pokal_wir.differenz) }}</td>
+          <td class="mitte">Tordifferenz</td>
+          <td class="sie">{{ '%+d'|format(pokal_sie.differenz) }}</td>
+        </tr>
+        <tr>
+          <td class="wir">{{ m.formkurve(form_wir) }}</td>
+          <td class="mitte">Pokalrunden</td>
+          <td class="sie">{{ m.formkurve(form_sie) }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% else %}
     {% set eigen = daten.tabellenplatz %}
     {% set fremd = gegner.tabellenplatz if gegner else none %}
 
@@ -79,6 +119,7 @@
         </tr>
       </tbody>
     </table>
+    {% endif %}
 
     {% if letzte_duelle %}
       <p class="unterzeile">Die letzten Aufeinandertreffen</p>
@@ -95,7 +136,7 @@
       </table>
     {% endif %}
 
-    {% if daten.letztes_spiel %}
+    {% if daten.letztes_spiel and not daten.pokalspiel %}
       <p class="unterzeile">Zuletzt gespielt</p>
       <p class="zeile">
         {{ daten.letztes_spiel.paarung }}

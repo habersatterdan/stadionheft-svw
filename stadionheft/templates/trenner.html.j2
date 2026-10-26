@@ -6,7 +6,10 @@
   {% if daten.untertitel %}
     <div class="untertitel">{{ daten.untertitel }}</div>
   {% endif %}
-  {% if daten.liga %}
+  {% if daten.pokalspiel %}
+    <div class="liga">{{ daten.naechstes_spiel.wettbewerb }}
+      {%- if daten.naechstes_spiel.spieltag %} &middot; {{ daten.naechstes_spiel.spieltag }}{% endif %}</div>
+  {% elif daten.liga %}
     <div class="liga">{{ daten.liga }}</div>
   {% endif %}
 </div>

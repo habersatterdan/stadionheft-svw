@@ -269,6 +269,12 @@ class Spiel(_Basis):
     def gespielt(self) -> bool:
         return self.ausgang != ""
 
+    @property
+    def ist_pokal(self) -> bool:
+        """Pokalspiel? FuPa nennt den Wettbewerb beim Namen
+        ("Frauen-Bezirkspokal Schwaben", "Toto-Pokal", "Kreispokal ...")."""
+        return "pokal" in self.wettbewerb.lower()
+
     def _tore(self) -> tuple[int, int] | None:
         """Das Ergebnis als Zahlenpaar (Heim, Gast)."""
         if ":" not in self.ergebnis:
@@ -600,6 +606,23 @@ class GegnerDaten(_Basis):
         )
 
 
+def pokalweg(spiele: list[Spiel], naechstes: Spiel | None) -> list[Spiel]:
+    """Gespielte Partien im selben Wettbewerb wie ``naechstes``, aelteste zuerst.
+
+    Verglichen wird der genaue Wettbewerbsname: Ein Kreispokal-Spiel aus dem
+    Sommer gehoert nicht zum Weg durch den Bezirkspokal. Das naechste Spiel
+    selbst ist noch nicht gespielt und faellt dadurch von allein heraus.
+    """
+    if not naechstes or not naechstes.ist_pokal:
+        return []
+    name = naechstes.wettbewerb.strip().lower()
+    treffer = [s for s in spiele
+               if s.gespielt and s.anstoss_dt is not None
+               and s.wettbewerb.strip().lower() == name]
+    treffer.sort(key=lambda s: s.anstoss_dt)       # type: ignore[arg-type,return-value]
+    return treffer
+
+
 def _eigene_zeile(tabelle: list[TabellenZeile], name: str) -> TabellenZeile | None:
     """Die Tabellenzeile einer Mannschaft -- erst ueber die Markierung, dann
     ueber den Namen."""
@@ -673,6 +696,23 @@ class MannschaftsDaten(_Basis):
     @property
     def tabellenplatz(self) -> TabellenZeile | None:
         return _eigene_zeile(self.tabelle, self.anzeigename)
+
+    @property
+    def pokalspiel(self) -> bool:
+        """Ist das naechste Spiel ein Pokalspiel? Dann zaehlt die Liga nicht --
+        die Seiten zeigen nur, wie beide Mannschaften im Pokal dastehen."""
+        return bool(self.naechstes_spiel and self.naechstes_spiel.ist_pokal)
+
+    @property
+    def pokalweg(self) -> list[Spiel]:
+        """Die bisher gespielten Partien im Wettbewerb des naechsten Spiels."""
+        return pokalweg(self.spiele, self.naechstes_spiel)
+
+    @property
+    def pokalweg_gegner(self) -> list[Spiel]:
+        """Dasselbe aus Sicht des Gegners -- aus seinem eigenen Spielplan."""
+        return pokalweg(self.gegner_daten.spiele if self.gegner_daten else [],
+                        self.naechstes_spiel)
 
     @property
     def gleiche_liga(self) -> bool:
