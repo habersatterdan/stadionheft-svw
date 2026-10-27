@@ -77,6 +77,25 @@
     </div>
   </div>
 
+  {% if bericht_mannschaften %}
+  <div class="karte">
+    <fieldset>
+      <legend>Zeitungsberichte <span style="font-weight:400;color:#666">(optional)</span></legend>
+      {% for m in bericht_mannschaften %}
+        <div class="feld">
+          <label for="bericht_{{ m.schluessel }}">{{ m.anzeigename }}</label>
+          <input type="file" id="bericht_{{ m.schluessel }}" name="bericht_{{ m.schluessel }}"
+                 accept="application/pdf,image/jpeg,image/png">
+        </div>
+      {% endfor %}
+      <p class="hilfe">PDF oder Foto des Berichts, je Mannschaft einzeln. Beim
+        Ablegen kommt er in den Ordner der Mannschaft
+        {%- if gesamtheft_aktiv %} – das Gesamtheft setzt ihn dort als
+        <em>Spielbericht</em> vor die FuPa-Seiten{% endif %}.</p>
+    </fieldset>
+  </div>
+  {% endif %}
+
   <p><button type="submit">Seiten jetzt erzeugen</button>
   {% if gesamtheft_aktiv %}
     &nbsp; <a class="knopf-zweit" href="{{ url_for('heft_seite') }}">Gesamtes Heft bauen …</a>

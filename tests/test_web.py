@@ -352,3 +352,65 @@ def test_titelbild_geht_ans_deckblatt_und_auf_die_nas(konfiguration: Konfigurati
     client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe"})
     _warten_auf_ablage(client, lauf_id)
     assert ("", "Titelbild.jpg") in gesehen["dateien"]
+
+
+# ---------------------------------------------------------------------------
+# Zeitungsberichte von Hand hochladen
+# ---------------------------------------------------------------------------
+
+def _mit_mannschaftsordnern(konfiguration: Konfiguration) -> None:
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    konfiguration.roh["nas"].setdefault("filestation", {})["mannschaftsordner"] = {
+        "herren1": "Herren 1", "damen1": "Damen1"}
+
+
+def test_startseite_bietet_zeitungsberichte_je_mannschaft(konfiguration: Konfiguration):
+    _mit_mannschaftsordnern(konfiguration)
+    konfiguration.roh["heft"]["zeitungsberichte"] = ["damen1"]
+    html = _client(konfiguration).get("/").get_data(as_text=True)
+    assert 'name="bericht_damen1"' in html
+    assert 'name="bericht_herren1"' not in html
+
+
+def test_zeitungsbericht_falsche_datei_wird_abgelehnt(konfiguration: Konfiguration):
+    import io
+    _mit_mannschaftsordnern(konfiguration)
+    antwort = _client(konfiguration).post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "bericht_herren1": (io.BytesIO(b"kein pdf"), "bericht.pdf")})
+    assert antwort.status_code == 400
+    assert "Zeitungsbericht für Herren 1" in antwort.get_data(as_text=True)
+
+
+def test_zeitungsberichte_gehen_in_den_ordner_der_mannschaft(konfiguration: Konfiguration,
+                                                            monkeypatch):
+    import io
+
+    from stadionheft.storage import filestation
+
+    _mit_mannschaftsordnern(konfiguration)
+    gesehen: dict = {}
+
+    def ablage(k, ordnername, dateien, fs=None, fortsetzen=False, melden=None):
+        gesehen["dateien"] = [(s, p.name) for s, p in dateien]
+        return filestation.AblageBericht(ordner=f"/S/{ordnername}",
+                                         angelegt=True, erfolgreich=True)
+
+    monkeypatch.setattr(filestation, "ablage_ausfuehren", ablage)
+    client = _client(konfiguration)
+    antwort = client.post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "bericht_herren1": (io.BytesIO(b"%PDF-1.4 x"), "scan.pdf"),
+              "bericht_damen1": (io.BytesIO(JPG), "IMG_1.jpg")})
+    lauf_id = antwort.headers["Location"].rstrip("/").split("/")[-1]
+    for _ in range(120):
+        if client.get(f"/lauf/{lauf_id}/status").get_json()["fertig"]:
+            break
+        time.sleep(0.5)
+
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe"})
+    _warten_auf_ablage(client, lauf_id)
+    assert ("herren1", "Zeitungsbericht Herren 1.pdf") in gesehen["dateien"]
+    assert ("damen1", "Zeitungsbericht Damen 1.jpg") in gesehen["dateien"]
