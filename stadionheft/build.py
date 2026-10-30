@@ -35,10 +35,10 @@ from pathlib import Path
 from .config import Konfiguration, Mannschaft
 from .errors import StadionheftFehler, VorlageFehltFehler
 from .logging_setup import logger
-from .models import Ausgabe, MannschaftsDaten
+from .models import Ausgabe, MannschaftsDaten, spielfreie_markieren
 from .render.assemble import Heftseite, zusammenfuegen
-from .render.pages import (POKAL_SEITEN, SEITEN_VORLAGEN, STANDARD_SEITEN,
-                           SeitenRenderer)
+from .render.pages import (POKAL_SEITEN, SEITEN_VORLAGEN, SPIELFREI_SEITEN,
+                           STANDARD_SEITEN, SeitenRenderer)
 from .sources.base import quelle_erzeugen
 from .storage.nas import NasAblage
 
@@ -307,6 +307,13 @@ def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
     ziel_ordner.mkdir(parents=True, exist_ok=True)
 
     warnungen = list(ausgabe.warnungen)
+    for frei in spielfreie_markieren(
+            ausgabe, float(konfiguration.get("heft.spielfrei_ab_tagen", 4))):
+        spiel = frei.naechstes_spiel
+        warnungen.append(
+            f"{frei.anzeigename}: an diesem Wochenende spielfrei"
+            + (f" (nächstes Spiel {spiel.datum})" if spiel and spiel.datum else "")
+            + " – im Heft nur Hinweisseite, nicht auf dem Deckblatt.")
     ergebnis = LaufErgebnis(ordner=ziel_ordner,
                             verwendete_quelle=(ausgabe.mannschaften[0].quelle
                                                if ausgabe.mannschaften else ""))
@@ -333,7 +340,7 @@ def _bauen(konfiguration: Konfiguration, ausgabe: Ausgabe,
             pdf=ziel,
             seitenzahl=montage.seitenzahl,
             gegner=daten.gegner,
-            anstoss=(daten.naechstes_spiel.datum if daten.naechstes_spiel else ""),
+            anstoss=(daten.heftspiel.datum if daten.heftspiel else ""),
             seiten=list(seiten),
             warnungen=list(daten.warnungen),
         ))
@@ -444,6 +451,9 @@ def seitenfolge(daten: MannschaftsDaten) -> list[str]:
     keine Tabellen, keine Torschuetzenlisten -- dafuer der bisherige Weg
     beider Mannschaften durch diesen Pokal.
     """
+    if daten.spielfrei:
+        return [s for s in SPIELFREI_SEITEN if s in SEITEN_VORLAGEN
+                and (s != "tabelle" or daten.tabelle)]
     if daten.pokalspiel:
         return [s for s in POKAL_SEITEN if s in SEITEN_VORLAGEN]
     seiten = list(STANDARD_SEITEN)
@@ -472,8 +482,12 @@ def _dateiname(konfiguration: Konfiguration, daten: MannschaftsDaten,
     """
     vorlage = str(konfiguration.get("ausgabe.dateiname",
                                     "{datum}_{mannschaft}_gegen_{gegner}.pdf"))
-    spiel = daten.naechstes_spiel
-    zeitpunkt = spiel.anstoss_dt if spiel and spiel.anstoss_dt else start
+    spiel = daten.heftspiel
+    # Spielfrei: Datum des Spieltags, damit die Datei bei den anderen steht.
+    termine = [m.heftspiel.anstoss_dt for m in ausgabe.mannschaften
+               if m.heftspiel and m.heftspiel.anstoss_dt]
+    zeitpunkt = (spiel.anstoss_dt if spiel and spiel.anstoss_dt
+                 else min(termine) if termine else start)
     werte = {
         "datum": f"{zeitpunkt:%Y-%m-%d}",
         "datum_kompakt": f"{zeitpunkt:%Y%m%d}",
@@ -482,7 +496,7 @@ def _dateiname(konfiguration: Konfiguration, daten: MannschaftsDaten,
         "spieltag": ausgabe.spieltag or "",
         "mannschaft": daten.anzeigename or daten.schluessel,
         "schluessel": daten.schluessel,
-        "gegner": daten.gegner or "offen",
+        "gegner": daten.gegner or ("spielfrei" if daten.spielfrei else "offen"),
     }
     try:
         name = vorlage.format(**werte)
@@ -522,7 +536,7 @@ def _sauberer_name(name: str) -> str:
 
 def _ausgabe_ordner(ausgabe: Ausgabe, start: datetime) -> str:
     """Je Lauf ein eigener Unterordner -- sonst vermischen sich die Spieltage."""
-    spiele = [m.naechstes_spiel for m in ausgabe.mannschaften if m.naechstes_spiel]
+    spiele = [m.heftspiel for m in ausgabe.mannschaften if m.heftspiel]
     termine = [s.anstoss_dt for s in spiele if s.anstoss_dt]
     zeitpunkt = min(termine) if termine else start
     return f"{zeitpunkt:%Y-%m-%d}_Spieltag"
