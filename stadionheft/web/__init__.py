@@ -41,6 +41,10 @@ class Lauf:
     benutzer: str = ""
     #: Ablage auf der NAS per Knopf (nur nas.modus = filestation)
     nas: dict = field(default_factory=dict)
+    #: Von Hand hochgeladenes Titelbild (geht mit auf die NAS)
+    titelbild: str = ""
+    #: Von Hand hochgeladene Zeitungsberichte je Mannschaft (Schluessel -> Datei)
+    berichte: dict = field(default_factory=dict)
 
     def als_dict(self) -> dict:
         return {
@@ -60,6 +64,18 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["KONFIGURATION"] = k
+    # Titelbild + Zeitungsberichte vom Handy in einer Anfrage; jede Datei
+    # wird zusaetzlich einzeln begrenzt.
+    app.config["MAX_CONTENT_LENGTH"] = ANFRAGE_MAX_BYTES
+
+    @app.errorhandler(413)
+    def zu_gross(_fehler):
+        return render_template(
+            "fehler.html", titel="Datei zu groß",
+            meldung=f"Titelbild und Zeitungsberichte dürfen zusammen höchstens "
+                    f"{ANFRAGE_MAX_BYTES // 1_000_000} MB groß sein.",
+            hinweis="Bitte ein kleineres Bild wählen (am Handy z. B. per "
+                    "Teilen → verkleinern).", technisch=""), 413
 
     from .zugang import einrichten as zugang_einrichten
     zugang_einrichten(app, k)
@@ -111,6 +127,7 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
                        if "keine Liga eingetragen" not in w],
             lage=lage,
             quelle_je_mannschaft={m.schluessel: m for m in lage.mannschaften},
+            bericht_mannschaften=_bericht_mannschaften(k),
         )
 
     @app.get("/vorab")
@@ -134,10 +151,50 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
 
         lauf = Lauf(id=uuid.uuid4().hex[:12],
                     benutzer=request.form.get("benutzer", "").strip())
+        titelbild = None
+        hochgeladen = request.files.get("titelbild")
+        if hochgeladen and hochgeladen.filename:
+            inhalt = hochgeladen.read()
+            endung = _bildendung(inhalt)
+            if not endung or len(inhalt) > TITELBILD_MAX_BYTES:
+                return render_template(
+                    "fehler.html", titel="Titelbild nicht lesbar",
+                    meldung="Das Titelbild muss ein JPG- oder PNG-Bild sein.",
+                    hinweis="Am Handy klappt es mit einem Foto aus der Galerie.",
+                    technisch=hochgeladen.filename), 400
+            # Genau so benannt, wie es im Ausgabe-Ordner liegen soll -- daran
+            # erkennt es "Gesamtes Heft bauen" spaeter wieder.
+            ordner = k.arbeits_ordner / "titelbilder" / lauf.id
+            ordner.mkdir(parents=True, exist_ok=True)
+            titelbild = ordner / f"Titelbild{endung}"
+            titelbild.write_bytes(inhalt)
+            lauf.titelbild = str(titelbild)
+        for m in _bericht_mannschaften(k):
+            hochgeladen = request.files.get(f"bericht_{m.schluessel}")
+            if not hochgeladen or not hochgeladen.filename:
+                continue
+            inhalt = hochgeladen.read()
+            endung = _berichtendung(inhalt)
+            if not endung or len(inhalt) > TITELBILD_MAX_BYTES:
+                return render_template(
+                    "fehler.html", titel="Zeitungsbericht nicht lesbar",
+                    meldung=f"Der Zeitungsbericht für {m.anzeigename} muss ein "
+                            f"PDF oder ein JPG-/PNG-Bild sein (höchstens "
+                            f"{TITELBILD_MAX_BYTES // 1_000_000} MB).",
+                    hinweis="Am Handy klappt ein Foto oder Scan der Zeitungsseite.",
+                    technisch=hochgeladen.filename), 400
+            # Liegt spaeter im Ordner der Mannschaft -- "Gesamtes Heft bauen"
+            # setzt ihn dort als Spielbericht vor die FuPa-Seiten.
+            ordner = k.arbeits_ordner / "berichte" / lauf.id / m.schluessel
+            ordner.mkdir(parents=True, exist_ok=True)
+            bericht = ordner / f"Zeitungsbericht {m.anzeigename}{endung}"
+            bericht.write_bytes(inhalt)
+            lauf.berichte[m.schluessel] = str(bericht)
         with sperre:
             laeufe[lauf.id] = lauf
 
         argumente = {
+            "titelbild": titelbild,
             "mannschaften": auswahl,
             "spieltag": request.form.get("spieltag", "").strip(),
             "datenquelle": request.form.get("quelle") or None,
@@ -199,6 +256,13 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
         snapshot = (lauf.ergebnis or {}).get("snapshot")
         if snapshot and Path(snapshot).exists():
             dateien.append(("ordner:_daten", Path(snapshot)))
+        # Ein hochgeladenes Titelbild liegt danach im Ausgabe-Ordner -- und
+        # ersetzt dort das aus der Vorlage (auch fuers Gesamtheft).
+        if lauf.titelbild and Path(lauf.titelbild).exists():
+            dateien.append(("", Path(lauf.titelbild)))
+        for schluessel, bericht in lauf.berichte.items():
+            if Path(bericht).exists():
+                dateien.append((schluessel, Path(bericht)))
         return dateien
 
     @app.get("/lauf/<lauf_id>/nas/vorschlag")
@@ -459,6 +523,38 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             technisch=fehler.technisch), 500
 
     return app
+
+
+TITELBILD_MAX_BYTES = 30_000_000
+ANFRAGE_MAX_BYTES = 150_000_000
+
+
+def _bericht_mannschaften(k: Konfiguration) -> list:
+    """Mannschaften mit Upload-Feld fuer den Zeitungsbericht.
+
+    ``heft.zeitungsberichte`` waehlt sie aus (leer = alle aktiven). Nur
+    Mannschaften mit eigenem NAS-Ordner -- der Bericht gehoert dorthin.
+    """
+    wahl = k.get("heft.zeitungsberichte") or []
+    ordner = k.get("nas.filestation.mannschaftsordner", {}) or {}
+    return [m for m in k.aktive_mannschaften()
+            if (not wahl or m.schluessel in wahl) and ordner.get(m.schluessel)]
+
+
+def _berichtendung(inhalt: bytes) -> str:
+    """PDF, JPG oder PNG -- am Inhalt erkannt."""
+    if inhalt[:5] == b"%PDF-":
+        return ".pdf"
+    return _bildendung(inhalt)
+
+
+def _bildendung(inhalt: bytes) -> str:
+    """Erkennt JPG/PNG am Inhalt, nicht am Dateinamen."""
+    if inhalt[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if inhalt[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    return ""
 
 
 def _lauf_ausfuehren(k: Konfiguration, lauf: Lauf, argumente: dict) -> None:

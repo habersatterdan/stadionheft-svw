@@ -42,7 +42,7 @@
   </div>
 {% endif %}
 
-<form method="post" action="{{ url_for('erstellen') }}">
+<form method="post" action="{{ url_for('erstellen') }}" enctype="multipart/form-data">
   <div class="karte">
     <fieldset>
       <legend>Welche Mannschaften?</legend>
@@ -65,6 +65,36 @@
       {% endfor %}
     </fieldset>
   </div>
+
+  <div class="karte">
+    <div class="feld">
+      <label for="titelbild">Neues Titelbild <span style="font-weight:400;color:#666">(optional)</span></label>
+      <input type="file" id="titelbild" name="titelbild" accept="image/jpeg,image/png">
+      <p class="hilfe">Leer lassen = Titelbild aus dem Vorlage-Ordner der NAS.
+        Ein hier gewähltes Bild kommt aufs Deckblatt und beim Ablegen als
+        <em>Titelbild</em> in den Ausgabe-Ordner
+        {%- if gesamtheft_aktiv %} – dort nimmt es auch das Gesamtheft{% endif %}.</p>
+    </div>
+  </div>
+
+  {% if bericht_mannschaften %}
+  <div class="karte">
+    <fieldset>
+      <legend>Zeitungsberichte <span style="font-weight:400;color:#666">(optional)</span></legend>
+      {% for m in bericht_mannschaften %}
+        <div class="feld">
+          <label for="bericht_{{ m.schluessel }}">{{ m.anzeigename }}</label>
+          <input type="file" id="bericht_{{ m.schluessel }}" name="bericht_{{ m.schluessel }}"
+                 accept="application/pdf,image/jpeg,image/png">
+        </div>
+      {% endfor %}
+      <p class="hilfe">PDF oder Foto des Berichts, je Mannschaft einzeln. Beim
+        Ablegen kommt er in den Ordner der Mannschaft
+        {%- if gesamtheft_aktiv %} – das Gesamtheft setzt ihn dort als
+        <em>Spielbericht</em> vor die FuPa-Seiten{% endif %}.</p>
+    </fieldset>
+  </div>
+  {% endif %}
 
   <p><button type="submit">Seiten jetzt erzeugen</button>
   {% if gesamtheft_aktiv %}

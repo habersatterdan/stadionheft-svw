@@ -121,6 +121,21 @@ def test_ablage_legt_an_kopiert_und_laedt_in_die_mannschaftsordner(
     assert bericht.schritte[-1].text.startswith("Geprüft: alle 4 Dateien")
 
 
+def test_eigenes_titelbild_ersetzt_das_der_vorlage(nas_konfiguration, dateien,
+                                                   tmp_path):
+    bild = tmp_path / "hoch" / "Titelbild.jpg"
+    bild.parent.mkdir()
+    bild.write_bytes(b"\xff\xd8\xff" + b"x" * 20)
+    nas = NachgebauteNas()
+    bericht = ablage_ausfuehren(nas_konfiguration, "09 Ausgabe 301026",
+                                dateien + [("", bild)], fs=nas)
+    assert bericht.erfolgreich, bericht.fehler
+    neu = f"{SAISON}/09 Ausgabe 301026"
+    assert nas.baum[neu]["Titelbild.jpg"] == 23
+    assert "Titelbild.jpeg" not in nas.baum[neu]          # das alte nicht
+    assert nas.baum[f"{neu}/Herren 1"]["Liga.jpeg"] == 500  # Rest der Vorlage
+
+
 def test_vorhandener_ordner_wird_nicht_angefasst(nas_konfiguration, dateien):
     nas = NachgebauteNas()
     bericht = ablage_ausfuehren(nas_konfiguration, "08 Ausgabe 161026",

@@ -307,6 +307,9 @@ nas:
 # ---------------------------------------------------------------------------
 heft:
   gesamt_aktiv: false
+  # Mannschaften mit Upload-Feld "Zeitungsbericht" auf der Startseite
+  # (leer = alle aktiven mit eigenem NAS-Ordner).
+  zeitungsberichte: []
   # Relativ zum Saisonordner. Jede Datei = Anzeige (PDF oder Bild), in
   # Namensreihenfolge. Querformate und Logos sind "halbe Seiten" und kommen
   # zu zweit auf eine Seite.

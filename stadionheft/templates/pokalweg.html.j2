@@ -1,0 +1,32 @@
+{# Pokalspiel: statt Tabelle und Torschuetzenliste der Liga die bisherigen
+   Runden beider Mannschaften in genau diesem Pokal. #}
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% macro runden(name, spiele) %}
+  <p class="unterzeile">{{ name }}</p>
+  {% if spiele %}
+    <table class="daten pokalweg">
+      <tbody>
+        {% for s in spiele %}
+        <tr>
+          <td class="links runde">{{ s.spieltag or '–' }}</td>
+          <td class="links datum">{{ s.datum }}</td>
+          <td class="links name">{{ s.paarung }}</td>
+          <td class="ergebnis">{{ s.ergebnis }}</td>
+          <td class="ausgang"><span class="form-zeichen form-{{ s.ausgang|lower }}">{{ s.ausgang }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    {{ m.leer("Noch keine Pokalrunde gespielt.") }}
+  {% endif %}
+{% endmacro %}
+
+{% block inhalt %}
+  {% if wettbewerb %}<p class="zeile">{{ wettbewerb }}</p>{% endif %}
+  {{ runden(daten.anzeigename, weg_wir) }}
+  {{ runden(daten.gegner or 'Gegner', weg_sie) }}
+  {{ m.stand(daten) }}
+{% endblock %}

@@ -259,6 +259,13 @@ td.verein {
 
 .zeile { font-size: 8pt; margin: 0 0 2.5mm 0; }
 
+/* Weg im Pokal (nur bei Pokalspielen): je Mannschaft die bisherigen Runden */
+table.daten.pokalweg { margin-bottom: 5mm; }
+table.daten.pokalweg td.runde { width: 18mm; font-weight: 600; }
+table.daten.pokalweg td.datum { width: 15mm; color: var(--grau); }
+table.daten.pokalweg td.ausgang { width: 5mm; }
+table.daten.pokalweg .form-zeichen { margin-right: 0; }
+
 /* --------------------------------------------------------------------------
    Formkurve -- die letzten Spiele als Kette S/U/N
    -------------------------------------------------------------------------- */

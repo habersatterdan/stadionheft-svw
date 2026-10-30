@@ -12,8 +12,8 @@ from stadionheft.build import (dateien_aus_snapshot, dateien_erstellen,
                                seitenfolge)
 from stadionheft.config import Konfiguration
 from stadionheft.errors import StadionheftFehler
-from stadionheft.models import GegnerDaten, MannschaftsDaten, TabellenZeile
-from stadionheft.render.pages import STANDARD_SEITEN, LayoutWerte
+from stadionheft.models import GegnerDaten, MannschaftsDaten, Spiel, TabellenZeile
+from stadionheft.render.pages import POKAL_SEITEN, STANDARD_SEITEN, LayoutWerte
 
 A5_BREITE_PT = 419.53
 A5_HOEHE_PT = 595.28
@@ -144,6 +144,89 @@ def test_gegner_aus_derselben_liga_bekommt_keine_zweite_tabelle():
                                                       tabelle=list(gemeinsam)))
     assert daten.gleiche_liga is True
     assert "tabelle_gegner" not in seitenfolge(daten)
+
+
+POKAL = "Frauen-Bezirkspokal Schwaben"
+LIGA = "Frauen-Bezirksliga Nord"
+
+
+def _pokaldaten() -> MannschaftsDaten:
+    """Damen 1 am 26.10.2026: Viertelfinale gegen einen Gegner aus der
+    Bezirksoberliga -- Ligaspiele und ein anderer Pokal dazwischen."""
+    naechstes = Spiel(heim="SVW", gast="TSV Nördlingen", wettbewerb=POKAL,
+                      spieltag="Viertelfinale", anstoss="2026-10-31T16:00:00")
+    return MannschaftsDaten(
+        anzeigename="Damen 1", liga=LIGA,
+        tabelle=[TabellenZeile(platz=1, mannschaft="SVW"),
+                 TabellenZeile(platz=2, mannschaft="B")],
+        torjaeger=[],
+        spiele=[
+            Spiel(heim="SVW", gast="Maihingen", wettbewerb=POKAL, spieltag="1. Runde",
+                  anstoss="2026-08-29T16:00:00", ergebnis="2:0"),
+            Spiel(heim="Maihingen", gast="SVW", wettbewerb=LIGA, heimspiel=False,
+                  anstoss="2026-09-12T16:00:00", ergebnis="0:2"),
+            Spiel(heim="Bissingen", gast="SVW", wettbewerb=POKAL, heimspiel=False,
+                  spieltag="2. Runde", anstoss="2026-10-03T16:00:00",
+                  ergebnis="1:2"),
+            Spiel(heim="SVW", gast="X", wettbewerb="Kreispokal", spieltag="1. Runde",
+                  anstoss="2026-07-20T18:00:00", ergebnis="0:3"),
+            naechstes,
+        ],
+        naechstes_spiel=naechstes,
+        gegner_daten=GegnerDaten(
+            name="TSV Nördlingen",
+            tabelle=[TabellenZeile(platz=1, mannschaft="X"),
+                     TabellenZeile(platz=2, mannschaft="Y")],
+            spiele=[
+                Spiel(heim="Wechingen", gast="TSV Nördlingen", wettbewerb=POKAL,
+                      heimspiel=False, spieltag="2. Runde",
+                      anstoss="2026-10-04T15:00:00", ergebnis="5:6"),
+                Spiel(heim="TSV Nördlingen", gast="FC Augsburg",
+                      wettbewerb="Frauen-Bezirksoberliga Schwaben",
+                      anstoss="2026-10-24T15:00:00", ergebnis="1:1"),
+            ]),
+    )
+
+
+def test_pokalspiel_ohne_liga_nur_pokalergebnisse():
+    """Pokal: weder die eigene Liga noch die des Gegners -- nur der Pokalweg."""
+    daten = _pokaldaten()
+    assert daten.pokalspiel is True
+    folge = seitenfolge(daten)
+    assert folge == list(POKAL_SEITEN)
+    for liga_seite in ("tabelle", "torjaeger", "tabelle_gegner", "torjaeger_gegner"):
+        assert liga_seite not in folge
+
+
+def test_pokalweg_nur_derselbe_wettbewerb():
+    daten = _pokaldaten()
+    assert [s.spieltag for s in daten.pokalweg] == ["1. Runde", "2. Runde"]
+    assert [s.ergebnis for s in daten.pokalweg_gegner] == ["5:6"]
+    assert daten.pokalweg_gegner[0].ausgang == "S"
+
+
+def test_pokalseiten_ohne_liganamen(konfiguration: Konfiguration, tmp_path):
+    from stadionheft.render.pages import SeitenRenderer
+    renderer = SeitenRenderer(konfiguration, tmp_path)
+    daten = _pokaldaten()
+    texte = {}
+    for nr, art in enumerate(seitenfolge(daten), 1):
+        reader = PdfReader(str(renderer.mannschaftsseite(art, daten, nr)))
+        assert len(reader.pages) == 1, art
+        texte[art] = " ".join(reader.pages[0].extract_text().split())
+        assert LIGA not in texte[art], art
+    assert "Viertelfinale" in texte["trenner"]
+    assert "2. Runde" in texte["pokalweg"] and "5:6" in texte["pokalweg"]
+    assert "Tabellenplatz" not in texte["vergleich"]
+
+
+def test_ligaspiel_bleibt_wie_bisher():
+    daten = _pokaldaten()
+    daten.naechstes_spiel = Spiel(heim="SVW", gast="B", wettbewerb=LIGA,
+                                  anstoss="2026-11-07T16:00:00")
+    assert daten.pokalspiel is False
+    assert daten.pokalweg == []
+    assert "tabelle" in seitenfolge(daten)
 
 
 # ---------------------------------------------------------------------------

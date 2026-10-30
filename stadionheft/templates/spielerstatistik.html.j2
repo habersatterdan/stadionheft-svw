@@ -2,7 +2,7 @@
 {% import "_makros.html.j2" as m %}
 
 {% block inhalt %}
-  <p class="unterzeile">{{ daten.anzeigename }}{% if daten.liga %} &middot; {{ daten.liga }}{% endif %}</p>
+  <p class="unterzeile">{{ daten.anzeigename }}{% if daten.liga and not daten.pokalspiel %} &middot; {{ daten.liga }}{% endif %}</p>
 
   {% if spieler %}
     {{ m.spielertabelle(spieler) }}
