@@ -663,6 +663,11 @@ class MannschaftsDaten(_Basis):
     #: Der naechste Gegner mit seinen eigenen Zahlen.
     gegner_daten: GegnerDaten | None = None
 
+    #: Hat die Mannschaft am Heft-Wochenende kein Spiel? Wird beim Bauen aus
+    #: der ganzen Ausgabe bestimmt (``spielfreie_markieren``), nicht geholt --
+    #: deshalb auch nicht im Snapshot.
+    spielfrei: bool = False
+
     #: Woher stammen die Daten? "api" | "manuell" | "demo"
     quelle: str = ""
     #: Die Rechnernamen, von denen die Zahlen tatsaechlich kamen, etwa
@@ -681,6 +686,8 @@ class MannschaftsDaten(_Basis):
 
     @property
     def gegner(self) -> str:
+        if self.spielfrei:
+            return ""
         if self.gegner_daten and self.gegner_daten.name:
             return self.gegner_daten.name
         return self.naechstes_spiel.gegner if self.naechstes_spiel else ""
@@ -701,7 +708,14 @@ class MannschaftsDaten(_Basis):
     def pokalspiel(self) -> bool:
         """Ist das naechste Spiel ein Pokalspiel? Dann zaehlt die Liga nicht --
         die Seiten zeigen nur, wie beide Mannschaften im Pokal dastehen."""
-        return bool(self.naechstes_spiel and self.naechstes_spiel.ist_pokal)
+        return bool(not self.spielfrei and self.naechstes_spiel
+                    and self.naechstes_spiel.ist_pokal)
+
+    @property
+    def heftspiel(self) -> Spiel | None:
+        """Das Spiel, fuer das diese Ausgabe gemacht ist -- bei einer
+        spielfreien Mannschaft keins."""
+        return None if self.spielfrei else self.naechstes_spiel
 
     @property
     def pokalweg(self) -> list[Spiel]:
@@ -833,3 +847,33 @@ class Ausgabe(_Basis):
             warnungen=list(daten.get("warnungen", [])),
             seitenfolge=list(daten.get("seitenfolge", [])),
         )
+
+
+def spielfreie_markieren(ausgabe: "Ausgabe", tage: float = 4) -> list[MannschaftsDaten]:
+    """Markiert Mannschaften, die am Heft-Wochenende nicht spielen.
+
+    Der Spieltag beginnt mit dem fruehesten Anstoss aller Mannschaften der
+    Ausgabe. Liegt das naechste Spiel einer Mannschaft mehr als ``tage``
+    Kalendertage danach (oder gibt es keins), ist sie spielfrei: Sonst
+    stuende ihr Spiel in 1-2 Wochen auf dem Deckblatt und im Kopfdatum.
+    Ohne einen einzigen Termin bleibt alles unveraendert. Beispieldaten
+    (``quelle == "demo"``) bleiben aussen vor -- ihre Termine sind erfunden.
+
+    Rueckgabe: die spielfreien Mannschaften.
+    """
+    echte = [m for m in ausgabe.mannschaften if m.quelle != "demo"]
+    termine = [m.naechstes_spiel.anstoss_dt for m in echte
+               if m.naechstes_spiel and m.naechstes_spiel.anstoss_dt]
+    if not termine:
+        return []
+    beginn = min(termine).date()
+    frei = []
+    for m in echte:
+        spiel = m.naechstes_spiel
+        m.spielfrei = (spiel is None
+                       or (spiel.anstoss_dt is not None
+                           and (spiel.anstoss_dt.date() - beginn).days > tage))
+        if m.spielfrei:
+            frei.append(m)
+    return frei
+

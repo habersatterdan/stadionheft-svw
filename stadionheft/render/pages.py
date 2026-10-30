@@ -42,6 +42,8 @@ SEITEN_VORLAGEN: dict[str, tuple[str, str]] = {
     "gegner":           ("gegner.html.j2", "Der Gegner"),
     # Nur bei Pokalspielen: statt Tabelle und Torschuetzenliste der Liga.
     "pokalweg":         ("pokalweg.html.j2", "Der Weg im Pokal"),
+    # Nur bei spielfreien Mannschaften: kurzer Hinweis + naechstes Spiel.
+    "spielfrei":        ("spielfrei.html.j2", "Spielfrei"),
     # Nur noetig, wenn der Gegner in einer anderen Liga spielt (Pokal).
     "tabelle_gegner":   ("tabelle.html.j2", "Tabelle des Gegners"),
     "torjaeger_gegner": ("torjaeger.html.j2", "Torschützen des Gegners"),
@@ -62,6 +64,10 @@ STANDARD_SEITEN: tuple[str, ...] = (
 POKAL_SEITEN: tuple[str, ...] = (
     "trenner", "vergleich", "pokalweg", "spielerstatistik", "gegner",
 )
+
+#: Spielfrei: kein Gegner, kein Vergleich -- nur der Hinweis und die
+#: aktuelle Tabelle.
+SPIELFREI_SEITEN: tuple[str, ...] = ("trenner", "spielfrei", "tabelle")
 
 #: So viele Zeilen passen auf eine A5-Seite. Was darueber hinausgeht, wuerde
 #: auf eine zweite Seite umbrechen oder abgeschnitten.
@@ -319,8 +325,8 @@ def deckblatt_spieltage(ausgabe: Ausgabe, kurzname: str = "") -> list[dict]:
     fuer das ihre Seiten in dieser Ausgabe gemacht sind.
     """
     spiele: list[tuple[Spiel, MannschaftsDaten]] = [
-        (m.naechstes_spiel, m) for m in ausgabe.mannschaften
-        if m.naechstes_spiel and m.naechstes_spiel.heimspiel]
+        (m.heftspiel, m) for m in ausgabe.mannschaften
+        if m.heftspiel and m.heftspiel.heimspiel]
     # ISO-Text sortiert wie die Zeit; ohne Termin ans Ende.
     spiele.sort(key=lambda p: (p[0].anstoss or "9999", p[1].anzeigename))
 
@@ -343,9 +349,9 @@ def deckblatt_spieltage(ausgabe: Ausgabe, kurzname: str = "") -> list[dict]:
 
 def kopfdatum(ausgabe: Ausgabe) -> str:
     """'Freitag 16.10.2026' bei einem Tag, sonst '16.–18.10.2026'."""
-    termine = sorted({m.naechstes_spiel.anstoss_dt.date()
+    termine = sorted({m.heftspiel.anstoss_dt.date()
                       for m in ausgabe.mannschaften
-                      if m.naechstes_spiel and m.naechstes_spiel.anstoss_dt})
+                      if m.heftspiel and m.heftspiel.anstoss_dt})
     if not termine:
         return ""
     erster, letzter = termine[0], termine[-1]
