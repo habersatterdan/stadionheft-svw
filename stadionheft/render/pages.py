@@ -262,6 +262,9 @@ class SeitenRenderer:
             "deckblatt.html.j2",
             seitentitel=self.heft["hefttitel"],
             spieltage=spieltage,
+            # Bewusst niemand ausgewaehlt: Kasten weglassen, statt "alle
+            # auswaerts" zu behaupten.
+            kasten_zeigen=ausgabe.deckblatt != [],
             anzahl_spiele=sum(len(t["spiele"]) for t in spieltage),
             kopfdatum=kopfdatum(ausgabe),
             titelbild_url=(titelbild.as_uri()
@@ -322,11 +325,12 @@ def deckblatt_spieltage(ausgabe: Ausgabe, kurzname: str = "") -> list[dict]:
 
     "Wir begruessen unsere Gaeste" -- also nur, wo der Gegner zu uns kommt.
     Jede Mannschaft steuert ihr naechstes Spiel bei; das ist genau das Spiel,
-    fuer das ihre Seiten in dieser Ausgabe gemacht sind.
+    fuer das ihre Seiten in dieser Ausgabe gemacht sind. Wer beim Erzeugen
+    nicht fuers Deckblatt angehakt war (``Ausgabe.deckblatt``), fehlt.
     """
     spiele: list[tuple[Spiel, MannschaftsDaten]] = [
         (m.heftspiel, m) for m in ausgabe.mannschaften
-        if m.heftspiel and m.heftspiel.heimspiel]
+        if m.heftspiel and m.heftspiel.heimspiel and ausgabe.auf_deckblatt(m)]
     # ISO-Text sortiert wie die Zeit; ohne Termin ans Ende.
     spiele.sort(key=lambda p: (p[0].anstoss or "9999", p[1].anzeigename))
 

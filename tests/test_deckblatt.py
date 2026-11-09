@@ -172,3 +172,22 @@ def test_hochgeladenes_titelbild_hat_vorrang_vor_der_nas(
     deckblatt = ergebnis.dateien[0]
     assert deckblatt.anzeigename == "Deckblatt"
     assert not any("Kein Titelbild" in w for w in deckblatt.warnungen)
+
+
+def test_nur_ausgewaehlte_mannschaften_aufs_deckblatt():
+    """Abfrage beim Erzeugen (09.11.2026): wer nicht angehakt ist, fehlt."""
+    ausgabe = Ausgabe(mannschaften=AUSGABE.mannschaften, deckblatt=["herren1"])
+    tage = deckblatt_spieltage(ausgabe, "SVW")
+    assert [s["paarung"] for t in tage for s in t["spiele"]] == [
+        "SVW Herren 1 – TSV Hollenbach"]
+    # None = alle, wie bisher
+    assert len(deckblatt_spieltage(AUSGABE)) == 2
+
+
+def test_deckblatt_auswahl_im_snapshot():
+    ausgabe = Ausgabe(mannschaften=AUSGABE.mannschaften, deckblatt=["damen1"])
+    assert Ausgabe.from_dict(ausgabe.to_dict()).deckblatt == ["damen1"]
+    assert Ausgabe.from_dict(AUSGABE.to_dict()).deckblatt is None
+    # alte Snapshots ohne das Feld
+    assert Ausgabe.from_dict({"mannschaften": []}).deckblatt is None
+

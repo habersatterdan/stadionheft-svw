@@ -414,3 +414,28 @@ def test_zeitungsberichte_gehen_in_den_ordner_der_mannschaft(konfiguration: Konf
     _warten_auf_ablage(client, lauf_id)
     assert ("herren1", "Zeitungsbericht Herren 1.pdf") in gesehen["dateien"]
     assert ("damen1", "Zeitungsbericht Damen 1.jpg") in gesehen["dateien"]
+
+
+def test_deckblatt_abfrage_wird_weitergegeben(konfiguration: Konfiguration,
+                                              monkeypatch):
+    from stadionheft import web
+
+    text = _client(konfiguration).get("/").get_data(as_text=True)
+    assert "Wer kommt aufs Deckblatt?" in text and 'name="deckblatt"' in text
+
+    gesehen: list = []
+    monkeypatch.setattr(web, "_lauf_ausfuehren",
+                        lambda _k, _l, argumente: gesehen.append(argumente["deckblatt"]))
+    client = _client(konfiguration)
+    client.post("/erstellen", data={"mannschaften": ["herren1", "damen1"],
+                                    "deckblatt_abgefragt": "ja",
+                                    "deckblatt": ["damen1"]})
+    client.post("/erstellen", data={"mannschaften": ["herren1"],
+                                    "deckblatt_abgefragt": "ja"})
+    client.post("/erstellen", data={"mannschaften": ["herren1"]})
+    for _ in range(50):
+        if len(gesehen) == 3:
+            break
+        time.sleep(0.05)
+    # Threads -- Reihenfolge nicht garantiert
+    assert sorted(map(repr, gesehen)) == sorted(map(repr, [["damen1"], [], None]))

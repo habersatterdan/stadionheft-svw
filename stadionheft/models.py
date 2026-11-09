@@ -821,6 +821,13 @@ class Ausgabe(_Basis):
     #: Die Seitenfolge, die je Mannschaft gesetzt wurde. Gehoert in den
     #: Snapshot, sonst koennte ein spaeterer Neuaufbau andere Seiten ergeben.
     seitenfolge: list[str] = field(default_factory=list)
+    #: Wer aufs Deckblatt darf (Schluessel). ``None`` = alle Mannschaften der
+    #: Ausgabe. Steht im Snapshot, damit "Gesamtes Heft bauen" dasselbe
+    #: Deckblatt setzt wie "Seiten erzeugen".
+    deckblatt: list[str] | None = None
+
+    def auf_deckblatt(self, daten: "MannschaftsDaten") -> bool:
+        return self.deckblatt is None or daten.schluessel in self.deckblatt
 
     def to_dict(self) -> dict:
         return {
@@ -832,6 +839,8 @@ class Ausgabe(_Basis):
             "erzeugt_von": self.erzeugt_von,
             "warnungen": list(self.warnungen),
             "seitenfolge": list(self.seitenfolge),
+            "deckblatt": (None if self.deckblatt is None
+                          else list(self.deckblatt)),
         }
 
     @classmethod
@@ -846,6 +855,8 @@ class Ausgabe(_Basis):
             erzeugt_von=daten.get("erzeugt_von", ""),
             warnungen=list(daten.get("warnungen", [])),
             seitenfolge=list(daten.get("seitenfolge", [])),
+            deckblatt=(None if daten.get("deckblatt") is None
+                       else list(daten["deckblatt"])),
         )
 
 

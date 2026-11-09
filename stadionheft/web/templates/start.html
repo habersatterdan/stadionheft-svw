@@ -77,6 +77,23 @@
     </div>
   </div>
 
+  <div class="karte">
+    <fieldset>
+      <legend>Wer kommt aufs Deckblatt?</legend>
+      <input type="hidden" name="deckblatt_abgefragt" value="ja">
+      {% for m in mannschaften %}
+        <label class="zeile">
+          <input type="checkbox" name="deckblatt" value="{{ m.schluessel }}" checked>
+          <span class="name">{{ m.anzeigename }}</span>
+        </label>
+      {% endfor %}
+      <p class="hilfe">Unter „Wir begrüßen unsere Gäste“ stehen nur Heimspiele
+        der hier angehakten Mannschaften. Auswärtsspiele und spielfreie
+        Mannschaften fehlen dort ohnehin. Nichts angehakt = Deckblatt ohne
+        Spielekasten.</p>
+    </fieldset>
+  </div>
+
   {% if bericht_mannschaften %}
   <div class="karte">
     <fieldset>

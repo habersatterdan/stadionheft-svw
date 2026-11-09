@@ -32,6 +32,7 @@
   <div class="schraege schraege-oben"></div>
   <div class="schraege schraege-unten"></div>
 
+  {% if kasten_zeigen %}
   <div class="kasten {{ 'kasten-voll' if anzahl_spiele > 3 }}">
     <div class="gaeste">Wir begrüßen unsere Gäste:</div>
     {% for tag in spieltage %}
@@ -46,9 +47,10 @@
       {% endfor %}
     {% else %}
       <div class="details" style="text-align:center">An diesem Wochenende
-        spielen alle Mannschaften auswärts.</div>
+        spielen alle ausgewählten Mannschaften auswärts.</div>
     {% endfor %}
   </div>
+  {% endif %}
 
 </div>
 {% endblock %}
