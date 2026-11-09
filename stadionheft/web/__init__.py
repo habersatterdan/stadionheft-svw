@@ -200,6 +200,9 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             "datenquelle": request.form.get("quelle") or None,
             "erzeugt_von": lauf.benutzer or "Weboberfläche",
             "frisch": request.form.get("frisch") == "ja",
+            # Feld fehlt (alte Seite im Browser) = alle aufs Deckblatt.
+            "deckblatt": (request.form.getlist("deckblatt")
+                          if request.form.get("deckblatt_abgefragt") else None),
         }
 
         threading.Thread(target=_lauf_ausfuehren, args=(k, lauf, argumente),

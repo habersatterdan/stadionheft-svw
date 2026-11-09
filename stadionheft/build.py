@@ -239,8 +239,12 @@ def dateien_erstellen(konfiguration: Konfiguration,
                       datenquelle: str | None = None,
                       erzeugt_von: str = "",
                       frisch: bool = False,
-                      titelbild: Path | None = None) -> LaufErgebnis:
+                      titelbild: Path | None = None,
+                      deckblatt: list[str] | None = None) -> LaufErgebnis:
     """Erzeugt je gewaehlter Mannschaft eine druckfertige PDF-Datei.
+
+    ``deckblatt``: Schluessel der Mannschaften, die aufs Deckblatt sollen
+    (``None`` = alle). Auswaertsspiele stehen dort ohnehin nicht.
 
     ``titelbild``: von Hand hochgeladenes Bild fuers Deckblatt. Es hat Vorrang
     vor dem Titelbild aus der NAS-Vorlage.
@@ -269,6 +273,7 @@ def dateien_erstellen(konfiguration: Konfiguration,
         erstellt_am=start.isoformat(timespec="seconds"),
         erzeugt_von=erzeugt_von,
         warnungen=list(warnungen) + list(konfiguration.warnungen),
+        deckblatt=None if deckblatt is None else list(deckblatt),
     )
     return _bauen(konfiguration, ausgabe, start=start, titelbild=titelbild)
 

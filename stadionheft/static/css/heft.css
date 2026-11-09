@@ -456,8 +456,13 @@ dl.merkmale .form-zeichen {
    -------------------------------------------------------------------------- */
 
 .titel {
+    page: titel;
     background: var(--rot);
     color: #FFFFFF;
+    /* Rot, Foto und Schraegen laufen bis in den Anschnitt -- sonst bleibt
+       dort ein weisser Rand (gesehen 09.11.2026). Die Seitenfarbe fuer den
+       Anschnitt setzt @page titel in _basis.html.j2. */
+    overflow: visible;
 }
 
 .titel .kopfzeile {
@@ -504,8 +509,8 @@ dl.merkmale .form-zeichen {
 .titel .bild-platzhalter {
     position: absolute;
     top: 60mm;
-    left: 0;
-    width: 100%;
+    left: calc(-1 * var(--anschnitt));
+    width: calc(100% + 2 * var(--anschnitt));
     height: 96mm;
     z-index: 0;
 }

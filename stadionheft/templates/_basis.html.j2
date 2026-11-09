@@ -25,6 +25,9 @@
       --text: {{ layout.textfarbe_css }};
       --schrift: {{ layout.schrift_css }};
     }
+    /* Deckblatt randlos: Anschnitt in Hausfarbe, keine Schnittmarken im Bild
+       (TrimBox steht im PDF; var() geht in @page nicht) */
+    @page titel { background: {{ layout.primaerfarbe_css }}; marks: none; }
   </style>
 </head>
 <body class="{{ 'fliessend' if fliessend else '' }}">
