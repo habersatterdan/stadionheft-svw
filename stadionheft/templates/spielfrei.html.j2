@@ -1,0 +1,37 @@
+{# Spielfreie Mannschaft: am Heft-Wochenende kein Spiel. Statt Vergleich und
+   Gegner nur der Hinweis, das naechste Spiel und der aktuelle Stand. #}
+{% extends "_inhaltsseite.html.j2" %}
+{% import "_makros.html.j2" as m %}
+
+{% block inhalt %}
+  {% set spiel = daten.naechstes_spiel %}
+  <div class="anstosskarte">
+    <div class="paarung">{{ daten.anzeigename }} ist an diesem Wochenende spielfrei.</div>
+  </div>
+
+  {% if spiel %}
+    <p class="unterzeile">Nächstes Spiel</p>
+    <div class="anstosskarte">
+      <div class="paarung">{{ spiel.paarung }}</div>
+      <div class="termin">
+        {{ spiel.wochentag }}{% if spiel.datum %}, {{ spiel.datum }}{% endif %}
+        {%- if spiel.uhrzeit %} &middot; {{ spiel.uhrzeit }}{% endif %}
+      </div>
+      <div class="ort">
+        {{ 'Heimspiel' if spiel.heimspiel else 'Auswärtsspiel' }}
+        {%- if spiel.spielort %} &middot; {{ spiel.spielort }}{% endif %}
+        {%- if spiel.wettbewerb %} &middot; {{ spiel.wettbewerb }}{% endif %}
+      </div>
+    </div>
+  {% else %}
+    {{ m.leer("Das nächste Spiel steht noch nicht fest.") }}
+  {% endif %}
+
+  {% set platz = daten.tabellenplatz %}
+  {% if platz or daten.form %}
+    <p class="unterzeile">Aktueller Stand</p>
+    {% if platz %}<p class="zeile">{{ platz.platz }}. Platz &middot; {{ platz.punkte }} Punkte{% if daten.liga %} &middot; {{ daten.liga }}{% endif %}</p>{% endif %}
+    {% if daten.form %}<p class="zeile">Form: {{ m.formkurve(daten.form) }}</p>{% endif %}
+  {% endif %}
+  {{ m.stand(daten) }}
+{% endblock %}

@@ -230,6 +230,62 @@ def test_ligaspiel_bleibt_wie_bisher():
 
 
 # ---------------------------------------------------------------------------
+# Spielfreie Mannschaft
+# ---------------------------------------------------------------------------
+
+def _ausgabe_mit_spielfrei():
+    from stadionheft.models import Ausgabe
+    h1 = MannschaftsDaten(anzeigename="Herren 1", schluessel="h1", liga=LIGA,
+                          naechstes_spiel=Spiel(heim="SVW", gast="A", heimspiel=True,
+                                                anstoss="2026-10-31T14:00:00"))
+    h2 = MannschaftsDaten(anzeigename="Herren 2", schluessel="h2", liga=LIGA,
+                          tabelle=[TabellenZeile(platz=3, mannschaft="Herren 2", punkte=9)],
+                          naechstes_spiel=Spiel(heim="SVW II", gast="B", heimspiel=True,
+                                                anstoss="2026-11-08T12:30:00"))
+    d1 = MannschaftsDaten(anzeigename="Damen 1", schluessel="d1", liga=LIGA,
+                          naechstes_spiel=Spiel(heim="C", gast="SVW", heimspiel=False,
+                                                anstoss="2026-11-01T16:00:00"))
+    return Ausgabe(mannschaften=[h1, h2, d1])
+
+
+def test_spielfrei_erkannt_ab_grenze():
+    from stadionheft.models import spielfreie_markieren
+    ausgabe = _ausgabe_mit_spielfrei()
+    frei = spielfreie_markieren(ausgabe, tage=4)
+    assert [m.anzeigename for m in frei] == ["Herren 2"]
+    h2 = ausgabe.mannschaften[1]
+    assert h2.heftspiel is None and h2.gegner == "" and h2.pokalspiel is False
+    # Grosszuegige Grenze: dann spielt auch Herren 2 "an diesem Wochenende".
+    assert spielfreie_markieren(ausgabe, tage=10) == []
+
+
+def test_spielfrei_nicht_auf_deckblatt_und_kopfdatum():
+    from stadionheft.models import spielfreie_markieren
+    from stadionheft.render.pages import deckblatt_spieltage, kopfdatum
+    ausgabe = _ausgabe_mit_spielfrei()
+    spielfreie_markieren(ausgabe)
+    assert kopfdatum(ausgabe) == "31.10.–01.11.2026"
+    paarungen = [s["paarung"] for t in deckblatt_spieltage(ausgabe) for s in t["spiele"]]
+    assert paarungen == ["Herren 1 – A"]
+
+
+def test_spielfrei_seiten(konfiguration: Konfiguration, tmp_path):
+    from stadionheft.models import spielfreie_markieren
+    from stadionheft.render.pages import SPIELFREI_SEITEN, SeitenRenderer
+    ausgabe = _ausgabe_mit_spielfrei()
+    spielfreie_markieren(ausgabe)
+    h2, d1 = ausgabe.mannschaften[1], ausgabe.mannschaften[2]
+    assert seitenfolge(h2) == list(SPIELFREI_SEITEN)
+    assert "tabelle" not in seitenfolge(MannschaftsDaten(spielfrei=True))
+    assert "vergleich" in seitenfolge(d1)
+    renderer = SeitenRenderer(konfiguration, tmp_path)
+    reader = PdfReader(str(renderer.mannschaftsseite("spielfrei", h2, 2)))
+    assert len(reader.pages) == 1
+    text = " ".join(reader.pages[0].extract_text().split())
+    assert "spielfrei" in text and "08.11.2026" in text and "3. Platz" in text
+
+
+# ---------------------------------------------------------------------------
 # Reproduzierbarkeit
 # ---------------------------------------------------------------------------
 
