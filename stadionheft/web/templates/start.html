@@ -94,6 +94,19 @@
     </fieldset>
   </div>
 
+  {% if gesamtheft_aktiv %}
+  <div class="karte">
+    <div class="feld">
+      <label for="vorwort">Vorwort <span style="font-weight:400;color:#666">(optional)</span></label>
+      <input type="file" id="vorwort" name="vorwort"
+             accept=".docx,.doc,.odt,.rtf,.pdf,.txt">
+      <p class="hilfe">Word-Datei, PDF oder Text. Kommt beim Ablegen als
+        <em>Vorwort</em> in den Ausgabe-Ordner – das Gesamtheft setzt es dort
+        hinter das Deckblatt.</p>
+    </div>
+  </div>
+  {% endif %}
+
   {% if bericht_mannschaften %}
   <div class="karte">
     <fieldset>

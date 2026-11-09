@@ -527,6 +527,10 @@ def ablage_ausfuehren(k: Konfiguration, ordnername: str,
         if any(not s and ist_titelbild(d.name) for s, d in dateien):
             vorlage_inhalt = [f for f in vorlage_inhalt
                               if f.get("isdir") or not ist_titelbild(f["name"])]
+        # Dasselbe fuers Vorwort: das hochgeladene gilt, nicht das der Vorlage.
+        if any(not s and ist_vorwort(d.name) for s, d in dateien):
+            vorlage_inhalt = [f for f in vorlage_inhalt
+                              if f.get("isdir") or not ist_vorwort(f["name"])]
         if vorlage_inhalt:
             jetzt(f"Kopiere die Vorlage '{vorlage_name}' …")
             client.kopieren([f["path"] for f in vorlage_inhalt], ziel)
@@ -574,6 +578,14 @@ def ablage_ausfuehren(k: Konfiguration, ordnername: str,
         if fs is None:
             client.abmelden()
     return bericht
+
+
+#: "Vorwort.docx", "Grußwort Stadionheft.docx", "Grusswort.txt" ...
+VORWORT = re.compile(r"^(vorwort|gru(ß|ss)wort)", re.I)
+
+
+def ist_vorwort(name: str) -> bool:
+    return bool(VORWORT.match(name))
 
 
 def ist_titelbild(name: str) -> bool:

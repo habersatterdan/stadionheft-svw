@@ -439,3 +439,67 @@ def test_deckblatt_abfrage_wird_weitergegeben(konfiguration: Konfiguration,
         time.sleep(0.05)
     # Threads -- Reihenfolge nicht garantiert
     assert sorted(map(repr, gesehen)) == sorted(map(repr, [["damen1"], [], None]))
+
+
+# ---------------------------------------------------------------------------
+# Vorwort von Hand hochladen (09.11.2026)
+# ---------------------------------------------------------------------------
+
+def _gesamtheft_an(konfiguration: Konfiguration) -> None:
+    konfiguration.roh["nas"].update({"aktiv": True, "modus": "filestation"})
+    konfiguration.roh.setdefault("heft", {})["gesamt_aktiv"] = True
+
+
+def test_vorwort_feld_nur_mit_gesamtheft(konfiguration: Konfiguration):
+    assert 'name="vorwort"' not in _client(konfiguration).get("/").get_data(as_text=True)
+    _gesamtheft_an(konfiguration)
+    assert 'name="vorwort"' in _client(konfiguration).get("/").get_data(as_text=True)
+
+
+def test_vorwort_falsches_format_wird_abgelehnt(konfiguration: Konfiguration):
+    import io
+    antwort = _client(konfiguration).post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "vorwort": (io.BytesIO(b"\xff\xd8\xffbild"), "Vorwort.docx")})
+    assert antwort.status_code == 400
+    assert "Vorwort nicht lesbar" in antwort.get_data(as_text=True)
+
+
+def test_vorwort_endung_am_inhalt_geprueft():
+    from stadionheft.web import _vorwortendung
+    assert _vorwortendung("Grußwort 2026.DOCX", b"PK\x03\x04rest") == ".docx"
+    assert _vorwortendung("v.pdf", b"%PDF-1.7") == ".pdf"
+    assert _vorwortendung("v.txt", "Liebe Gäste".encode("cp1252")) == ".txt"
+    assert _vorwortendung("v.pdf", b"PK\x03\x04") == ""
+    assert _vorwortendung("v.jpg", b"\xff\xd8\xff") == ""
+
+
+def test_vorwort_geht_in_den_ausgabe_ordner(konfiguration: Konfiguration,
+                                           monkeypatch):
+    import io
+
+    from stadionheft.storage import filestation
+
+    _gesamtheft_an(konfiguration)
+    gesehen: dict = {}
+
+    def ablage(k, ordnername, dateien, fs=None, fortsetzen=False, melden=None):
+        gesehen["dateien"] = [(s, p.name, p.read_bytes()) for s, p in dateien]
+        return filestation.AblageBericht(ordner=f"/S/{ordnername}",
+                                         angelegt=True, erfolgreich=True)
+
+    monkeypatch.setattr(filestation, "ablage_ausfuehren", ablage)
+    client = _client(konfiguration)
+    antwort = client.post(
+        "/erstellen", content_type="multipart/form-data",
+        data={"mannschaften": ["herren1"],
+              "vorwort": (io.BytesIO(b"PK\x03\x04docx"), "Grußwort Vorstand.docx")})
+    lauf_id = antwort.headers["Location"].rstrip("/").split("/")[-1]
+    for _ in range(120):
+        if client.get(f"/lauf/{lauf_id}/status").get_json()["fertig"]:
+            break
+        time.sleep(0.5)
+    client.post(f"/lauf/{lauf_id}/nas", json={"ordnername": "09 Ausgabe"})
+    _warten_auf_ablage(client, lauf_id)
+    assert ("", "Vorwort.docx", b"PK\x03\x04docx") in gesehen["dateien"]

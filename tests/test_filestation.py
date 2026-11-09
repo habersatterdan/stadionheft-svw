@@ -136,6 +136,21 @@ def test_eigenes_titelbild_ersetzt_das_der_vorlage(nas_konfiguration, dateien,
     assert nas.baum[f"{neu}/Herren 1"]["Liga.jpeg"] == 500  # Rest der Vorlage
 
 
+
+def test_eigenes_vorwort_ersetzt_das_der_vorlage(nas_konfiguration, dateien,
+                                                 tmp_path):
+    from stadionheft.storage.filestation import ist_vorwort
+    assert ist_vorwort("Grußwort Stadionheft.docx") and ist_vorwort("vorwort.pdf")
+    assert not ist_vorwort("Titelbild.jpg")
+    vorwort = tmp_path / "hoch" / "Vorwort.docx"
+    vorwort.parent.mkdir()
+    vorwort.write_bytes(b"PK" + b"x" * 10)
+    nas = NachgebauteNas()
+    bericht = ablage_ausfuehren(nas_konfiguration, "09 Ausgabe 301026",
+                                dateien + [("", vorwort)], fs=nas)
+    assert bericht.erfolgreich, bericht.fehler
+    assert nas.baum[f"{SAISON}/09 Ausgabe 301026"]["Vorwort.docx"] == 12
+
 def test_vorhandener_ordner_wird_nicht_angefasst(nas_konfiguration, dateien):
     nas = NachgebauteNas()
     bericht = ablage_ausfuehren(nas_konfiguration, "08 Ausgabe 161026",
