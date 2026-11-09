@@ -45,6 +45,8 @@ class Lauf:
     titelbild: str = ""
     #: Von Hand hochgeladene Zeitungsberichte je Mannschaft (Schluessel -> Datei)
     berichte: dict = field(default_factory=dict)
+    #: Von Hand hochgeladenes Vorwort (geht in den Ausgabe-Ordner)
+    vorwort: str = ""
 
     def als_dict(self) -> dict:
         return {
@@ -72,7 +74,7 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
     def zu_gross(_fehler):
         return render_template(
             "fehler.html", titel="Datei zu groß",
-            meldung=f"Titelbild und Zeitungsberichte dürfen zusammen höchstens "
+            meldung=f"Titelbild, Vorwort und Zeitungsberichte dürfen zusammen höchstens "
                     f"{ANFRAGE_MAX_BYTES // 1_000_000} MB groß sein.",
             hinweis="Bitte ein kleineres Bild wählen (am Handy z. B. per "
                     "Teilen → verkleinern).", technisch=""), 413
@@ -169,6 +171,25 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
             titelbild = ordner / f"Titelbild{endung}"
             titelbild.write_bytes(inhalt)
             lauf.titelbild = str(titelbild)
+        hochgeladen = request.files.get("vorwort")
+        if hochgeladen and hochgeladen.filename:
+            inhalt = hochgeladen.read()
+            endung = _vorwortendung(hochgeladen.filename, inhalt)
+            if not endung or len(inhalt) > TITELBILD_MAX_BYTES:
+                return render_template(
+                    "fehler.html", titel="Vorwort nicht lesbar",
+                    meldung="Das Vorwort muss eine Word-Datei (.docx), ein PDF "
+                            "oder eine Textdatei sein (höchstens "
+                            f"{TITELBILD_MAX_BYTES // 1_000_000} MB).",
+                    hinweis="Aus Word: Speichern unter → .docx oder PDF.",
+                    technisch=hochgeladen.filename), 400
+            # "Vorwort.<endung>" -- daran erkennt das Gesamtheft es im
+            # Ausgabe-Ordner.
+            ordner = k.arbeits_ordner / "vorworte" / lauf.id
+            ordner.mkdir(parents=True, exist_ok=True)
+            vorwort = ordner / f"Vorwort{endung}"
+            vorwort.write_bytes(inhalt)
+            lauf.vorwort = str(vorwort)
         for m in _bericht_mannschaften(k):
             hochgeladen = request.files.get(f"bericht_{m.schluessel}")
             if not hochgeladen or not hochgeladen.filename:
@@ -263,6 +284,8 @@ def app_erzeugen(konfiguration: Konfiguration | None = None) -> Flask:
         # ersetzt dort das aus der Vorlage (auch fuers Gesamtheft).
         if lauf.titelbild and Path(lauf.titelbild).exists():
             dateien.append(("", Path(lauf.titelbild)))
+        if lauf.vorwort and Path(lauf.vorwort).exists():
+            dateien.append(("", Path(lauf.vorwort)))
         for schluessel, bericht in lauf.berichte.items():
             if Path(bericht).exists():
                 dateien.append((schluessel, Path(bericht)))
@@ -542,6 +565,34 @@ def _bericht_mannschaften(k: Konfiguration) -> list:
     ordner = k.get("nas.filestation.mannschaftsordner", {}) or {}
     return [m for m in k.aktive_mannschaften()
             if (not wahl or m.schluessel in wahl) and ordner.get(m.schluessel)]
+
+
+#: Was das Gesamtheft als Vorwort setzen kann (siehe gesamtheft._text_oder_pdf).
+VORWORT_ENDUNGEN = (".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt")
+
+
+def _vorwortendung(dateiname: str, inhalt: bytes) -> str:
+    """Endung aus dem Dateinamen, am Inhalt gegengeprueft."""
+    endung = Path(dateiname).suffix.lower()
+    if endung not in VORWORT_ENDUNGEN or not inhalt:
+        return ""
+    passt = {
+        ".pdf": inhalt[:5] == b"%PDF-",
+        ".docx": inhalt[:2] == b"PK",
+        ".odt": inhalt[:2] == b"PK",
+        ".doc": inhalt[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",
+        ".rtf": inhalt[:5] == b"{\\rtf",
+    }.get(endung)
+    if passt is None:  # .txt
+        try:
+            inhalt.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                inhalt.decode("cp1252")
+            except UnicodeDecodeError:
+                return ""
+        return endung
+    return endung if passt else ""
 
 
 def _berichtendung(inhalt: bytes) -> str:

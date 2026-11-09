@@ -38,7 +38,7 @@ from .logging_setup import logger
 from .models import Ausgabe, MannschaftsDaten
 from .render.assemble import Heftseite, zusammenfuegen
 from .render.pages import SeitenRenderer
-from .storage.filestation import (FileStation, ansprechpartner_lesen,
+from .storage.filestation import (VORWORT, FileStation, ansprechpartner_lesen,
                                   ordnername_pruefen, text_dekodieren,
                                   zielordner_fuer)
 
@@ -58,8 +58,6 @@ FUPA_DATEI = re.compile(r"^\d{4}-\d{2}-\d{2}_.+_gegen_.+\.pdf$")
 DECKBLATT_DATEI = re.compile(r"^\d{4}-\d{2}-\d{2}_Deckblatt\.pdf$")
 
 HEFTPLAN = "Heftplan.txt"
-#: "Vorwort.docx", "Grußwort Stadionheft.docx", "Grusswort.txt" ...
-VORWORT = re.compile(r"^(vorwort|gru(ß|ss)wort)", re.I)
 ARTEN = ("deckblatt", "vorwort", "trenner", "datei", "fupa", "kontaktliste",
          "impressum", "werbung", "leerseite", "ansprechpartner")
 
