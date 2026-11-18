@@ -3,6 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Installierbar als App (PWA): Chrome/Edge -> Menue -> "App installieren" -->
+  <link rel="manifest" href="{{ url_for('static', filename='pwa/manifest.json') }}" crossorigin="use-credentials">
+  <meta name="theme-color" content="#E52421">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='pwa/icon-192.png') }}">
   <title>{% block titel %}Stadionheft{% endblock %} – {{ konfiguration.hefttitel }}</title>
   <style>
     :root { --rot: #E52421; --dunkel: #1A1A1A; --grau: #666; --rahmen: #DDD;
